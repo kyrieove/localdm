@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>LocalDm.App</RootNamespace>
+    <AssemblyName>LocalDm</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <SatelliteResourceLanguages>zh-Hans;en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Speech" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LocalDm.Core\LocalDm.Core.csproj" />
+    <ProjectReference Include="..\LocalDm.Infrastructure\LocalDm.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

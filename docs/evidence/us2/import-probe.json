@@ -1,0 +1,1149 @@
+{
+  "ObservedAt": "2026-10-19T19:41:00.4048208+03:00",
+  "ToolVersion": "4.0.1",
+  "Tier": "Flash",
+  "PrivacyAllowed": true,
+  "PrivacyCode": null,
+  "Telemetry": "disabled",
+  "ConsentScope": "LocalProcessingOnly",
+  "ManifestHash": "47697b5c7ac275850adaf7dfb42b4c4def011758e2b2874913997ab607f58489",
+  "TotalPages": 72,
+  "Groups": [
+    "唐",
+    "护士",
+    "杰",
+    "海",
+    "玉",
+    "组织"
+  ],
+  "FilesProcessed": 72,
+  "AllComplete": true,
+  "SourceCoveragePercent": 100,
+  "TotalElapsedMs": 633254,
+  "Files": [
+    {
+      "Group": "唐",
+      "FileId": "唐/1",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 5839,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 65,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "唐",
+      "FileId": "唐/2",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 5740,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 672,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "唐",
+      "FileId": "唐/3",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 6287,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1226,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "唐",
+      "FileId": "唐/4",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 6292,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1233,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "唐",
+      "FileId": "唐/5",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 5982,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1312,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "唐",
+      "FileId": "唐/6",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 6125,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1046,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "唐",
+      "FileId": "唐/7",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 5966,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 961,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "唐",
+      "FileId": "唐/8",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 6203,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 884,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "唐",
+      "FileId": "唐/9",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 6207,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 187,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "唐",
+      "FileId": "唐/10",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 6182,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1007,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "唐",
+      "FileId": "唐/11",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 6134,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 326,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "唐",
+      "FileId": "唐/12",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 6215,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 198,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "护士",
+      "FileId": "护士/1",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8176,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 71,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "护士",
+      "FileId": "护士/2",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 9293,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 608,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "护士",
+      "FileId": "护士/3",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10480,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1212,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "护士",
+      "FileId": "护士/4",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10631,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1310,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "护士",
+      "FileId": "护士/5",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10554,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1297,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "护士",
+      "FileId": "护士/6",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10433,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1155,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "护士",
+      "FileId": "护士/7",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10382,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 898,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "护士",
+      "FileId": "护士/8",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 9382,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 692,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "护士",
+      "FileId": "护士/9",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8223,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 158,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "护士",
+      "FileId": "护士/10",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10193,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1085,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "护士",
+      "FileId": "护士/11",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10298,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 944,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "护士",
+      "FileId": "护士/12",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8260,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 196,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "杰",
+      "FileId": "杰/1",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8357,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 61,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "杰",
+      "FileId": "杰/2",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 9269,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 610,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "杰",
+      "FileId": "杰/3",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10468,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1258,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "杰",
+      "FileId": "杰/4",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10492,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1193,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "杰",
+      "FileId": "杰/5",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10623,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1247,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "杰",
+      "FileId": "杰/6",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10480,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 914,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "杰",
+      "FileId": "杰/7",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8345,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 327,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "杰",
+      "FileId": "杰/8",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 9454,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 699,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "杰",
+      "FileId": "杰/9",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8329,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 142,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "杰",
+      "FileId": "杰/10",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10299,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1069,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "杰",
+      "FileId": "杰/11",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 9095,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 802,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "杰",
+      "FileId": "杰/12",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8097,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 135,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "海",
+      "FileId": "海/1",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8087,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 62,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "海",
+      "FileId": "海/2",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8972,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 612,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "海",
+      "FileId": "海/3",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10085,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1242,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "海",
+      "FileId": "海/4",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10133,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1176,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "海",
+      "FileId": "海/5",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 9986,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1299,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "海",
+      "FileId": "海/6",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10024,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1237,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "海",
+      "FileId": "海/7",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10024,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 916,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "海",
+      "FileId": "海/8",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8822,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1034,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "海",
+      "FileId": "海/9",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8191,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 157,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "海",
+      "FileId": "海/10",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10334,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1093,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "海",
+      "FileId": "海/11",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10010,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1058,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "海",
+      "FileId": "海/12",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8186,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 179,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "玉",
+      "FileId": "玉/1",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 7412,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 63,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "玉",
+      "FileId": "玉/2",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8938,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 613,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "玉",
+      "FileId": "玉/3",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 9999,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1308,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "玉",
+      "FileId": "玉/4",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10107,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1195,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "玉",
+      "FileId": "玉/5",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10050,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1368,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "玉",
+      "FileId": "玉/6",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10192,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1232,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "玉",
+      "FileId": "玉/7",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 9178,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 754,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "玉",
+      "FileId": "玉/8",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10290,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1126,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "玉",
+      "FileId": "玉/9",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8105,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 146,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "玉",
+      "FileId": "玉/12",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8112,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 203,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "玉",
+      "FileId": "玉/img395",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10102,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1050,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "玉",
+      "FileId": "玉/img396",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10022,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1102,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "组织",
+      "FileId": "组织/1",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 7970,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 99,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "组织",
+      "FileId": "组织/2",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10242,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 465,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "组织",
+      "FileId": "组织/3",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10471,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 738,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "组织",
+      "FileId": "组织/4",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 9285,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 895,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "组织",
+      "FileId": "组织/5",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 9616,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 669,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "组织",
+      "FileId": "组织/6",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8601,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 609,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "组织",
+      "FileId": "组织/7",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 6417,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 40,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "组织",
+      "FileId": "组织/8",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 7691,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1390,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "组织",
+      "FileId": "组织/9",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8878,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1584,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "组织",
+      "FileId": "组织/10",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 10744,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1522,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "组织",
+      "FileId": "组织/11",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 8328,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 1384,
+      "ErrorCode": null,
+      "PublicReason": null
+    },
+    {
+      "Group": "组织",
+      "FileId": "组织/12",
+      "State": "Complete",
+      "ToolComplete": true,
+      "ElapsedMs": 6820,
+      "SpanCount": 1,
+      "Pages": [
+        1
+      ],
+      "HasLocator": true,
+      "SampleChars": 82,
+      "ErrorCode": null,
+      "PublicReason": null
+    }
+  ],
+  "GroupSummaries": [
+    {
+      "Name": "唐",
+      "Pages": 12,
+      "Complete": 12,
+      "Chars": 9117,
+      "ElapsedMs": 73172
+    },
+    {
+      "Name": "护士",
+      "Pages": 12,
+      "Complete": 12,
+      "Chars": 9626,
+      "ElapsedMs": 116305
+    },
+    {
+      "Name": "杰",
+      "Pages": 12,
+      "Complete": 12,
+      "Chars": 8457,
+      "ElapsedMs": 113308
+    },
+    {
+      "Name": "海",
+      "Pages": 12,
+      "Complete": 12,
+      "Chars": 10065,
+      "ElapsedMs": 112854
+    },
+    {
+      "Name": "玉",
+      "Pages": 12,
+      "Complete": 12,
+      "Chars": 10160,
+      "ElapsedMs": 112507
+    },
+    {
+      "Name": "组织",
+      "Pages": 12,
+      "Complete": 12,
+      "Chars": 9477,
+      "ElapsedMs": 105063
+    }
+  ]
+}

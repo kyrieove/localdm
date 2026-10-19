@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LocalDm.App/LocalDm.App.csproj" />
+    <Project Path="src/LocalDm.Core/LocalDm.Core.csproj" />
+    <Project Path="src/LocalDm.Infrastructure/LocalDm.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LocalDm.Tests/LocalDm.Tests.csproj" />
+    <Project Path="tests/LocalDm.UiTests/LocalDm.UiTests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/LocalDm.Probe/LocalDm.Probe.csproj" />
+  </Folder>
+</Solution>

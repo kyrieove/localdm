@@ -1,0 +1,74 @@
+<Window x:Class="LocalDm.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:LocalDm.App.ViewModels"
+        xmlns:views="clr-namespace:LocalDm.App.Views"
+        Title="本局主持" Height="820" Width="1320" MinHeight="640" MinWidth="1040"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="Microsoft YaHei UI" FontSize="15"
+        Foreground="{DynamicResource Ink}"
+        Background="{DynamicResource Paper}"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/LocalDm;component/Themes/Shared.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <DataTemplate DataType="{x:Type vm:LibraryViewModel}">
+                <views:LibraryView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:SetupViewModel}">
+                <views:SetupView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:HostViewModel}">
+                <views:HostView />
+            </DataTemplate>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="216" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- 炭黑硬封：书名、导航、当前局摘要 -->
+        <Border Grid.Column="0" Background="{DynamicResource Cloth}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Margin="22,30,22,26">
+                    <TextBlock Text="本局主持" Style="{StaticResource SpineTitle}" />
+                    <Border Height="1" Background="{StaticResource Silver}" Opacity="0.45" Margin="0,14,0,10" />
+                    <TextBlock Text="单电脑 · 公共屏幕" Style="{StaticResource SpineMeta}" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Margin="10,0">
+                    <Button x:Name="NavLibrary" Content="首页 / 本局" Style="{StaticResource SpineButton}"
+                            Command="{Binding ShowLibraryCommand}" />
+                    <Button x:Name="NavSetup" Content="设置与诊断" Style="{StaticResource SpineButton}"
+                            Command="{Binding ShowSetupCommand}" />
+                    <Button x:Name="NavHost" Content="主持台" Style="{StaticResource SpineButton}"
+                            Command="{Binding ShowHostCommand}" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="2" Margin="22,0,22,26">
+                    <Border Height="1" Background="{StaticResource Silver}" Opacity="0.28" Margin="0,0,0,12" />
+                    <TextBlock Text="{Binding CurrentPackageLine}" Style="{StaticResource SpineMeta}" />
+                    <TextBlock Text="{Binding CurrentPhaseLine}" Style="{StaticResource SpineMeta}"
+                               Margin="0,5,0,0" FontSize="11" Opacity="0.7" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 纸页 -->
+        <Border Grid.Column="1" Background="{DynamicResource Paper}">
+            <ContentControl Content="{Binding Current}" />
+        </Border>
+    </Grid>
+</Window>

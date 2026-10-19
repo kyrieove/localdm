@@ -1,0 +1,34 @@
+﻿{
+  "observedAt": "2026-10-19T15:42:31.9117346+03:00",
+  "modelId": "group/auto-deepseek-v4-1-flash",
+  "modelsEndpoint": {
+    "path": "/v1/models",
+    "ok": true,
+    "elapsedMs": 116,
+    "modelCount": 56,
+    "selectedPresent": true
+  },
+  "chineseVoices": [
+    "Microsoft Huihui Desktop (zh-CN)",
+    "Microsoft Huihui (zh-CN)",
+    "Microsoft Kangkang (zh-CN)",
+    "Microsoft Yaoyao (zh-CN)"
+  ],
+  "speech": {
+    "state": "Idle",
+    "late": false,
+    "elapsedMs": 10285,
+    "text": "欢迎五位侦探来到灯塔！请开始阅读第一幕。"
+  },
+  "replay": {
+    "state": "Idle",
+    "late": false,
+    "elapsedMs": 0,
+    "text": "欢迎五位侦探来到灯塔！请开始阅读第一幕。"
+  },
+  "limits": [
+    "Only synthetic public text was sent",
+    "Magpie downstream may be remote",
+    "Real speaker audibility must be confirmed by a human at the target machine"
+  ]
+}

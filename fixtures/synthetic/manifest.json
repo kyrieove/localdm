@@ -1,0 +1,18 @@
+{
+  "formatVersion": 1,
+  "note": "合成测试材料，不含任何真实剧本内容。生成脚本：scripts/make-synthetic-fixtures.py。",
+  "storyTitle": "合成测试剧本《灯塔回声》",
+  "playerCount": 5,
+  "order": [
+    { "fileId": "fixture-text-pdf", "path": "text-12pages.pdf", "kind": "textPdf", "pageCount": 12 },
+    { "fileId": "fixture-scan-pdf", "path": "scan-3pages.pdf", "kind": "scanPdf", "pageCount": 3 },
+    { "fileId": "fixture-image-01", "path": "images/01-cover.png", "kind": "image", "pageCount": 1, "order": 1 },
+    { "fileId": "fixture-image-02", "path": "images/02-clue.png", "kind": "image", "pageCount": 1, "order": 2 }
+  ],
+  "images": {
+    "note": "图片页序只能由本 manifest 明确指定，不按文件名字典序猜剧情顺序。",
+    "order": ["fixture-image-01", "fixture-image-02"]
+  },
+  "expectedLocation": ".private/expected.json",
+  "expectedNote": "已知真值只存在于测试私有文件，测试读取它，产品代码不得引用。"
+}

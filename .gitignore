@@ -1,0 +1,45 @@
+# Private source material and runtime state
+/stories/
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+/.local/
+/data/
+/artifacts/
+/TestResults/
+**/bin/
+**/obj/
+**/node_modules/
+**/.vs/
+*.user
+*.suo
+*.db
+*.db-shm
+*.db-wal
+# Machine-bound preview verification helper, not a product dependency
+/docs/preview/verify-preview.mjs
+
+# .NET tooling state, packaging output and test artifacts
+*.binlog
+*.secure
+*.msix
+*.msixupload
+*.AppxPackage/
+/coverage*/
+*.coverage
+*.trx
+/packaging/windows/Output/
+
+# Runtime application data root (single SQLite file, DPAPI blobs, logs, prepared packages)
+# Never inside the install directory; local dev copies stay untracked.
+/.appdata/
+/LocalDm/
+
+# Synthetic fixture ground truth: kept locally for tests, never committed
+/fixtures/synthetic/.private/
+
+# Python caches from the helper scripts
+__pycache__/
+*.pyc

@@ -1,0 +1,14 @@
+{
+  "scenario": "US5 便携发布物在无 .NET SDK 环境启动",
+  "exe": "artifacts\\publish\\win-x64\\LocalDm.exe",
+  "selfContained": true,
+  "sdkOnPath": false,
+  "pathUsed": "C:\\Windows\\System32;C:\\Windows",
+  "secondsToWindow": 1.2,
+  "windowTitle": "本局主持",
+  "dataRoot": "artifacts\\portable-smoke-data",
+  "dataFilesCreated": [
+    "sessions.db"
+  ],
+  "screenshot": "portable-start.png"
+}

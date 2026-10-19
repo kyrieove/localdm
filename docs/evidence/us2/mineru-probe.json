@@ -1,0 +1,31 @@
+{
+  "executablePresent": true,
+  "executable": "C:\\Users\\ASUS\\.local\\bin\\mineru.exe",
+  "appOwnedHome": "C:\\Users\\ASUS\\AppData\\Local\\LocalDm\\mineru-home",
+  "version": {
+    "args": [
+      "version"
+    ],
+    "exitCode": 0,
+    "stdout": "MinerU 版本: 4.0.1\nPython 版本: 3.12.14\n",
+    "stderr": ""
+  },
+  "parseHelp": {
+    "args": [
+      "parse",
+      "--help"
+    ],
+    "exitCode": 0,
+    "stdout": "                                                                               \n Usage: mineru parse [OPTIONS] {path}                                          \n                                                                               \n 解析一个文档文件。                                                            \n                                                                               \n┌─ Arguments ─────────────────────────────────────────────────────────────────┐\n│ *    path      <str>  文档文件路径 [required]                               │\n└─────────────────────────────────────────────────────────────────────────────┘\n┌─ Options ───────────────────────────────────────────────────────────────────┐\n│ --tier               <flash|basic|standard|adv  解析档位:                   │\n│                      anced>                     flash、basic、standard、ad… │\n│ --pages      -p      <str>                      PDF 页码: '1-5,8,r3-r1' 或  │\n│                                                 'all';默认前 10 页          │\n│ --after              <str>                      从内容游标之后继续读取      │\n│ --limit              <int>                      STDOUT 内容的软字符上限     │\n│ --format     -f      <markdown>                 输出格式: markdown          │\n│                                                 [default: markdown]         │\n│ --force                                         强制重新解析,忽略缓存       │\n│ --remote                                        使用远程 parse-server       │\n│ --wait               <int>                      等待解析完成的最长秒数      │\n│                                                 [default: 60]               │\n│ --no-wait                                       不等待,立即返回             │\n│ --output     -o      <str>                      输出路径;自动创建父目录     │\n│ --no-marker                                     输出中省略文档结构标记      │\n│ --json                                          JSON 输出                   │\n│ --verbose    -v                                 详细输出                    │\n│ --help                                          Show this message and exit. │\n└─────────────────────────────────────────────────────────────────────────────┘\n\n",
+    "stderr": ""
+  },
+  "serverStatus": {
+    "args": [
+      "server",
+      "status"
+    ],
+    "exitCode": 0,
+    "stdout": "服务未在运行。\n",
+    "stderr": ""
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "status": "PASS",
+  "evidence": [
+    "未确认时保持原阶段",
+    "确认后推进并清空确认",
+    "演示按钮明确不采音",
+    "语音转写落点支持文字输入和回车，预览仅回显",
+    "设置页内嵌中文样音可解码",
+    "窄屏设计稿无横向溢出"
+  ],
+  "audioDuration": 13.069841,
+  "errors": [],
+  "scope": "HTML design preview only; no model or live microphone validation"
+}

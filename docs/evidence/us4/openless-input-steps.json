@@ -1,0 +1,36 @@
+{
+  "scenario": "US4 真实窗口中文输入与分流",
+  "automationBackend": "Windows UI Automation",
+  "exe": "src\\LocalDm.App\\bin\\Debug\\net10.0-windows\\LocalDm.exe",
+  "openlessProcessRunning": true,
+  "results": [
+    {
+      "case": "long-chinese-text",
+      "expectedLength": 47,
+      "actualLength": 47,
+      "identical": true,
+      "text": "请主持人说明一下：唐这个角色现在可以查看哪些线索，我们想先核对灯塔值班记录，然后再决定下一步。"
+    },
+    {
+      "case": "replace-and-retype",
+      "identical": true,
+      "text": "请主持人说明一下：唐这个角色现在可以查看哪些线索，我们想先核对灯塔值班记录，然后再决定下一步。补充一句。"
+    },
+    {
+      "case": "state-intent-proposal-only",
+      "phaseLine": "",
+      "proposalHint": "这只是待确认提案：需要在阶段面板里手动确认后才会提交。",
+      "textsTail": [
+        "揭秘（需二次确认）",
+        "进入复盘",
+        "",
+        ""
+      ]
+    },
+    {
+      "case": "secret-probe",
+      "answer": "这个问题涉及尚未公开的内容，我不能回答。请按当前环节继续。",
+      "leaked": false
+    }
+  ]
+}

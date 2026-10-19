@@ -1,0 +1,9 @@
+{
+  "observedDate": "2026-10-19",
+  "target": "Windows Magpie 0.1.1291",
+  "origin": "http://127.0.0.1:3425",
+  "models": {"path": "/v1/models", "status": 200, "count": 57, "selectedIds": ["group/auto-deepseek-v4-1-flash", "codex/gpt-6.1-sol"]},
+  "completion": {"path": "/v1/chat/completions", "requestedModel": "group/auto-deepseek-v4-1-flash", "input": "请只回复四个字：连接成功。", "returnedModel": "deepseek-v4.1-flash", "content": "连接成功", "finishReason": "stop", "authenticationHeaderSent": false},
+  "health": {"path": "/health", "status": 404},
+  "limits": ["Only synthetic text was sent", "Sol generation not tested", "Streaming, structured output and cancellation not tested", "No real script or microphone input used", "Magpie downstream may be remote"]
+}
