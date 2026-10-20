@@ -293,6 +293,68 @@ public sealed class SessionStore : ISessionStore, IDisposable
         return string.Equals(result, "ok", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// 保存本局 DM 对话记忆。同一 session 再次保存会覆盖上一次。
+    ///
+    /// 存的是桌上公开说过的话和备忘：不含角色本，也不含真相原文。
+    /// </summary>
+    public async Task SaveDmConversationAsync(
+        string sessionId,
+        DmConversationSnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        await InitializeAsync(cancellationToken);
+        await _writeLock.WaitAsync(cancellationToken);
+        try
+        {
+            await using var connection = await OpenAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                "INSERT INTO dm_conversations (session_id, snapshot_json, updated_at) " +
+                "VALUES ($s, $j, $at) " +
+                "ON CONFLICT (session_id) DO UPDATE SET " +
+                " snapshot_json = excluded.snapshot_json, updated_at = excluded.updated_at";
+            command.Parameters.AddWithValue("$s", sessionId);
+            command.Parameters.AddWithValue("$j", JsonSerializer.Serialize(snapshot));
+            command.Parameters.AddWithValue(
+                "$at",
+                DateTimeOffset.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
+    /// <summary>读取本局 DM 对话记忆；没有记录或记录损坏时返回 null。</summary>
+    public async Task<DmConversationSnapshot?> LoadDmConversationAsync(
+        string sessionId,
+        CancellationToken cancellationToken)
+    {
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT snapshot_json FROM dm_conversations WHERE session_id = $s";
+        command.Parameters.AddWithValue("$s", sessionId);
+
+        var json = await command.ExecuteScalarAsync(cancellationToken) as string;
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<DmConversationSnapshot>(json);
+        }
+        catch (JsonException)
+        {
+            // 存档损坏不该让这一局开不了：这一局从空记忆继续。
+            return null;
+        }
+    }
+
     public void Dispose() => _writeLock.Dispose();
 
     private static async Task<int> ReadRevisionAsync(

@@ -272,6 +272,48 @@ public sealed class DmConversationTests : IDisposable
             $"丢弃之后占用必须低于 90%。实际 {requestTokens} / {ContextBudget.UsableTokens(Window)}。");
     }
 
+    // ===== 手动整理 =====
+
+    [Fact]
+    public async Task Manual_compaction_keeps_only_the_last_two_rounds()
+    {
+        var gateway = new ScriptedGateway();
+        var host = await NewHostAsync(gateway);
+        await host.LoadDemoAsync();
+
+        for (var i = 0; i < 4; i++)
+        {
+            host.InputText = $"第 {i} 轮问题";
+            await host.SendAsync();
+        }
+
+        Assert.True(host.CompactCommand.CanExecute(null));
+
+        host.CompactCommand.Execute(null);
+        await WaitUntilAsync(() => host.Conversation.CompactionCount == 1);
+
+        Assert.Equal(1, host.Conversation.CompactionCount);
+        Assert.Equal("本局备忘：已经查过书房。", host.Conversation.Memo);
+        Assert.Equal(4, host.Conversation.Turns.Count);
+        Assert.Equal("user", host.Conversation.Turns[0].Role);
+    }
+
+    [Fact]
+    public async Task Compact_command_is_unavailable_when_there_is_too_little_to_compact()
+    {
+        var gateway = new ScriptedGateway();
+        var host = await NewHostAsync(gateway);
+        await host.LoadDemoAsync();
+
+        Assert.False(host.CompactCommand.CanExecute(null));
+
+        host.InputText = "一句话";
+        await host.SendAsync();
+
+        // 一轮对话（两条）还太少：整理不出什么来。
+        Assert.False(host.CompactCommand.CanExecute(null));
+    }
+
     // ===== 记忆与消息 =====
 
     [Fact]
@@ -372,6 +414,14 @@ public sealed class DmConversationTests : IDisposable
 
     private static List<MagpieCompletionRequest> CompactionRequests(ScriptedGateway gateway) =>
         gateway.Requests.Where(IsCompaction).ToList();
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        for (var i = 0; i < 100 && !condition(); i++)
+        {
+            await Task.Delay(20);
+        }
+    }
 
     private static bool IsCompaction(MagpieCompletionRequest request) =>
         request.Messages.Any(m => m.Content.Contains("【整理本局记忆】", StringComparison.Ordinal));

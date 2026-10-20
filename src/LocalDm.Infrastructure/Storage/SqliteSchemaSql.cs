@@ -76,5 +76,11 @@ internal static class SqliteSchemaSql
             byte_length INTEGER NOT NULL,
             PRIMARY KEY (package_id, version, file_key)
         );
+
+        CREATE TABLE IF NOT EXISTS dm_conversations (
+            session_id    TEXT NOT NULL PRIMARY KEY,
+            snapshot_json TEXT NOT NULL,
+            updated_at    TEXT NOT NULL
+        );
         """;
 }

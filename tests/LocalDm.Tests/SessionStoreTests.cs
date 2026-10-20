@@ -1,5 +1,6 @@
 using System.IO;
 using LocalDm.Core.Domain;
+using LocalDm.Core.Ports;
 using LocalDm.Infrastructure.Storage;
 using Microsoft.Data.Sqlite;
 
@@ -158,6 +159,66 @@ public sealed class SessionStoreTests : IDisposable
         using var store = NewStore();
         await store.InitializeAsync(TestContext.Current.CancellationToken);
         Assert.True(await store.CheckIntegrityAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Dm_conversation_snapshot_round_trips()
+    {
+        using var store = NewStore();
+        await store.InitializeAsync(TestContext.Current.CancellationToken);
+
+        var snapshot = new DmConversationSnapshot
+        {
+            Memo = "查过书房与地下室。",
+            Turns =
+            [
+                new MagpieMessage { Role = "user", Content = "我们去调查书房" },
+                new MagpieMessage { Role = "assistant", Content = "请翻开 1 楼那一组卡。" },
+            ],
+            CompactionCount = 2,
+            LastUsage = new MagpieUsage(1234, 56, 1000),
+        };
+
+        await store.SaveDmConversationAsync("s1", snapshot, TestContext.Current.CancellationToken);
+        var loaded = await store.LoadDmConversationAsync("s1", TestContext.Current.CancellationToken);
+
+        Assert.NotNull(loaded);
+        Assert.Equal("查过书房与地下室。", loaded!.Memo);
+        Assert.Equal(2, loaded.CompactionCount);
+        Assert.Equal(2, loaded.Turns.Count);
+        Assert.Equal("user", loaded.Turns[0].Role);
+        Assert.Equal("我们去调查书房", loaded.Turns[0].Content);
+        Assert.Equal("请翻开 1 楼那一组卡。", loaded.Turns[1].Content);
+        Assert.Equal(1234, loaded.LastUsage!.PromptTokens);
+        Assert.Equal(1000, loaded.LastUsage.CacheHitTokens);
+    }
+
+    [Fact]
+    public async Task Saving_the_same_session_twice_replaces_the_first_snapshot()
+    {
+        using var store = NewStore();
+        await store.InitializeAsync(TestContext.Current.CancellationToken);
+
+        var first = new DmConversationSnapshot { Memo = "第一份备忘", CompactionCount = 1 };
+        var second = new DmConversationSnapshot { Memo = "第二份备忘", CompactionCount = 2 };
+
+        await store.SaveDmConversationAsync("s1", first, TestContext.Current.CancellationToken);
+        await store.SaveDmConversationAsync("s1", second, TestContext.Current.CancellationToken);
+
+        var loaded = await store.LoadDmConversationAsync("s1", TestContext.Current.CancellationToken);
+
+        Assert.NotNull(loaded);
+        Assert.Equal("第二份备忘", loaded!.Memo);
+        Assert.Equal(2, loaded.CompactionCount);
+    }
+
+    [Fact]
+    public async Task Missing_dm_conversation_returns_null()
+    {
+        using var store = NewStore();
+        await store.InitializeAsync(TestContext.Current.CancellationToken);
+
+        Assert.Null(await store.LoadDmConversationAsync("还没有这一局", TestContext.Current.CancellationToken));
     }
 
     private async Task AssertFaultLeavesNothingAsync(TransactionFaultPoint point)

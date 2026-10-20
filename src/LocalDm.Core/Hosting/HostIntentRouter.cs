@@ -23,12 +23,23 @@ public sealed class HostIntentRouter
         "真相是什么", "谁是凶手", "告诉我凶手", "秘密是什么", "给我看真相", "剧透",
     ];
 
+    /// <summary>整句输入就等于这条命令，不夹带别的意思。</summary>
+    private static readonly string[] CompactKeywords =
+    [
+        "/compact", "压缩上下文",
+    ];
+
     public HostIntent Route(string? text)
     {
         var trimmed = text?.Trim() ?? string.Empty;
         if (trimmed.Length == 0)
         {
             return new HostIntent(HostIntentKind.PublicQuestion, null);
+        }
+
+        if (IsWholeSentence(trimmed, CompactKeywords))
+        {
+            return new HostIntent(HostIntentKind.Compact, null);
         }
 
         if (ContainsAny(trimmed, SecretProbeKeywords))
@@ -49,6 +60,25 @@ public sealed class HostIntentRouter
         return new HostIntent(HostIntentKind.PublicQuestion, null);
     }
 
+    /// <summary>
+    /// 整句匹配：去掉首尾空白与末尾标点之后，整句等于命令词才算这条命令。
+    /// 「帮我压缩上下文吧」不是命令，「压缩上下文」才是。
+    /// </summary>
+    private static bool IsWholeSentence(string text, IEnumerable<string> commands) =>
+        commands.Contains(StripTrailingPunctuation(text), StringComparer.Ordinal);
+
+    /// <summary>去掉末尾的标点与空白。</summary>
+    private static string StripTrailingPunctuation(string text)
+    {
+        var trimmed = text.Trim();
+        while (trimmed.Length > 0 && "。！？!?，, ".Contains(trimmed[^1]))
+        {
+            trimmed = trimmed[..^1].TrimEnd();
+        }
+
+        return trimmed;
+    }
+
     private static bool ContainsAny(string text, IEnumerable<string> keywords) =>
         keywords.Any(k => text.Contains(k, StringComparison.Ordinal));
 }
@@ -60,6 +90,9 @@ public enum HostIntentKind
 
     /// <summary>状态意图：只打开确认视图，不提交。</summary>
     ProposeCommand = 1,
+
+    /// <summary>整理上下文：等同点「压缩上下文」按钮，不进入对话记忆。</summary>
+    Compact = 2,
 }
 
 public sealed record HostIntent(HostIntentKind Kind, PublicAction? ProposedAction)

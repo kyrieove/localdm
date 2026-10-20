@@ -57,6 +57,14 @@
                 <TextBlock Text="本局对话，从这里继续" Style="{StaticResource ChatMeta}" FontSize="11"
                            HorizontalAlignment="Center" Margin="0,0,0,26" />
 
+                <!-- 本局备忘：只记桌上公开发生过的事，可以放在公共屏幕上 -->
+                <Expander x:Name="MemoExpander" Header="查看本局备忘" Margin="0,0,0,22"
+                          Foreground="{StaticResource InkSoft}"
+                          Visibility="{Binding HasMemo, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="{Binding Memo}" TextWrapping="Wrap" Style="{StaticResource ChatBody}"
+                               Margin="0,10,0,0" />
+                </Expander>
+
                 <ItemsControl x:Name="MessageList" ItemsSource="{Binding Messages}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
@@ -418,11 +426,36 @@
                 </Border>
 
                 <Grid Grid.Row="2" Margin="2,9,2,0">
-                    <TextBlock Text="Enter 发送 · Shift+Enter 换行 · 中文组合输入不会误发"
-                               Style="{StaticResource ChatMeta}" FontSize="10" />
-                    <Button Content="请主持人开场" Command="{Binding OpeningSpeechCommand}"
-                            Style="{StaticResource TopBarButton}" HorizontalAlignment="Right" Padding="8,2"
-                            Visibility="{Binding ShowOpeningSpeech, Converter={StaticResource BoolToVisibility}}" />
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Enter 发送 · Shift+Enter 换行 · 中文组合输入不会误发"
+                                   Style="{StaticResource ChatMeta}" FontSize="10" />
+                        <TextBlock x:Name="ContextUsageText" Text="{Binding ContextUsageText}"
+                                   FontSize="10" Margin="16,0,0,0" VerticalAlignment="Center"
+                                   ToolTip="上下文占用：接近上限时会自动把较早的对话整理成备忘">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource ChatMeta}">
+                                    <Setter Property="Foreground" Value="{StaticResource Muted}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ContextUsageHigh}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource Seal}" />
+                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="CompactButton" Content="压缩上下文" Command="{Binding CompactCommand}"
+                                Style="{StaticResource TopBarButton}" Padding="8,2" Margin="0,0,8,0" />
+                        <Button Content="请主持人开场" Command="{Binding OpeningSpeechCommand}"
+                                Style="{StaticResource TopBarButton}" Padding="8,2"
+                                Visibility="{Binding ShowOpeningSpeech, Converter={StaticResource BoolToVisibility}}" />
+                    </StackPanel>
                 </Grid>
             </Grid>
         </Border>

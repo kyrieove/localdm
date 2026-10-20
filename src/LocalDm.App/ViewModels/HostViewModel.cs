@@ -19,6 +19,8 @@ public sealed class HostViewModel : ObservableObject, IDisposable
 {
     private readonly HostDirector _director;
     private readonly Func<ToolSettings> _settingsProvider;
+    private readonly HostIntentRouter _router;
+
     /// <summary>
     /// 本局的 DM 对话记忆：发给模型的历史、备忘与真实 token 用量。
     /// 屏幕上的聊天记录不受它影响：这里只决定发给模型什么。
@@ -68,6 +70,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
     {
         _director = director;
         _settingsProvider = settingsProvider;
+        _router = router;
         _dispatcher = dispatcher;
         _store = store;
         _tts = tts;
@@ -142,6 +145,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             () => !IsBusy && ShowSuggestions);
         ShowMaterialsCommand = new RelayCommand(() => { ShowMaterials = true; return Task.CompletedTask; });
         ShowConversationCommand = new RelayCommand(() => { ShowMaterials = false; return Task.CompletedTask; });
+        CompactCommand = new RelayCommand(() => ManualCompactAsync(), () => CanCompact);
     }
 
     public ObservableCollection<VoiceOption> AvailableVoices { get; } = [];
@@ -303,6 +307,44 @@ public sealed class HostViewModel : ObservableObject, IDisposable
 
     public RelayCommand ShowConversationCommand { get; }
 
+    /// <summary>手动整理上下文：把较早的对话整理成备忘，保留最近 2 轮原话。</summary>
+    public RelayCommand CompactCommand { get; }
+
+    /// <summary>
+    /// 能不能整理上下文：忙着的时候不行，对话太短也没必要。
+    /// </summary>
+    public bool CanCompact => !IsBusy && _conversation.Turns.Count >= 3;
+
+    /// <summary>本局备忘的正文；没整理过时是空的。</summary>
+    public string? Memo => _conversation.Memo;
+
+    /// <summary>有没有备忘：没有就不显示「查看本局备忘」。</summary>
+    public bool HasMemo => !string.IsNullOrWhiteSpace(_conversation.Memo);
+
+    /// <summary>
+    /// 上下文占用：百分比与估算的 token 数，例如「上下文 42% · 约 27k / 65k」。
+    /// 到 80% 会变提醒色：再聊下去就要自动整理了。
+    /// </summary>
+    public string ContextUsageText
+    {
+        get
+        {
+            var (tokens, window) = CurrentContextUsage();
+            var percent = (int)Math.Round(tokens / (double)Math.Max(1, window) * 100);
+            return $"上下文 {percent}% · 约 {tokens / 1000}k / {window / 1000}k";
+        }
+    }
+
+    /// <summary>占用已经到自动整理的门槛：文字要变提醒色。</summary>
+    public bool ContextUsageHigh
+    {
+        get
+        {
+            var (tokens, window) = CurrentContextUsage();
+            return tokens >= (double)Math.Max(1, window) * ContextBudget.AutoCompactRatio;
+        }
+    }
+
     private void RaiseBusyChanged()
     {
         OnPropertyChanged(nameof(IsBusy));
@@ -315,10 +357,38 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         OpeningSpeechCommand.RaiseCanExecuteChanged();
         AskStatusCommand.RaiseCanExecuteChanged();
         AskRulesCommand.RaiseCanExecuteChanged();
+        CompactCommand.RaiseCanExecuteChanged();
         foreach (var message in Messages)
         {
             message.ReplayCommand?.RaiseCanExecuteChanged();
         }
+    }
+
+    /// <summary>
+    /// 当前的上下文占用：这一局已有的内容（提示词 + 备忘 + 历史）加上下一轮要发的消息。
+    /// 第二个数是扣掉回复预留之后真正能放东西的窗口。
+    /// </summary>
+    private (int Tokens, int Window) CurrentContextUsage()
+    {
+        var window = _settingsProvider()?.ContextWindowTokens ?? ToolSettings.DefaultContextWindowTokens;
+        var usable = ContextBudget.UsableTokens(window);
+        var package = _session.Package;
+        var session = _session.Session;
+        if (package is null || session is null)
+        {
+            return (0, usable);
+        }
+
+        var system = HostNarration.BuildSystemPrompt(package);
+        var next = HostNarration.BuildAskUserMessage(package, session, string.Empty, _conversation.Memo);
+        return (ContextBudget.EstimateNextPromptTokens(_conversation, system, next), usable);
+    }
+
+    /// <summary>占用变了就刷新界面上的那行字。</summary>
+    private void RefreshContextUsage()
+    {
+        OnPropertyChanged(nameof(ContextUsageText));
+        OnPropertyChanged(nameof(ContextUsageHigh));
     }
 
     /// <summary>音色变更。落盘失败时给主持人一句能看懂的提示，不把异常抛到绑定层。</summary>
@@ -488,6 +558,8 @@ public sealed class HostViewModel : ObservableObject, IDisposable
                 package.Title,
                 $"已装载「{package.Title}」：{package.PlayerCount} 人、{package.Spans.Count} 页来源。",
                 $"已装载「{package.Title}」。全员就位后，点左侧「开始这一局」。");
+
+            await LoadConversationAsync(session.SessionId);
         }
         catch (DomainRuleException ex)
         {
@@ -589,6 +661,8 @@ public sealed class HostViewModel : ObservableObject, IDisposable
                 "演示剧本",
                 "演示剧本已装载。这是合成数据，用来熟悉操作。",
                 "演示剧本已就绪。全员就位后，点左侧「开始这一局」。");
+
+            await LoadConversationAsync(session.SessionId);
         }
         catch (DomainRuleException ex)
         {
@@ -622,6 +696,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(SessionSummary));
         Status = "已恢复上一次的进度。不会自动重播。";
         AppendEvent($"已恢复至「{result.Session.CurrentPhaseId}」所在环节。");
+        await LoadConversationAsync(result.Session.SessionId);
     }
 
     // ===== 一次提问：玩家说 → 主持回 =====
@@ -636,6 +711,14 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         var text = InputText.Trim();
         if (text.Length == 0)
         {
+            return;
+        }
+
+        // 整句输入「压缩上下文」等同点那个按钮：这句话不进对话记忆，也不发给模型。
+        if (_router.Route(text).Kind == HostIntentKind.Compact)
+        {
+            InputText = string.Empty;
+            await ManualCompactAsync();
             return;
         }
 
@@ -799,6 +882,31 @@ public sealed class HostViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// 手动整理：保留最近 2 轮原话，其余全部整理成备忘。
+    /// </summary>
+    private async Task ManualCompactAsync()
+    {
+        var package = _session.Package;
+        var session = _session.Session;
+        if (package is null || session is null)
+        {
+            Status = "还没有装载剧本。";
+            return;
+        }
+
+        if (IsBusy)
+        {
+            Status = "现在正忙着，整理上下文要等这一轮结束。";
+            return;
+        }
+
+        var settings = _settingsProvider();
+        var system = HostNarration.BuildSystemPrompt(package);
+        var next = HostNarration.BuildAskUserMessage(package, session, string.Empty, _conversation.Memo);
+        await CompactAsync(package, system, next, settings.ContextWindowTokens, manual: true);
+    }
+
+    /// <summary>
     /// 把较早的对话整理成一份本局备忘。返回 false 表示这一轮被取消。
     ///
     /// 整理失败时不动记忆：这一轮照常发。真的发不出去（占用超过 100%）时，
@@ -848,6 +956,10 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         _conversation.ApplyCompaction(memo, keepFromIndex);
         var kept = (_conversation.Turns.Count + 1) / 2;
         AppendEvent($"已整理较早的对话（第 {_conversation.CompactionCount} 次），保留了最近 {kept} 轮原话。");
+        OnPropertyChanged(nameof(Memo));
+        OnPropertyChanged(nameof(HasMemo));
+        RefreshContextUsage();
+        await SaveConversationAsync();
         return true;
     }
 
@@ -915,6 +1027,8 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             // 请求成功了才写进本局记忆：失败或被停止时这句话不进记忆，玩家可以重发。
             _conversation.AppendUser(memoryUserText);
             _conversation.AppendAssistant(reply, _director.LastUsage);
+            RefreshContextUsage();
+            await SaveConversationAsync();
 
             if (!AutoRead)
             {
@@ -1072,6 +1186,58 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// 装载一局时把这一局的对话记忆读回来。
+    ///
+    /// 读到的记忆只影响发给模型的内容：不回放到屏幕上，也不朗读（恢复不自动重播）。
+    /// </summary>
+    private async Task LoadConversationAsync(string sessionId)
+    {
+        _conversation = new DmConversation();
+        if (_store is not null)
+        {
+            try
+            {
+                var snapshot = await _store.LoadDmConversationAsync(sessionId, CancellationToken.None);
+                _conversation = DmConversation.FromSnapshot(snapshot);
+            }
+            catch (Exception ex)
+            {
+                // 记忆读不出来不该让这一局开不了：这一局从空记忆继续。
+                System.Diagnostics.Debug.WriteLine("[Host] 读取对话记忆失败：" + ex.Message);
+            }
+        }
+
+        OnPropertyChanged(nameof(Memo));
+        OnPropertyChanged(nameof(HasMemo));
+        RefreshContextUsage();
+        CompactCommand.RaiseCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// 把本局对话记忆存档。存失败只在状态栏提示，不影响主持。
+    /// </summary>
+    private async Task SaveConversationAsync()
+    {
+        if (_store is null || _conversationSessionId is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _store.SaveDmConversationAsync(
+                _conversationSessionId,
+                _conversation.ToSnapshot(),
+                CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine("[Host] 保存对话记忆失败：" + ex.Message);
+            Status = "对话记忆没有存下来；这一局照常主持。";
+        }
+    }
+
     /// <summary>当前环节的一行说明，放在状态行里帮助主持人定位。</summary>
     private string PhaseDetail()
     {
@@ -1220,6 +1386,12 @@ public sealed class HostViewModel : ObservableObject, IDisposable
 
         public Task SaveSessionAsync(Session session, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("未接线的会话存储不能保存。");
+
+        public Task<DmConversationSnapshot?> LoadDmConversationAsync(string sessionId, CancellationToken cancellationToken) =>
+            Task.FromResult<DmConversationSnapshot?>(null);
+
+        public Task SaveDmConversationAsync(string sessionId, DmConversationSnapshot snapshot, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("未接线的会话存储不能保存对话记忆。");
     }
 }
 

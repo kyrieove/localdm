@@ -341,5 +341,11 @@ public sealed class ScriptFlowTests : IDisposable
 
         public Task SaveSessionAsync(Session session, CancellationToken cancellationToken) =>
             _inner.SaveSessionAsync(session, cancellationToken);
+
+        public Task SaveDmConversationAsync(string sessionId, DmConversationSnapshot snapshot, CancellationToken cancellationToken) =>
+            _inner.SaveDmConversationAsync(sessionId, snapshot, cancellationToken);
+
+        public Task<DmConversationSnapshot?> LoadDmConversationAsync(string sessionId, CancellationToken cancellationToken) =>
+            _inner.LoadDmConversationAsync(sessionId, cancellationToken);
     }
 }
