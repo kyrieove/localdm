@@ -465,7 +465,7 @@ public sealed class PhaseFlowTests
     private const string PrivateText = "这是合成角色的秘密，公共界面不应出现。";
 
     [Fact]
-    public void Truth_and_private_text_are_available_to_dm_before_reveal_but_not_public_grounding()
+    public void Truth_is_available_to_dm_before_reveal_but_role_book_is_not_and_public_grounding_stays_filtered()
     {
         var playing = Started();
 
@@ -476,12 +476,12 @@ public sealed class PhaseFlowTests
 
         Assert.Contains(SyntheticPackage.PublicTruth, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain(SyntheticPackage.PublicTruth, grounding, StringComparison.Ordinal);
-        Assert.Contains(PrivateText, prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain(PrivateText, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain(PrivateText, grounding, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Full_script_including_private_text_remains_available_after_reveal()
+    public void Role_book_stays_out_of_the_dm_context_after_reveal()
     {
         var revealed = RevealPhase();
 
@@ -491,7 +491,8 @@ public sealed class PhaseFlowTests
         var grounding = HostNarration.BuildGroundingText(Package, revealed);
 
         Assert.Contains(SyntheticPackage.PublicTruth, prompt, StringComparison.Ordinal);
-        Assert.Contains(PrivateText, prompt, StringComparison.Ordinal);
+        // 揭秘之后角色本照样不给 DM：玩家手里的东西始终不给。
+        Assert.DoesNotContain(PrivateText, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain(PrivateText, grounding, StringComparison.Ordinal);
     }
 

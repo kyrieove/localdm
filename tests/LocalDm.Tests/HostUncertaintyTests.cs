@@ -24,7 +24,7 @@ public sealed class HostUncertaintyTests
     }
 
     [Fact]
-    public void Narration_prompt_contains_full_script_for_dm_for_every_intent()
+    public void Narration_prompt_keeps_the_handbook_for_dm_and_drops_the_role_book_for_every_intent()
     {
         var session = PhaseFlowTests.Started();
 
@@ -34,12 +34,13 @@ public sealed class HostUncertaintyTests
             var prompt = string.Join("\n", messages.Select(m => m.Content));
 
             Assert.Contains(SyntheticPackage.PublicTruth, prompt, StringComparison.Ordinal);
-            Assert.Contains("合成角色的秘密", prompt, StringComparison.Ordinal);
+            Assert.Contains(SyntheticPackage.ClueCardText, prompt, StringComparison.Ordinal);
+            Assert.DoesNotContain(SyntheticPackage.RoleBookText, prompt, StringComparison.Ordinal);
         }
     }
 
     [Fact]
-    public void Ask_prompt_contains_full_script_for_dm_and_current_player_question()
+    public void Ask_prompt_keeps_the_handbook_for_dm_and_current_player_question()
     {
         var session = PhaseFlowTests.Started();
 
@@ -47,7 +48,8 @@ public sealed class HostUncertaintyTests
         var prompt = string.Join("\n", messages.Select(m => m.Content));
 
         Assert.Contains(SyntheticPackage.PublicTruth, prompt, StringComparison.Ordinal);
-        Assert.Contains("合成角色的秘密", prompt, StringComparison.Ordinal);
+        Assert.Contains(SyntheticPackage.ClueCardText, prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain(SyntheticPackage.RoleBookText, prompt, StringComparison.Ordinal);
         // 玩家原话要原样带上，模型才知道在回答什么
         Assert.Contains("谁是凶手？", prompt, StringComparison.Ordinal);
     }

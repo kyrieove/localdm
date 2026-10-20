@@ -7,7 +7,7 @@ namespace LocalDm.Tests;
 public sealed class HostNarrationFullContextTests
 {
     [Fact]
-    public void Narration_receives_the_full_script_with_visibility_and_source_labels_before_reveal()
+    public void Narration_receives_the_handbook_with_visibility_and_source_labels_before_reveal()
     {
         var package = SyntheticPackage.Create();
         var session = PhaseFlowTests.Started();
@@ -17,7 +17,9 @@ public sealed class HostNarrationFullContextTests
 
         Assert.Contains(SyntheticPackage.PublicIntro, prompt, StringComparison.Ordinal);
         Assert.Contains(SyntheticPackage.PublicTruth, prompt, StringComparison.Ordinal);
-        Assert.Contains("合成角色的秘密", prompt, StringComparison.Ordinal);
+        Assert.Contains(SyntheticPackage.ClueCardText, prompt, StringComparison.Ordinal);
+        // 角色本不进 DM 上下文：隔离发生在上下文构造处，不靠提示词自觉。
+        Assert.DoesNotContain(SyntheticPackage.RoleBookText, prompt, StringComparison.Ordinal);
         Assert.Contains("Visibility=Private", prompt, StringComparison.Ordinal);
         Assert.Contains("p.5", prompt, StringComparison.Ordinal);
         Assert.Contains("投票", prompt, StringComparison.Ordinal);
