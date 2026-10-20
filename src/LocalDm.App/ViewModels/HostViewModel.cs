@@ -9,65 +9,176 @@ using LocalDm.Infrastructure.Storage;
 namespace LocalDm.App.ViewModels;
 
 /// <summary>
-/// 主持页：合成口播、发送、停止和重播，加上确定性完整局的阶段操作。
+/// 主持台：一条连续对话 + 一个底边固定输入区。
+///
+/// 玩家输入、主持回复与阶段事件按时间顺序排在同一个 <see cref="Messages"/> 里；
+/// 生成、朗读、停止、失败都在对应消息上就地显示，不再另设常驻状态栏。
 /// 只绑定公开投影与公开文字，不持有完整剧本或真相对象。
 /// </summary>
-public sealed class HostViewModel : ObservableObject
+public sealed class HostViewModel : ObservableObject, IDisposable
 {
     private readonly HostDirector _director;
     private readonly Func<ToolSettings> _settingsProvider;
-    private readonly HostIntentRouter _router;
+    private string? _conversationSessionId;
     private readonly CommandDispatcher? _dispatcher;
     private readonly ISessionStore? _store;
     private readonly SessionViewModel _session;
+    private readonly ITtsService? _tts;
+
+    /// <summary>
+    /// 音色变更回调：把选择落盘。返回 null 表示成功，返回文案表示失败原因。
+    /// 落盘失败必须由调用方展示给主持人，不能静默吞掉。
+    /// </summary>
+    private readonly Func<string, string?>? _onVoiceChanged;
+
+    private string? _selectedVoiceId;
+
+    /// <summary>初始化或外部同步时抑制「已切换音色」提示与落盘回调。</summary>
+    private bool _suppressVoiceFeedback;
     private string _inputText = string.Empty;
-    private string _lastSpokenText = string.Empty;
     private string _status = "等待开始。界面不会主动请求模型。";
     private SpeechState _speechState = SpeechState.Idle;
-    private bool _busy;
-    private string _proposal = string.Empty;
+    private bool _isGenerating;
+    private bool _isSpeaking;
+    private bool _showMaterials;
+
+    /// <summary>
+    /// 当前这一轮请求的序号。停止时自增，让已经在飞的请求认输出局：
+    /// 晚到的文字既不上屏，也不朗读 —— 否则「停止」会变成「暂停一下然后接着说」。
+    /// </summary>
+    private int _generation;
+
+    /// <summary>正在朗读的那条消息；停止时要把它的就地状态改成「已停止」。</summary>
+    private ChatMessage? _speakingMessage;
 
     public HostViewModel(
         HostDirector director,
         Func<ToolSettings> settingsProvider,
         HostIntentRouter router,
         CommandDispatcher? dispatcher = null,
-        ISessionStore? store = null)
+        ISessionStore? store = null,
+        ITtsService? tts = null,
+        Func<string, string?>? onVoiceChanged = null)
     {
         _director = director;
         _settingsProvider = settingsProvider;
-        _router = router;
         _dispatcher = dispatcher;
         _store = store;
+        _tts = tts;
+        _onVoiceChanged = onVoiceChanged;
+
+        // 枚举音色可能因为语音组件异常而失败：不能让整个主持台构造不出来。
+        try
+        {
+            foreach (var v in tts?.GetChineseVoices() ?? [])
+            {
+                AvailableVoices.Add(new VoiceOption(v));
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine("[Host] 枚举音色失败：" + ex.Message);
+        }
+
+        var savedVoice = settingsProvider()?.VoiceId;
+        _suppressVoiceFeedback = true;
+        try
+        {
+            _selectedVoiceId = !string.IsNullOrEmpty(savedVoice) && AvailableVoices.Any(v => v.Name == savedVoice)
+                ? savedVoice
+                : AvailableVoices.FirstOrDefault()?.Name;
+        }
+        finally
+        {
+            _suppressVoiceFeedback = false;
+        }
+
         _session = dispatcher is null ? new SessionViewModel(new CommandDispatcher(new UnwiredSessionStore())) : new SessionViewModel(dispatcher);
         _session.PropertyChanged += OnSessionPropertyChanged;
+        SyncIdleActivity();
 
         // 每次状态提交成功后，按对应意图请模型生成播报措辞。
         // 状态已由程序裁决，这里只是「把刚发生的事说出来」。
-        _session.Committed += async (_, type) => await NarrateAfterCommandAsync(type);
+        _session.Committed += async (_, type) =>
+        {
+            // 阶段事件先落进对话：即使随后模型失败，玩家也看得见流程确实走了一步。
+            AppendEvent(_session.Status);
 
-        SpeakCommand = new RelayCommand(SpeakAsync, () => !Busy);
-        SendCommand = new RelayCommand(SendAsync, () => !Busy);
-        StopCommand = new RelayCommand(() => { _director.Stop(); Status = "已停止播音。"; return Task.CompletedTask; });
-        ReplayCommand = new RelayCommand(ReplayAsync, () => !Busy && !string.IsNullOrEmpty(LastSpokenText));
-        LoadDemoCommand = new RelayCommand(LoadDemoAsync, () => !Busy);
-        ResumeCommand = new RelayCommand(ResumeAsync, () => !Busy && _dispatcher is not null);
+            // 播报期间也占住忙碌闸：否则主持人可以在上一段还没念完时再点一次提交，
+            // 于是模型请求与播音各跑一路，状态与日志互相覆盖。
+            _session.SetNarrationBusy(true);
+            try
+            {
+                await NarrateAfterCommandAsync(type);
+            }
+            catch (Exception ex)
+            {
+                // 公共屏只显示固定文案：异常里可能带本机路径与模型细节。
+                System.Diagnostics.Debug.WriteLine("[Host] 播报异常：" + ex);
+                Status = "播报未完成，文字已保留。";
+            }
+            finally
+            {
+                _session.SetNarrationBusy(false);
+            }
+        };
+
+        SendCommand = new RelayCommand(SendAsync, () => !IsBusy);
+        StopCommand = new RelayCommand(StopAsync, () => IsBusy);
+        OpeningSpeechCommand = new RelayCommand(
+            () => NarrateIntentAsync(HostNarrationIntent.OpenSession),
+            () => !IsBusy && ShowOpeningSpeech);
+        AskStatusCommand = new RelayCommand(
+            () => AskAsync("现在这个环节需要做什么？"),
+            () => !IsBusy && ShowSuggestions);
+        AskRulesCommand = new RelayCommand(
+            () => AskAsync("请再说明一次当前环节的规则。"),
+            () => !IsBusy && ShowSuggestions);
+        ShowMaterialsCommand = new RelayCommand(() => { ShowMaterials = true; return Task.CompletedTask; });
+        ShowConversationCommand = new RelayCommand(() => { ShowMaterials = false; return Task.CompletedTask; });
     }
 
-    public ObservableCollection<HostLogEntry> Log { get; } = [];
+    public ObservableCollection<VoiceOption> AvailableVoices { get; } = [];
+
+    /// <summary>本局对话：玩家、主持与阶段事件按时间顺序在同一条线上。</summary>
+    public ObservableCollection<ChatMessage> Messages { get; } = [];
+
+    /// <summary>
+    /// 正在进行的这件事：现在在做什么、走到第几步、已经等了多久。
+    /// 只在「正在做」和「失败」时显示，空闲不占屏。
+    /// </summary>
+    public HostActivity Activity { get; } = new();
 
     public SessionViewModel Session => _session;
+
+    public string? SelectedVoiceId
+    {
+        get => _selectedVoiceId;
+        set
+        {
+            if (SetProperty(ref _selectedVoiceId, value))
+            {
+                OnPropertyChanged(nameof(VoiceLabel));
+                OnVoiceChanged(value);
+            }
+        }
+    }
+
+    /// <summary>左侧页脚那一行：这位声音会不会自动读。</summary>
+    public string VoiceLabel =>
+        (string.IsNullOrEmpty(SelectedVoiceId) ? "跟随系统声音" : TtsVoiceDisplay.For(SelectedVoiceId))
+        + (AutoRead ? " · 自动朗读" : " · 仅文字");
 
     public string InputText
     {
         get => _inputText;
-        set => SetProperty(ref _inputText, value);
-    }
-
-    public string LastSpokenText
-    {
-        get => _lastSpokenText;
-        private set => SetProperty(ref _lastSpokenText, value);
+        set
+        {
+            if (SetProperty(ref _inputText, value))
+            {
+                OnPropertyChanged(nameof(CanSend));
+            }
+        }
     }
 
     public string Status
@@ -76,55 +187,244 @@ public sealed class HostViewModel : ObservableObject
         private set => SetProperty(ref _status, value);
     }
 
-    public string Proposal
-    {
-        get => _proposal;
-        private set => SetProperty(ref _proposal, value);
-    }
-
     public SpeechState SpeechState
     {
         get => _speechState;
         private set => SetProperty(ref _speechState, value);
     }
 
-    public bool Busy
+    /// <summary>正在等模型返回文字。</summary>
+    public bool IsGenerating
     {
-        get => _busy;
+        get => _isGenerating;
         private set
         {
-            if (SetProperty(ref _busy, value))
+            if (SetProperty(ref _isGenerating, value))
             {
-                SpeakCommand.RaiseCanExecuteChanged();
-                SendCommand.RaiseCanExecuteChanged();
-                ReplayCommand.RaiseCanExecuteChanged();
-                LoadDemoCommand.RaiseCanExecuteChanged();
-                ResumeCommand.RaiseCanExecuteChanged();
+                RaiseBusyChanged();
             }
         }
     }
 
-    public RelayCommand SpeakCommand { get; }
+    /// <summary>正在朗读。生成与朗读分开报，就地反馈才说得准。</summary>
+    public bool IsSpeaking
+    {
+        get => _isSpeaking;
+        private set
+        {
+            if (SetProperty(ref _isSpeaking, value))
+            {
+                RaiseBusyChanged();
+            }
+        }
+    }
+
+    public bool IsBusy => IsGenerating || IsSpeaking;
+
+    /// <summary>停止只在忙碌时出现：没在生成也没在念，就没有可停的东西。</summary>
+    public bool ShowStop => IsBusy;
+
+    public bool CanSend => !IsBusy && !string.IsNullOrWhiteSpace(InputText);
+
+    /// <summary>回复生成后是否自动朗读；读的是设置页那一份，改了立刻生效。</summary>
+    public bool AutoRead => _settingsProvider()?.AutoRead ?? true;
+
+    /// <summary>输入区上方那行提示：现在会不会自动朗读、能不能点停止。</summary>
+    public string ComposerHint => IsBusy
+        ? "正在回应，点右侧方形按钮可停止。"
+        : AutoRead
+            ? "回复后自动朗读。"
+            : "仅显示文字，可在消息旁逐条重播。";
+
+    /// <summary>
+    /// 本环节是否提供「请主持人开场」。
+    /// 由剧本包的流程声明决定，不按「是不是第 1 个环节」推断 ——
+    /// 序章本身可能就是第一步，固定序号会让这个按钮在不该出现的地方消失。
+    /// </summary>
+    public bool ShowOpeningSpeech =>
+        _session.SessionStateText == nameof(SessionState.Playing)
+        && _session.Projection?.CurrentPhase.CanOpenSession == true;
+
+    /// <summary>快捷意图只在对话里用得上：待开局和忙碌时不摆。</summary>
+    public bool ShowSuggestions =>
+        !IsBusy
+        && _session.Projection is not null
+        && _session.SessionStateText != nameof(SessionState.Prepared);
+
+    /// <summary>主区当前显示哪一屏：对话或公开材料/复盘。</summary>
+    public bool ShowMaterials
+    {
+        get => _showMaterials;
+        set
+        {
+            if (SetProperty(ref _showMaterials, value))
+            {
+                OnPropertyChanged(nameof(ShowConversation));
+                OnShellTitleChanged();
+            }
+        }
+    }
+
+    public bool ShowConversation => !ShowMaterials;
+
+    public string ShellTitle => ShowMaterials ? "公开材料与复盘" : "本局对话";
+
+    public string MaterialsTitle => _session.HasRevealedText ? "公开材料与复盘" : "已公开材料";
+
+    /// <summary>顶栏的材料入口只在真有东西可看时才亮。</summary>
+    public bool HasMaterialsTab => _session.ReleasedMaterials.Count > 0 || _session.HasRevealedText;
+
+    /// <summary>对话为空时给一句开场提示，而不是一片空白。</summary>
+    public bool HasConversation => Messages.Count > 0;
 
     public RelayCommand SendCommand { get; }
 
     public RelayCommand StopCommand { get; }
 
-    public RelayCommand ReplayCommand { get; }
+    public RelayCommand OpeningSpeechCommand { get; }
 
-    public RelayCommand LoadDemoCommand { get; }
+    public RelayCommand AskStatusCommand { get; }
 
-    public RelayCommand ResumeCommand { get; }
+    public RelayCommand AskRulesCommand { get; }
+
+    public RelayCommand ShowMaterialsCommand { get; }
+
+    public RelayCommand ShowConversationCommand { get; }
+
+    private void RaiseBusyChanged()
+    {
+        OnPropertyChanged(nameof(IsBusy));
+        OnPropertyChanged(nameof(ShowStop));
+        OnPropertyChanged(nameof(CanSend));
+        OnPropertyChanged(nameof(ComposerHint));
+        OnPropertyChanged(nameof(ShowSuggestions));
+        SendCommand.RaiseCanExecuteChanged();
+        StopCommand.RaiseCanExecuteChanged();
+        OpeningSpeechCommand.RaiseCanExecuteChanged();
+        AskStatusCommand.RaiseCanExecuteChanged();
+        AskRulesCommand.RaiseCanExecuteChanged();
+        foreach (var message in Messages)
+        {
+            message.ReplayCommand?.RaiseCanExecuteChanged();
+        }
+    }
+
+    /// <summary>音色变更。落盘失败时给主持人一句能看懂的提示，不把异常抛到绑定层。</summary>
+    private void OnVoiceChanged(string? voiceId)
+    {
+        if (voiceId is null)
+        {
+            return;
+        }
+
+        if (_suppressVoiceFeedback)
+        {
+            return;
+        }
+
+        var failure = _onVoiceChanged?.Invoke(voiceId);
+        var voice = AvailableVoices.FirstOrDefault(v => v.Name == voiceId);
+        Status = failure is null
+            ? $"已切换主持音色为「{voice?.DisplayName ?? voiceId}」。"
+            : $"音色已切换为「{voice?.DisplayName ?? voiceId}」，但没有保存成功：{failure}";
+    }
+
+    /// <summary>
+    /// 朗读用的音色。设置页与主持台写的是同一份设置（<see cref="ApplySettingsVoice"/> 保持同步），
+    /// 所以下拉框优先；本机一个音色都没有时才退回设置里的值。
+    /// </summary>
+    private string? EffectiveVoice(ToolSettings settings) => SelectedVoiceId ?? settings.VoiceId;
+
+    /// <summary>
+    /// 重新枚举音色。Edge 依赖装好后不必重启应用，回到设置页再刷一次即可。
+    /// </summary>
+    public void RefreshVoices()
+    {
+        if (_tts is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var voices = _tts.GetChineseVoices();
+            var names = voices.Select(v => v.Name).ToArray();
+            if (names.SequenceEqual(AvailableVoices.Select(v => v.Name)))
+            {
+                return;
+            }
+
+            var selected = SelectedVoiceId;
+            AvailableVoices.Clear();
+            foreach (var v in voices)
+            {
+                AvailableVoices.Add(new VoiceOption(v));
+            }
+
+            if (selected is not null && AvailableVoices.All(v => v.Name != selected))
+            {
+                // 原来选的音色没了：换一个，并把它落盘，
+                // 否则下拉框显示的和实际朗读的不是同一个音色。
+                var fallback = AvailableVoices.FirstOrDefault()?.Name;
+                _suppressVoiceFeedback = true;
+                try
+                {
+                    SelectedVoiceId = fallback;
+                }
+                finally
+                {
+                    _suppressVoiceFeedback = false;
+                }
+
+                if (fallback is not null)
+                {
+                    _onVoiceChanged?.Invoke(fallback);
+                    Status = $"原来的音色不可用，已切换为「{TtsVoiceDisplay.For(fallback)}」。";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine("[Host] 刷新音色列表失败：" + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// 设置页保存后同步主持台的音色与朗读选项。
+    /// 否则主持台还在用启动时的旧音色朗读，而设置页已经换了。
+    /// </summary>
+    public void ApplySettingsVoice(string? voiceId)
+    {
+        if (!string.IsNullOrEmpty(voiceId)
+            && voiceId != _selectedVoiceId
+            && AvailableVoices.Any(v => v.Name == voiceId))
+        {
+            _suppressVoiceFeedback = true;
+            try
+            {
+                SelectedVoiceId = voiceId;
+            }
+            finally
+            {
+                _suppressVoiceFeedback = false;
+            }
+        }
+
+        // 自动朗读是设置项，改完要立刻反映到输入区提示上。
+        OnPropertyChanged(nameof(AutoRead));
+        OnPropertyChanged(nameof(ComposerHint));
+        OnPropertyChanged(nameof(VoiceLabel));
+    }
 
     /// <summary>默认不启动任何模型请求。</summary>
     public Task LoadAsync(CancellationToken cancellationToken)
     {
-        AnswerWithPublic("欢迎回来。点击「装载演示剧本」可以走完一局；点击「公共开场」会请求本机模型。");
+        AppendHost("欢迎回来。正在从剧本库读入剧本，读好后这一页就是你们的一局。", fromModel: false);
         return Task.CompletedTask;
     }
 
     /// <summary>
-    /// 装载一个已冻结的剧本包（来自首页选择）。不自动开始、不自动播音。
+    /// 装载一个已冻结的剧本包（来自剧本库）。不自动开始、不自动播音。
     /// 同一包若已有存档则接着用，不覆盖进度。
     /// </summary>
     public async Task LoadPackageAsync(ScriptPackage package)
@@ -141,10 +441,11 @@ public sealed class HostViewModel : ObservableObject
             return;
         }
 
-        var sessionId = "session-" + package.PackageId;
+        var sessionId = SessionIds.For(package);
         try
         {
             var session = await _store.LoadSessionAsync(sessionId, CancellationToken.None);
+            var isNew = session is null;
             session ??= new Session
             {
                 SessionId = sessionId,
@@ -156,7 +457,10 @@ public sealed class HostViewModel : ObservableObject
                 Revision = 0,
                 ReleasedMaterialIds = [],
             };
-            await _store.SaveSessionAsync(session, CancellationToken.None);
+            if (isNew)
+            {
+                await _store.SaveSessionAsync(session, CancellationToken.None);
+            }
             if (_store is SessionStore concrete)
             {
                 await concrete.RegisterPackageAsync(package, CancellationToken.None);
@@ -165,8 +469,13 @@ public sealed class HostViewModel : ObservableObject
             _activePendingPackage = package;
             _session.Attach(package, session);
             OnPropertyChanged(nameof(SessionSummary));
-            Status = $"已装载「{package.Title}」：{package.PlayerCount} 人、{package.Spans.Count} 页来源。请勾选准备后开始。";
-            AnswerWithPublic($"已装载「{package.Title}」。请先确认全员就位，再点开始。");
+
+            AnnounceLoadedSession(
+                package,
+                session,
+                package.Title,
+                $"已装载「{package.Title}」：{package.PlayerCount} 人、{package.Spans.Count} 页来源。",
+                $"已装载「{package.Title}」。全员就位后，点左侧「开始这一局」。");
         }
         catch (DomainRuleException ex)
         {
@@ -176,6 +485,52 @@ public sealed class HostViewModel : ObservableObject
 
     /// <summary>当前装载的真实剧本包；用于「继续一局」时校验指纹。</summary>
     private ScriptPackage? _activePendingPackage;
+
+    /// <summary>
+    /// 装载完成后的统一收尾：新局与恢复局只差文案，
+    /// 阶段标题兜底与大屏视图的复位必须两处一致，不能各写一份。
+    /// </summary>
+    private void AnnounceLoadedSession(
+        ScriptPackage package,
+        Session session,
+        string displayName,
+        string loadedStatus,
+        string loadedPublic)
+    {
+        if (_conversationSessionId != session.SessionId)
+        {
+            if (IsBusy)
+            {
+                StopCommand.Execute(null);
+            }
+            Messages.Clear();
+            _conversationSessionId = session.SessionId;
+        }
+
+        if (session.State == SessionState.Prepared)
+        {
+            Status = loadedStatus;
+            AppendHost(loadedPublic, fromModel: false);
+        }
+        else
+        {
+            var currentPhase = package.Phases.FirstOrDefault(p => p.PhaseId == session.CurrentPhaseId);
+            var phaseTitle = currentPhase?.Title ?? "当前环节";
+            Status = $"已恢复「{displayName}」进度至「{phaseTitle}」。";
+            AppendEvent($"已恢复「{displayName}」到「{phaseTitle}」。");
+            AppendHost($"上一局停在「{phaseTitle}」，进度已经接上。安静开始，不会自动朗读。", fromModel: false);
+        }
+
+        // 真相与复盘只在该显示时显示：装载新剧本时要复位。
+        // 用 TruthAccess 的同一套判定（含「已揭秘后暂停」），否则这里会把大屏关掉。
+        ShowMaterials = TruthAccess.IsUnlocked(session);
+        _hadRevealedText = _session.HasRevealedText;
+        OnPropertyChanged(nameof(MaterialsTitle));
+        OnPropertyChanged(nameof(HasMaterialsTab));
+        OnPropertyChanged(nameof(ShowOpeningSpeech));
+        OnPropertyChanged(nameof(ShowSuggestions));
+        OnPropertyChanged(nameof(HasConversation));
+    }
 
     /// <summary>装载演示剧本并建立/恢复一局；不自动开始、不自动播音。</summary>
     public async Task LoadDemoAsync()
@@ -190,6 +545,7 @@ public sealed class HostViewModel : ObservableObject
         {
             var package = DemoPackage.Create();
             var session = await _store.LoadSessionAsync(DemoPackage.SessionId, CancellationToken.None);
+            var isNew = session is null;
             session ??= new Session
             {
                 SessionId = DemoPackage.SessionId,
@@ -201,7 +557,10 @@ public sealed class HostViewModel : ObservableObject
                 Revision = 0,
                 ReleasedMaterialIds = [],
             };
-            await _store.SaveSessionAsync(session, CancellationToken.None);
+            if (isNew)
+            {
+                await _store.SaveSessionAsync(session, CancellationToken.None);
+            }
             if (_store is SessionStore concrete)
             {
                 await concrete.RegisterPackageAsync(package, CancellationToken.None);
@@ -210,8 +569,13 @@ public sealed class HostViewModel : ObservableObject
             _activePendingPackage = package;
             _session.Attach(package, session);
             OnPropertyChanged(nameof(SessionSummary));
-            Status = "演示剧本已装载：请勾选「大家已口头准备好」后再开始。";
-            AnswerWithPublic("演示剧本已就绪。请先勾选「大家已口头准备好」，再点开始。");
+
+            AnnounceLoadedSession(
+                package,
+                session,
+                "演示剧本",
+                "演示剧本已装载。这是合成数据，用来熟悉操作。",
+                "演示剧本已就绪。全员就位后，点左侧「开始这一局」。");
         }
         catch (DomainRuleException ex)
         {
@@ -230,9 +594,7 @@ public sealed class HostViewModel : ObservableObject
 
         // 优先用当前装载的真实剧本；没有装载时退回演示剧本
         var package = _activePendingPackage ?? DemoPackage.Create();
-        var sessionId = _activePendingPackage is null
-            ? DemoPackage.SessionId
-            : "session-" + package.PackageId;
+        var sessionId = SessionIds.For(package);
         var recovery = new SessionRecovery(_store);
         var result = await recovery.RecoverAsync(package, sessionId, CancellationToken.None);
         if (!result.Recovered || result.Session is null)
@@ -245,11 +607,60 @@ public sealed class HostViewModel : ObservableObject
         SpeechState = SpeechState.Idle;
         _session.Attach(package, result.Session);
         OnPropertyChanged(nameof(SessionSummary));
-        Status = $"已恢复：revision={result.Session.Revision}，state={result.Session.State}。不会自动重播。";
+        Status = "已恢复上一次的进度。不会自动重播。";
+        AppendEvent($"已恢复至「{result.Session.CurrentPhaseId}」所在环节。");
+    }
+
+    // ===== 一次提问：玩家说 → 主持回 =====
+
+    public async Task SendAsync()
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        var text = InputText.Trim();
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        AppendPlayer(text);
+        InputText = string.Empty;
+
+        var settings = _settingsProvider();
+        if (string.IsNullOrWhiteSpace(settings.ModelId))
+        {
+            AppendHost("还没有选择主持模型。请先到设置页读取模型列表。", fromModel: false);
+            Status = "未选择 model ID。";
+            return;
+        }
+
+        var package = _session.Package;
+        var session = _session.Session;
+        if (package is null || session is null)
+        {
+            AppendHost("还没有装载剧本。请先从剧本库选一本。", fromModel: false);
+            Status = "还没有装载剧本。";
+            return;
+        }
+
+        // 当前问题已上屏，但在请求中只加入一次；此前真实对话继续作为历史。
+        var history = ConversationHistory().SkipLast(1).ToArray();
+        var messages = HostNarration.BuildAskMessages(package, session, text, history, settings.ModelId);
+        await RunTurnAsync(messages, "正在请本机模型回答…", AskPipeline);
+    }
+
+    /// <summary>快捷意图：替玩家把这句话打进输入框再发出去，走的还是同一条链路。</summary>
+    private Task AskAsync(string text)
+    {
+        InputText = text;
+        return SendAsync();
     }
 
     /// <summary>公共开场：把“开场”这个意图交给模型，由模型组织措辞。</summary>
-    public Task SpeakAsync() => NarrateAsync(HostNarrationIntent.OpenSession);
+    public Task SpeakAsync() => NarrateIntentAsync(HostNarrationIntent.OpenSession);
 
     /// <summary>
     /// 一次状态提交后的播报。没配置模型就静默跳过，不覆盖「已提交」的状态提示。
@@ -277,7 +688,7 @@ public sealed class HostViewModel : ObservableObject
 
         try
         {
-            await NarrateAsync(intent);
+            await NarrateIntentAsync(intent);
         }
         catch (DomainRuleException ex)
         {
@@ -286,27 +697,27 @@ public sealed class HostViewModel : ObservableObject
         }
     }
 
-    public async Task SendAsync()
-    {
-        var text = InputText.Trim();
-        if (text.Length == 0)
-        {
-            return;
-        }
+    /// <summary>
+    /// 按主持意图请求模型措辞，经公开政策核对后朗读。
+    /// 按钮给的是「现在要做什么」，措辞由模型生成，程序只核对能否回指公开原文。
+    /// </summary>
+    public async Task NarrateAsync(HostNarrationIntent intent) => await NarrateIntentAsync(intent);
 
-        // 状态意图只出提案，绝不能凭一句话改状态
-        var intent = _router.Route(text);
-        if (intent.Kind == HostIntentKind.ProposeCommand)
+    private async Task NarrateIntentAsync(HostNarrationIntent intent)
+    {
+        if (IsBusy)
         {
-            ProposeCommand(intent.ProposedAction == PublicAction.Reveal ? "揭秘" : "下一环节");
-            InputText = string.Empty;
+            // 不静默吞掉：主持人得知道这一段没有播，而且进度与文字都还在。
+            Status = "上一段播报还没结束，这一段没有播。";
+            AppendEvent("上一段播报还没结束，这一段的播报跳过了；文字与进度都已保留。");
             return;
         }
 
         var settings = _settingsProvider();
         if (string.IsNullOrWhiteSpace(settings.ModelId))
         {
-            Status = "还没有选择 model ID。请先在设置页读取模型列表。";
+            AppendHost("还没有选择主持模型；流程操作仍然可用。", fromModel: false);
+            Status = "未选择 model ID。";
             return;
         }
 
@@ -314,166 +725,341 @@ public sealed class HostViewModel : ObservableObject
         var session = _session.Session;
         if (package is null || session is null)
         {
-            Status = "还没有装载剧本，先选一本再提问。";
+            AppendHost("还没有装载剧本。请先从剧本库选一本。", fromModel: false);
+            Status = "还没有装载剧本。";
             return;
         }
 
-        Busy = true;
-        SpeechState = SpeechState.GeneratingText;
-        Status = "正在请求本机模型…";
+        var messages = HostNarration.BuildMessages(package, session, intent, ConversationHistory(), settings.ModelId);
+        await RunTurnAsync(messages, "正在请本机模型写主持词…", SpeakPipeline);
+    }
+
+    /// <summary>提问这条流水线的两步：先问模型，再朗读。</summary>
+    private static readonly string[] AskPipeline = ["请模型回答", "朗读"];
+
+    /// <summary>口播这条流水线的两步：先请模型写词，再朗读。</summary>
+    private static readonly string[] SpeakPipeline = ["请模型写词", "朗读"];
+
+    /// <summary>
+    /// 一轮完整的「生成 → 朗读」。生成与朗读各自就地报状态；
+    /// 任一步被停止或失败，都只在这条消息上留痕，不影响已经提交的游戏状态。
+    /// </summary>
+    private async Task RunTurnAsync(
+        IReadOnlyList<MagpieMessage> messages,
+        string thinkingTitle,
+        string[] pipeline)
+    {
+        var token = ++_generation;
+        var settings = _settingsProvider();
+
+        IsGenerating = true;
+        Activity.Begin(ActivityKind.Thinking, thinkingTitle, pipeline, PhaseDetail());
+        _session.SetNarrationBusy(true);
         try
         {
-            // 玩家/主持人的原话 + 当前公开上下文一起交给模型；回复不审查，直接念
-            var messages = HostNarration.BuildAskMessages(package, session, text);
             var (reply, reason, late) = await _director.GenerateOnlyAsync(
-                settings.ModelId, messages, CancellationToken.None);
+                settings.ModelId!, messages, CancellationToken.None);
 
-            if (late)
+            // 已经被停止：晚到的回复不上屏，也不朗读。
+            if (token != _generation || late)
             {
-                Status = reason ?? "已取消，晚到的回复不会显示。";
                 return;
             }
 
             if (reply is null)
             {
                 SpeechState = SpeechState.Error;
-                Status = reason ?? "模型这次没有给出可用内容。";
+                AppendHost(reason ?? "模型这次没有给出可用内容，请检查本机模型服务。", fromModel: false);
+                Activity.Fail("模型没有给出可用内容", reason ?? "请检查本机模型服务。");
                 return;
             }
 
-            var result = await _director.SpeakApprovedAsync(reply, settings.VoiceId, CancellationToken.None);
-            ApplyResult(result);
+            // 模型拥有完整主持资料，自主组织对外回复；不把内部提示词直接显示或朗读。
+            var message = AppendHost(reply);
+
+            if (!AutoRead)
+            {
+                message.SetSpeech(ChatSpeechState.Ready, "自动朗读已关闭，可点重播。");
+                SpeechState = SpeechState.Idle;
+                Activity.Complete("文字已生成");
+                return;
+            }
+
+            IsGenerating = false;
+            IsSpeaking = true;
+            _speakingMessage = message;
+            message.SetSpeech(ChatSpeechState.Speaking, "正在朗读…");
+            SpeechState = SpeechState.Speaking;
+            Activity.SetStep(1, "正在朗读");
+            Activity.SetDetail(PhaseDetail());
+
+            var result = await _director.SpeakApprovedAsync(reply, EffectiveVoice(settings), CancellationToken.None);
+
+            if (token != _generation)
+            {
+                // 停止已经改写过这条消息的状态，这里不要覆盖它。
+                return;
+            }
+
             if (result.Item is not null)
             {
-                InputText = string.Empty;
+                message.SetSpeech(ChatSpeechState.Spoken, "已朗读");
+                SpeechState = SpeechState.Idle;
+                Activity.Complete("已朗读");
+            }
+            else
+            {
+                message.SetSpeech(ChatSpeechState.Failed, result.PublicReason ?? "朗读失败，文字已保留。");
+                SpeechState = SpeechState.Error;
+                Activity.Fail("朗读没有完成", result.PublicReason ?? "文字已保留，可稍后重播。");
             }
         }
-        finally
+        catch (DomainRuleException ex)
         {
-            Busy = false;
-        }
-    }
-
-    public async Task ReplayAsync()
-    {
-        Busy = true;
-        try
-        {
-            var settings = _settingsProvider();
-            var result = await _director.ReplayAsync(settings.VoiceId, CancellationToken.None);
-            ApplyResult(result, isReplay: true);
+            AppendHost(ex.PublicReason, fromModel: false);
+            Activity.Fail("这一步没有完成", ex.PublicReason);
         }
         finally
         {
-            Busy = false;
+            if (token == _generation)
+            {
+                IsGenerating = false;
+                IsSpeaking = false;
+                _speakingMessage = null;
+                _session.SetNarrationBusy(false);
+                if (Activity.IsActive)
+                {
+                    Activity.Reset("就绪", PhaseDetail());
+                }
+            }
         }
-    }
-
-    /// <summary>状态意图只产生待确认提案，不调用 CommandDispatcher、不改状态。</summary>
-    public void ProposeCommand(string proposal)
-    {
-        Proposal = proposal;
-        Status = "这只是待确认提案：需要在阶段面板里手动确认后才会提交。";
     }
 
     /// <summary>
-    /// 按主持意图请求模型措辞，经公开政策核对后朗读。
-    /// 按钮给的是「现在要做什么」，措辞由模型生成，程序只核对能否回指公开原文。
+    /// 停止：取消模型请求与播音，晚到的结果一律丢弃。
+    /// 不回滚已经提交的游戏状态，也不删已经生成好的文字。
     /// </summary>
-    public async Task NarrateAsync(HostNarrationIntent intent)
+    private Task StopAsync()
     {
+        _generation++;
+        _director.Stop();
+
+        _speakingMessage?.SetSpeech(ChatSpeechState.Stopped, "已停止朗读");
+        _speakingMessage = null;
+
+
+        IsGenerating = false;
+        IsSpeaking = false;
+        _session.SetNarrationBusy(false);
+        SpeechState = SpeechState.Cancelled;
+        Activity.Reset("就绪", PhaseDetail());
+        Status = "已停止本次回应。本局进度没有变化。";
+        AppendEvent("已停止本次回应。本局进度没有变化。");
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 重播某一条主持回复：只用它已经存下来的文字，不再请求模型，也不重复提交状态。
+    ///
+    /// 重播期间同样占住会话的播报忙碌闸：否则旧音频还在播放时点「进入下一环节」，
+    /// 阶段会真的推进，而紧接着那段播报因为宿主忙碌被直接丢弃 —— 主持人听不到新阶段。
+    /// </summary>
+    private async Task ReplayMessageAsync(ChatMessage message)
+    {
+        if (IsBusy || !message.CanReplay)
+        {
+            return;
+        }
+
         var settings = _settingsProvider();
-        if (string.IsNullOrWhiteSpace(settings.ModelId))
+        var item = new SpeechItem
         {
-            Status = "还没有选择 model ID，主持词暂时无法生成；流程操作仍可用。";
-            return;
-        }
+            SpeechId = Guid.NewGuid().ToString("N"),
+            RequestId = "replay-" + message.Id,
+            GenerationId = "replay-" + message.Id,
+            SafeText = message.Text,
+        };
 
-        var package = _session.Package;
-        var session = _session.Session;
-        if (package is null || session is null)
-        {
-            Status = "还没有装载剧本，先选一本再主持。";
-            return;
-        }
-
-        Busy = true;
-        SpeechState = SpeechState.GeneratingText;
-        Status = "正在生成主持词…";
+        var token = ++_generation;
+        _speakingMessage = message;
+        IsSpeaking = true;
+        _session.SetNarrationBusy(true);
+        message.SetSpeech(ChatSpeechState.Speaking, "正在重播…");
+        Activity.Begin(ActivityKind.Speaking, "正在重播…", ["朗读"], PhaseDetail());
         try
         {
-            var messages = HostNarration.BuildMessages(package, session, intent);
-            var (text, reason, late) = await _director.GenerateOnlyAsync(
-                settings.ModelId, messages, CancellationToken.None);
-
-            if (late)
+            var result = await _director.ReplayItemAsync(item, EffectiveVoice(settings), CancellationToken.None);
+            if (token != _generation)
             {
-                Status = reason ?? "已取消。";
                 return;
             }
 
-            if (text is null)
+            // 只有真的念出来才算成功：失败时 director 不给 Item。
+            if (result.Item is not null && result.State == SpeechState.Idle)
             {
-                SpeechState = SpeechState.Error;
-                Status = reason ?? "模型这次没有给出可用内容。";
-                return;
+                message.SetSpeech(ChatSpeechState.Spoken, "已重播（未请求模型）");
+                Activity.Complete("已重播");
             }
-
-            // 产品决定：不审查模型输出，回什么就念什么。
-            // 秘密隔离发生在拼提示词处（HostNarration 只取 Public 段），那里才是可建立标准的地方；
-            // 对自然语言做输出审查没有可靠标准，反而会毁掉主持的自然度。
-            var result = await _director.SpeakApprovedAsync(text, settings.VoiceId, CancellationToken.None);
-            ApplyResult(result);
-            if (result.Item is not null)
+            else if (result.State == SpeechState.Cancelled)
             {
-                Status = "已朗读。";
+                message.SetSpeech(ChatSpeechState.Stopped, "已停止朗读");
+                Activity.Reset("就绪", PhaseDetail());
             }
+            else
+            {
+                message.SetSpeech(
+                    ChatSpeechState.Failed,
+                    "重播失败：" + (result.PublicReason ?? "文字已保留，可稍后再试。"));
+                Activity.Fail("重播没有完成", result.PublicReason ?? "文字已保留，可稍后再试。");
+            }
+        }
+        catch (DomainRuleException ex)
+        {
+            message.SetSpeech(ChatSpeechState.Failed, ex.PublicReason);
+            Activity.Fail("重播没有完成", ex.PublicReason);
         }
         finally
         {
-            Busy = false;
+            if (token == _generation)
+            {
+                IsSpeaking = false;
+                _speakingMessage = null;
+                _session.SetNarrationBusy(false);
+                if (Activity.IsActive)
+                {
+                    Activity.Reset("就绪", PhaseDetail());
+                }
+            }
         }
     }
 
-    private void ApplyResult(HostDirector.HostTurnResult result, bool isReplay = false)
+    /// <summary>当前环节的一行说明，放在状态行里帮助主持人定位。</summary>
+    private string PhaseDetail()
     {
-        SpeechState = result.State;
-        if (result.Item is not null)
+        var phase = _session.PhaseTitle;
+        return string.IsNullOrEmpty(phase) || phase == "（未开始）" ? string.Empty : $"当前环节：{phase}";
+    }
+
+    /// <summary>空闲时状态行显示什么：就绪 + 当前环节。阶段变化时同步。</summary>
+    private void SyncIdleActivity()
+    {
+        Activity.SetIdleState("就绪", PhaseDetail());
+    }
+
+    // ===== 消息维护 =====
+
+    private IReadOnlyList<MagpieMessage> ConversationHistory() => Messages
+        .Where(m => m.IsPlayer || m.IsModelReply)
+        .Select(m => new MagpieMessage
         {
-            AnswerWithPublic(result.Item.SafeText);
-            Status = isReplay ? "已重播已保存的口播，没有请求模型。" : "已朗读。";
+            Role = m.IsPlayer ? "user" : "assistant",
+            Content = m.Text,
+        })
+        .ToArray();
+
+    private ChatMessage AppendHost(string text, bool fromModel = true)
+    {
+        var message = new ChatMessage(ChatAuthor.Host, text) { IsModelReply = fromModel };
+        if (fromModel)
+        {
+            message.SetSpeech(ChatSpeechState.Ready, "尚未朗读");
+            message.ReplayCommand = new RelayCommand(
+                () => ReplayMessageAsync(message),
+                () => !IsBusy && message.CanReplay);
         }
-        else if (result.PublicReason is not null)
+        else
         {
-            Status = result.PublicReason;
+            message.SetSpeech(ChatSpeechState.NotApplicable, "本机提示，未调用模型");
         }
 
-        ReplayCommand.RaiseCanExecuteChanged();
+        AddMessage(message);
+        return message;
     }
+
+    private void AppendPlayer(string text) => AddMessage(new ChatMessage(ChatAuthor.Player, text));
+
+    private void AppendEvent(string text) => AddMessage(new ChatMessage(ChatAuthor.Event, text));
+
+    private void AddMessage(ChatMessage message)
+    {
+        Messages.Add(message);
+        OnPropertyChanged(nameof(HasConversation));
+        OnPropertyChanged(nameof(ShowSuggestions));
+        MessageAppended?.Invoke(this, message);
+    }
+
+
+    /// <summary>有新消息落地；视图据此把对话滚到底。</summary>
+    public event EventHandler<ChatMessage>? MessageAppended;
+
+    /// <summary>当前装载的公开文字，供视图在材料页里显示。</summary>
+    public string? RevealedText => _session.RevealedText;
+
+    /// <summary>头部摘要只包含阶段与状态，不含任何私有内容，也不报内部 revision。</summary>
+    public string SessionSummary =>
+        _session.Projection is null
+            ? "当前没有装载一局。"
+            : $"{_session.PhaseTitle} · {_session.SessionStateLabel}";
 
     /// <summary>会话状态变化时把权威状态同步到主持台头部，避免显示装载时的旧值。</summary>
     private void OnSessionPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(SessionViewModel.SessionStateText) or nameof(SessionViewModel.Revision) or nameof(SessionViewModel.PhaseTitle))
+        if (e.PropertyName is nameof(SessionViewModel.SessionStateText)
+            or nameof(SessionViewModel.Revision)
+            or nameof(SessionViewModel.PhaseTitle))
         {
             OnPropertyChanged(nameof(SessionSummary));
+            OnPropertyChanged(nameof(ShowOpeningSpeech));
+            OnPropertyChanged(nameof(ShowSuggestions));
+            OpeningSpeechCommand.RaiseCanExecuteChanged();
+            AskStatusCommand.RaiseCanExecuteChanged();
+            AskRulesCommand.RaiseCanExecuteChanged();
+            SyncIdleActivity();
+        }
+
+        // 只在「还没有揭秘内容 → 有揭秘内容」的那一刻自动切到材料/复盘页。
+        // 注意只能在 HasRevealedText 事件里更新 _hadRevealedText：
+        // RefreshView 会先发 PhaseTitle 等事件，那时投影已经是新值，
+        // 若在每个事件里都同步，跃迁会被提前吃掉，自动切换就再也不会发生。
+        if (e.PropertyName == nameof(SessionViewModel.HasRevealedText))
+        {
+            var hasRevealed = _session.HasRevealedText;
+            if (hasRevealed && !_hadRevealedText)
+            {
+                ShowMaterials = true;
+            }
+
+            _hadRevealedText = hasRevealed;
+            OnPropertyChanged(nameof(MaterialsTitle));
+            OnPropertyChanged(nameof(HasMaterialsTab));
+            OnPropertyChanged(nameof(RevealedText));
         }
     }
 
-    /// <summary>头部摘要只包含阶段、状态与 revision，不含任何私有内容。</summary>
-    public string SessionSummary =>
-        _session.Projection is null
-            ? "当前没有装载一局。"
-            : $"{_session.PhaseTitle} · {_session.SessionStateText} · revision {_session.Revision}";
+    /// <summary>上一次刷新时是否已有揭秘内容；用来识别 false → true 的跃迁。</summary>
+    private bool _hadRevealedText;
 
-    public void AnswerWithPublic(string text)
+    /// <summary>主区标题变化（对话 / 公开材料）。</summary>
+    public event EventHandler? TitleChanged;
+
+    private void OnShellTitleChanged() => TitleChanged?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    /// 报告一个主持人需要知道的问题（装载失败、继续失败等）。
+    /// 对外只给固定文案，细节写诊断日志。
+    /// </summary>
+    public void ReportProblem(string message)
     {
-        LastSpokenText = text;
-        Log.Insert(0, new HostLogEntry(DateTime.Now.ToString("HH:mm:ss"), text));
-        while (Log.Count > 50)
-        {
-            Log.RemoveAt(Log.Count - 1);
-        }
+        Status = message;
+        AppendEvent(message);
+    }
+
+    /// <summary>
+    /// 释放状态条的计时器。
+    /// </summary>
+    public void Dispose()
+    {
+        Activity.Dispose();
     }
 
     /// <summary>未接线的存储：任何提交都显式失败，避免误以为已经写入。</summary>
@@ -499,9 +1085,11 @@ public sealed class HostViewModel : ObservableObject
         public Task<IReadOnlyList<GameEvent>> ReadEventsAsync(string sessionId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<GameEvent>>([]);
 
+        public Task<IReadOnlyList<StoredSessionRef>> ListSessionsAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<StoredSessionRef>>([]);
+
         public Task SaveSessionAsync(Session session, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("未接线的会话存储不能保存。");
     }
 }
 
-public sealed record HostLogEntry(string Time, string Text);

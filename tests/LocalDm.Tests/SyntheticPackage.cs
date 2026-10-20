@@ -44,7 +44,7 @@ public static class SyntheticPackage
 
         var phases = new[]
         {
-            Phase("phase-read", "阅本", [PublicAction.Advance, PublicAction.Pause], [], false, false, "seg-intro"),
+            Phase("phase-read", "阅本", [PublicAction.Start, PublicAction.Advance, PublicAction.Pause], [], false, false, "seg-intro"),
             Phase("phase-search", "搜证", [PublicAction.Advance, PublicAction.ReleaseMaterials, PublicAction.Pause], ["M1", "M2"], false, false, "seg-search"),
             Phase("phase-discuss", "讨论", [PublicAction.Advance, PublicAction.Pause], [], false, false, "seg-discuss"),
             Phase("phase-vote", "投票", [PublicAction.Advance, PublicAction.SubmitVoteSummary], [], true, false, "seg-vote"),
@@ -98,8 +98,6 @@ public static class SyntheticPackage
         GameCommandType type,
         int revision,
         string operationId,
-        bool groupReady = false,
-        bool confirmed = false,
         IReadOnlyList<string>? materials = null,
         VoteSummary? votes = null,
         string sessionId = "session-1") => new()
@@ -108,8 +106,6 @@ public static class SyntheticPackage
         OperationId = operationId,
         ExpectedRevision = revision,
         Type = type,
-        GroupReady = groupReady,
-        Confirmed = confirmed,
         MaterialIds = materials ?? [],
         Votes = votes,
     };
@@ -128,7 +124,7 @@ public static class SyntheticPackage
         PublicSegmentIds = [publicSegmentId],
         AllowedActions = actions,
         Conditions = [$"原本条件：{title}阶段满足剧本条件"],
-        RequiresGroupReady = true,
+        Hint = $"{title}环节当前提示",
         MaterialIds = materials,
         IsVotePhase = isVote,
         IsRevealPhase = isReveal,

@@ -241,8 +241,37 @@ public sealed class HostDirector
         }
         catch (DomainRuleException ex)
         {
+            // 没有真的念出来就不算成功：Item 归 null，调用方据此显示失败而不是「已重播」。
             SetState(SpeechState.Error);
-            return new HostTurnResult(item, SpeechState.Error, ex.PublicReason, Late: false);
+            return new HostTurnResult(null, SpeechState.Error, ex.PublicReason, Late: false);
+        }
+    }
+
+    /// <summary>
+    /// 重播某一条已生成的主持回复：只播放它保存下来的文字。
+    /// 不再请求模型、不再提交任何状态，也不改动「最近一次口播」指针。
+    ///
+    /// 失败时返回 Item = null：调用方按「拿到 Item 才算念成功」判定，
+    /// 否则界面会在没有声音的情况下报告「已重播」。
+    /// </summary>
+    public async Task<HostTurnResult> ReplayItemAsync(
+        SpeechItem item,
+        string? voiceId,
+        CancellationToken cancellationToken = default)
+    {
+        item.Validate();
+        SetState(SpeechState.Speaking);
+        try
+        {
+            await _tts.ReplayAsync(item, voiceId, cancellationToken);
+            SetState(SpeechState.Idle);
+            return new HostTurnResult(item, SpeechState.Idle, null, Late: false);
+        }
+        catch (DomainRuleException ex)
+        {
+            var cancelled = ex.Code == DomainErrorCode.REQUEST_CANCELLED;
+            SetState(cancelled ? SpeechState.Cancelled : SpeechState.Error);
+            return new HostTurnResult(null, State, ex.PublicReason, Late: false);
         }
     }
 

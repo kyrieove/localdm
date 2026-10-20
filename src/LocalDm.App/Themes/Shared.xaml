@@ -11,23 +11,39 @@
 
     <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
     <conv:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+    <conv:NotEmptyToVisibilityConverter x:Key="NotEmptyToVisibility" />
 
-    <SolidColorBrush x:Key="Paper" Color="#FFF1EADA" />
-    <SolidColorBrush x:Key="PaperDeep" Color="#FFE7DCC5" />
-    <SolidColorBrush x:Key="PaperDim" Color="#FFF8F3E9" />
-    <SolidColorBrush x:Key="Cloth" Color="#FF191613" />
-    <SolidColorBrush x:Key="ClothSoft" Color="#FF26221D" />
-    <SolidColorBrush x:Key="Ink" Color="#FF211E19" />
-    <SolidColorBrush x:Key="InkSoft" Color="#FF5B5346" />
-    <SolidColorBrush x:Key="Rule" Color="#FFC9BCA2" />
-    <SolidColorBrush x:Key="Seal" Color="#FF8E2B22" />
-    <SolidColorBrush x:Key="SealDeep" Color="#FF6A1F18" />
-    <SolidColorBrush x:Key="Silver" Color="#FFCBBFA6" />
-    <SolidColorBrush x:Key="Muted" Color="#FF8C7F6B" />
+    <!--
+      对话式界面 · 纸面与墨色
+      米白纸面 + 墨色文字 + 一个印章红（只给不可逆动作与当下状态）。
+      颜色取自第二版原型 docs/preview/conversation-ui-20261020：更浅的纸、更柔的分隔线，
+      让对话正文成为主角，而不是被厚边框抢走注意力。
+    -->
+    <SolidColorBrush x:Key="Paper" Color="#FFFBFAF7" />
+    <SolidColorBrush x:Key="PaperDeep" Color="#FFEFEDE7" />
+    <SolidColorBrush x:Key="PaperDim" Color="#FFFFFEFA" />
+    <SolidColorBrush x:Key="Cloth" Color="#FF292823" />
+    <SolidColorBrush x:Key="ClothSoft" Color="#FF3A382F" />
+    <SolidColorBrush x:Key="Ink" Color="#FF292823" />
+    <SolidColorBrush x:Key="InkSoft" Color="#FF5B564C" />
+    <SolidColorBrush x:Key="Rule" Color="#FFDEDBD2" />
+    <SolidColorBrush x:Key="Seal" Color="#FF943F32" />
+    <SolidColorBrush x:Key="SealDeep" Color="#FF7E3228" />
+    <SolidColorBrush x:Key="Silver" Color="#FFC8C3B7" />
+    <SolidColorBrush x:Key="Muted" Color="#FF716D63" />
+    <!-- 玩家气泡与主持头像底：比纸面深一档，不抢正文 -->
+    <SolidColorBrush x:Key="Bubble" Color="#FFEEECE5" />
+    <SolidColorBrush x:Key="AvatarWash" Color="#FFF5ECE3" />
+    <SolidColorBrush x:Key="SealWash" Color="#FFF0E4DD" />
 
     <FontFamily x:Key="DisplayFace">Source Han Serif SC, Noto Serif SC, SimSun, serif</FontFamily>
     <FontFamily x:Key="BodyFace">Microsoft YaHei UI, Microsoft YaHei, sans-serif</FontFamily>
-    <FontFamily x:Key="FigureFace">Consolas, Cascadia Mono, monospace</FontFamily>
+    <!--
+        等宽字体栈：NSimSun / SimSun 的西文半角恰为 0.5em、汉字全角为 1.0em，
+        天然构成 2:1 的列网格。Consolas 的步进是 0.55em，与之混排会让
+        复盘时间线的列位继续漂移，因此不排在前面。
+    -->
+    <FontFamily x:Key="FigureFace">NSimSun, SimSun, monospace</FontFamily>
 
     <!-- ===== 文字 ===== -->
     <!--
@@ -216,6 +232,121 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- ===== 左侧轨道（浅色） ===== -->
+    <!--
+      侧栏改成浅底之后，沿用深色书脊那套按钮样式会得到「深底深字」。
+      这里给轨道单独一套：透明底、墨色字、悬停一层淡淡的水洗。
+    -->
+    <Style x:Key="RailButton" TargetType="Button">
+        <Setter Property="FontFamily" Value="{StaticResource BodyFace}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Padding" Value="10,9" />
+        <Setter Property="Margin" Value="0,0,0,1" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Shell" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6" SnapsToDevicePixels="True">
+                        <ContentPresenter TextElement.Foreground="{TemplateBinding Foreground}"
+                                          HorizontalAlignment="Left" VerticalAlignment="Center"
+                                          Margin="{TemplateBinding Padding}" RecognizesAccessKey="False" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Shell" Property="Background" Value="{StaticResource Rule}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Shell" Property="Background" Value="{StaticResource Silver}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Shell" Property="BorderBrush" Value="{StaticResource Seal}" />
+                            <Setter TargetName="Shell" Property="BorderThickness" Value="2" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource Muted}" />
+                            <Setter Property="Cursor" Value="Arrow" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 小标题：轨道里的分组名，不是内容 -->
+    <Style x:Key="RailLabel" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource BodyFace}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{StaticResource Muted}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- 剧目名：轨道顶部那一行 -->
+    <Style x:Key="RailTitle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource DisplayFace}" />
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
+    </Style>
+
+    <!-- ===== 对话正文 ===== -->
+    <!-- 长回复要能一口气读下去：16px、行距 1.9、段间留白 -->
+    <Style x:Key="ChatBody" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource BodyFace}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="LineHeight" Value="30" />
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight" />
+        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
+    </Style>
+
+    <Style x:Key="ChatMeta" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource BodyFace}" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Foreground" Value="{StaticResource Muted}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- 顶栏的小按钮：只有字和图标，不要边框抢戏 -->
+    <Style x:Key="TopBarButton" TargetType="Button" BasedOn="{StaticResource QuietButton}">
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource Muted}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Padding" Value="10,7" />
+        <Setter Property="Margin" Value="0" />
+    </Style>
+
+    <!-- 发送：一个方形的印章红按钮，忙碌时变成停止 -->
+    <Style x:Key="SendButton" TargetType="Button" BasedOn="{StaticResource SealButton}">
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="Width" Value="34" />
+        <Setter Property="Height" Value="34" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+
+    <!-- 输入框外框：一条细线围成的书写区，聚焦时线变深 -->
+    <Style x:Key="ComposerFrame" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource PaperDim}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Silver}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="15,12,12,10" />
     </Style>
 
     <!-- ===== 输入 ===== -->

@@ -15,4 +15,10 @@
     <ProjectReference Include="..\LocalDm.Core\LocalDm.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Voice\edge_speak.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

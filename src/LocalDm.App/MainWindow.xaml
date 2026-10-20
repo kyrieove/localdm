@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:LocalDm.App.ViewModels"
         xmlns:views="clr-namespace:LocalDm.App.Views"
-        Title="本局主持" Height="820" Width="1320" MinHeight="640" MinWidth="1040"
+        Title="本局主持" Height="860" Width="1360" MinHeight="560" MinWidth="1040"
         WindowStartupLocation="CenterScreen"
         FontFamily="Microsoft YaHei UI" FontSize="15"
         Foreground="{DynamicResource Ink}"
@@ -29,44 +29,270 @@
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="216" />
+            <ColumnDefinition Width="278" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <!-- 炭黑硬封：书名、导航、当前局摘要 -->
-        <Border Grid.Column="0" Background="{DynamicResource Cloth}">
-            <Grid>
+        <!--
+            左侧只管「现在到哪、还差什么、我能做什么」。
+            主区全部留给对话与公开内容，不再有固定右栏。
+            可用动作固定在下方：窗口变矮、缩放变大时，只让进度列表滚动，
+            按钮不能被滚出屏幕。
+        -->
+        <Border Grid.Column="0" Background="{DynamicResource PaperDeep}"
+                BorderBrush="{StaticResource Rule}" BorderThickness="0,0,1,0"
+                DataContext="{Binding Host}">
+            <Grid Margin="0,0,0,14">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0" Margin="22,30,22,26">
-                    <TextBlock Text="本局主持" Style="{StaticResource SpineTitle}" />
-                    <Border Height="1" Background="{StaticResource Silver}" Opacity="0.45" Margin="0,14,0,10" />
-                    <TextBlock Text="单电脑 · 公共屏幕" Style="{StaticResource SpineMeta}" />
+                <!-- 书名 -->
+                <StackPanel Grid.Row="0" Margin="20,18,20,10">
+                    <TextBlock Text="本局主持" Style="{StaticResource Display}" FontSize="22" />
+                    <TextBlock Text="一台电脑，一场桌上戏" Style="{StaticResource RailLabel}" FontSize="11"
+                               Margin="0,4,0,0" />
                 </StackPanel>
 
-                <StackPanel Grid.Row="1" Margin="10,0">
-                    <Button x:Name="NavLibrary" Content="首页 / 本局" Style="{StaticResource SpineButton}"
-                            Command="{Binding ShowLibraryCommand}" />
-                    <Button x:Name="NavSetup" Content="设置与诊断" Style="{StaticResource SpineButton}"
-                            Command="{Binding ShowSetupCommand}" />
-                    <Button x:Name="NavHost" Content="主持台" Style="{StaticResource SpineButton}"
-                            Command="{Binding ShowHostCommand}" />
+                <StackPanel Grid.Row="1" Margin="12,0,12,0">
+                    <Button x:Name="NavLibrary" Content="剧本库" Style="{StaticResource RailButton}"
+                            Command="{Binding DataContext.ShowLibraryCommand,
+                                              RelativeSource={RelativeSource AncestorType=Window}}" />
+                    <Button x:Name="NavSession" Content="回到本局" Style="{StaticResource RailButton}"
+                            Command="{Binding DataContext.ShowHostCommand,
+                                              RelativeSource={RelativeSource AncestorType=Window}}"
+                            Visibility="{Binding DataContext.CanReturnToSession,
+                                                 RelativeSource={RelativeSource AncestorType=Window},
+                                                 Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
 
-                <StackPanel Grid.Row="2" Margin="22,0,22,26">
-                    <Border Height="1" Background="{StaticResource Silver}" Opacity="0.28" Margin="0,0,0,12" />
-                    <TextBlock Text="{Binding CurrentPackageLine}" Style="{StaticResource SpineMeta}" />
-                    <TextBlock Text="{Binding CurrentPhaseLine}" Style="{StaticResource SpineMeta}"
-                               Margin="0,5,0,0" FontSize="11" Opacity="0.7" />
+                <!-- 当前这一局：剧目与人数 -->
+                <StackPanel Grid.Row="2" Margin="20,14,20,0"
+                            Visibility="{Binding DataContext.IsHostActive,
+                                                 RelativeSource={RelativeSource AncestorType=Window},
+                                                 Converter={StaticResource BoolToVisibility}}">
+                    <Border Height="1" Background="{StaticResource Rule}" Margin="0,0,0,12" />
+                    <TextBlock Text="{Binding Session.PublicTitle}" Style="{StaticResource RailTitle}" FontSize="16" />
+                    <StackPanel Orientation="Horizontal" Margin="0,5,0,10">
+                        <TextBlock Text="{Binding Session.PlayerCount, StringFormat={}{0} 位玩家}"
+                                   Style="{StaticResource RailLabel}" FontSize="11" />
+                        <TextBlock Text=" · " Style="{StaticResource RailLabel}" FontSize="11" />
+                        <TextBlock Text="{Binding Session.SessionStateLabel}" Style="{StaticResource RailLabel}"
+                                   FontSize="11" />
+                        <TextBlock Text="{Binding Session.PhaseProgress}" Style="{StaticResource RailLabel}"
+                                   FontSize="11" Margin="10,0,0,0" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- 进度与提示：只有这一块滚动 -->
+                <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" Padding="20,0,16,0"
+                              Visibility="{Binding DataContext.IsHostActive,
+                                                   RelativeSource={RelativeSource AncestorType=Window},
+                                                   Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <ItemsControl x:Name="PhaseRail" ItemsSource="{Binding Session.PhaseRail}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="18" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Ellipse Grid.Column="0" Width="9" Height="9" VerticalAlignment="Center">
+                                            <Ellipse.Style>
+                                                <Style TargetType="Ellipse">
+                                                    <Setter Property="Fill" Value="Transparent" />
+                                                    <Setter Property="Stroke" Value="{StaticResource Silver}" />
+                                                    <Setter Property="StrokeThickness" Value="1" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsPast}" Value="True">
+                                                            <Setter Property="Fill" Value="{StaticResource InkSoft}" />
+                                                            <Setter Property="Stroke" Value="{StaticResource InkSoft}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                            <Setter Property="Fill" Value="{StaticResource Seal}" />
+                                                            <Setter Property="Stroke" Value="{StaticResource Seal}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Ellipse.Style>
+                                        </Ellipse>
+                                        <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="12"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{StaticResource Muted}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsPast}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource InkSoft}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource Seal}" />
+                                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Grid.Column="2" Text="{Binding Status}" FontSize="10"
+                                                   Foreground="{StaticResource Muted}" VerticalAlignment="Center"
+                                                   Margin="6,0,0,0" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="当前流程提示" Style="{StaticResource RailLabel}" FontSize="11"
+                                   Margin="0,14,0,5" />
+                        <TextBlock x:Name="PhaseHint" Text="{Binding Session.Hint}" Style="{StaticResource ChatMeta}"
+                                   FontSize="12" LineHeight="19" Foreground="{StaticResource InkSoft}" />
+
+                        <ItemsControl ItemsSource="{Binding Session.PhaseConditions}" Margin="0,6,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" Style="{StaticResource ChatMeta}" FontSize="10"
+                                               Foreground="{StaticResource Muted}" Margin="0,0,0,2" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ===== 可用动作：点一下就是确认 ===== -->
+                <StackPanel Grid.Row="4" Margin="20,10,20,0"
+                            Visibility="{Binding DataContext.IsHostActive,
+                                                 RelativeSource={RelativeSource AncestorType=Window},
+                                                 Converter={StaticResource BoolToVisibility}}">
+                    <Border Height="1" Background="{StaticResource Rule}" Margin="0,0,0,12" />
+
+                    <Button x:Name="StartButton" Content="{Binding Session.StartLabel}"
+                            Command="{Binding Session.StartCommand}"
+                            Style="{StaticResource SealButton}" Padding="14,10" Margin="0,0,0,7"
+                            IsEnabled="{Binding Session.CanStart}"
+                            Visibility="{Binding Session.IsStartVisible, Converter={StaticResource BoolToVisibility}}" />
+
+                    <Button x:Name="AdvanceButton" Content="{Binding Session.AdvanceLabel}"
+                            Command="{Binding Session.AdvanceCommand}"
+                            Style="{StaticResource SealButton}" Padding="14,10" Margin="0,0,0,7"
+                            IsEnabled="{Binding Session.CanAdvance}"
+                            Visibility="{Binding Session.IsAdvanceVisible, Converter={StaticResource BoolToVisibility}}" />
+
+                    <Button x:Name="OpeningSpeechButton" Content="请主持人开场"
+                            Command="{Binding OpeningSpeechCommand}"
+                            Style="{StaticResource QuietButton}" Padding="14,8" Margin="0,0,0,7"
+                            Visibility="{Binding ShowOpeningSpeech, Converter={StaticResource BoolToVisibility}}" />
+
+                    <Button x:Name="ReleaseButton" Content="{Binding Session.ReleaseLabel}"
+                            Command="{Binding Session.ReleaseMaterialsCommand}"
+                            Style="{StaticResource QuietButton}" Padding="14,8" Margin="0,0,0,7"
+                            IsEnabled="{Binding Session.CanReleaseMaterials}"
+                            Visibility="{Binding Session.IsReleaseVisible, Converter={StaticResource BoolToVisibility}}" />
+
+                    <TextBlock Text="{Binding Session.PendingMaterialSummary}" FontSize="11"
+                               Foreground="{StaticResource Seal}" Margin="0,0,0,7">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource ChatMeta}">
+                                <Setter Property="FontSize" Value="11" />
+                                <Setter Property="Foreground" Value="{StaticResource Seal}" />
+                                <Setter Property="Margin" Value="0,0,0,7" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Session.PendingMaterialSummary}" Value="">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- 投票：只有剧本有投票时才出现；点提交即确认，不再勾选 -->
+                    <StackPanel Margin="0,0,0,7"
+                                Visibility="{Binding Session.IsVoteVisible, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="纸笔投票汇总 · 格式 A=3, B=2" Style="{StaticResource RailLabel}"
+                                   FontSize="11" Margin="0,0,0,5" />
+                        <TextBox x:Name="VoteBox"
+                                 AutomationProperties.AutomationId="VoteBox"
+                                 Text="{Binding Session.VoteInput, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,0,5" />
+                        <TextBlock Text="{Binding Session.VoteHint}" Style="{StaticResource ChatMeta}"
+                                   FontSize="10" Margin="0,0,0,6" />
+                        <Button x:Name="VoteButton" Content="{Binding Session.SubmitVoteLabel}"
+                                Command="{Binding Session.SubmitVoteCommand}"
+                                Style="{StaticResource SealButton}" Padding="14,10"
+                                IsEnabled="{Binding Session.CanSubmitVote}" />
+                    </StackPanel>
+
+                    <Border Background="{StaticResource PaperDim}" BorderBrush="{StaticResource Rule}"
+                            BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,7"
+                            Visibility="{Binding Session.HasVoteSummary, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="{Binding Session.VoteSummaryDisplay}"
+                                   Style="{StaticResource ChatMeta}" FontSize="10" />
+                    </Border>
+
+                    <!-- 揭秘：按钮旁直接说清后果 -->
+                    <StackPanel Margin="0,0,0,7"
+                                Visibility="{Binding Session.IsRevealVisible, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="{Binding Session.RevealWarning}" Style="{StaticResource ChatMeta}"
+                                   FontSize="10" Foreground="{StaticResource SealDeep}" Margin="0,0,0,6" />
+                        <Button x:Name="RevealButton" Content="{Binding Session.RevealLabel}"
+                                Command="{Binding Session.RevealCommand}"
+                                Style="{StaticResource SealButton}" Padding="14,10"
+                                IsEnabled="{Binding Session.CanReveal}" />
+                    </StackPanel>
+
+                    <Button x:Name="CompleteButton" Content="{Binding Session.CompleteLabel}"
+                            Command="{Binding Session.CompleteCommand}"
+                            Style="{StaticResource SealButton}" Padding="14,10" Margin="0,0,0,7"
+                            IsEnabled="{Binding Session.CanComplete}"
+                            Visibility="{Binding Session.IsCompleteVisible, Converter={StaticResource BoolToVisibility}}" />
+
+                    <Button x:Name="PauseResumeButton" Content="{Binding Session.PauseResumeLabel}"
+                            Command="{Binding Session.PauseResumeCommand}"
+                            Style="{StaticResource QuietButton}" Padding="14,8" Margin="0,0,0,6"
+                            IsEnabled="{Binding Session.CanPauseResume}"
+                            Visibility="{Binding Session.IsPauseResumeVisible, Converter={StaticResource BoolToVisibility}}" />
+
+                    <TextBlock Text="{Binding Session.ActionHint}" Style="{StaticResource ChatMeta}"
+                               FontSize="10" Foreground="{StaticResource Muted}" TextWrapping="Wrap" />
+
+                    <!-- 命令被拒绝时的原因就地显示，不弹窗 -->
+                    <TextBlock x:Name="SessionStatus" Text="{Binding Session.Status}"
+                               Style="{StaticResource ChatMeta}" FontSize="10"
+                               Foreground="{StaticResource SealDeep}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                </StackPanel>
+
+                <!-- 页脚：声音入口与连接状态 -->
+                <StackPanel Grid.Row="5" Margin="12,8,12,0">
+                    <Border Height="1" Background="{StaticResource Rule}" Margin="8,0,8,8" />
+                    <!--
+                        停止放在轨道上而不是输入区里：生成或播音期间可能已经切到
+                        「公开材料与复盘」或设置页，那时输入区是折叠的，
+                        只在输入区放一个停止键，用户就找不到它。
+                    -->
+                    <Button x:Name="RailStopButton" Content="停止播报" Command="{Binding StopCommand}"
+                            Style="{StaticResource QuietButton}" FontSize="12" Padding="10,6" Margin="0,0,0,6"
+                            ToolTip="停止生成或朗读，游戏进度不变"
+                            Visibility="{Binding ShowStop, Converter={StaticResource BoolToVisibility}}" />
+                    <Button x:Name="NavVoice" Content="{Binding VoiceLabel}" Style="{StaticResource RailButton}"
+                            FontSize="12" Command="{Binding DataContext.ShowSetupCommand,
+                                                    RelativeSource={RelativeSource AncestorType=Window}}"
+                            ToolTip="声音与模型都在偏好设置里" />
+                    <Button x:Name="NavSetup" Content="偏好设置" Style="{StaticResource RailButton}" FontSize="12"
+                            Command="{Binding DataContext.ShowSetupCommand,
+                                      RelativeSource={RelativeSource AncestorType=Window}}" />
+                    <TextBlock Text="{Binding DataContext.ModelStatusLine,
+                                              RelativeSource={RelativeSource AncestorType=Window}}"
+                               Style="{StaticResource RailLabel}" FontSize="10" Margin="10,6,10,0" />
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- 纸页 -->
+        <!-- 主区：对话 / 公开材料 / 剧本库 / 设置 -->
         <Border Grid.Column="1" Background="{DynamicResource Paper}">
             <ContentControl Content="{Binding Current}" />
         </Border>

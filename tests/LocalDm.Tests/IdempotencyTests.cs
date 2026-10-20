@@ -41,7 +41,7 @@ public sealed class IdempotencyTests : IDisposable
     {
         var (store, dispatcher) = await NewDispatcherAsync();
         using var _ = store;
-        var command = SyntheticPackage.Command(GameCommandType.Start, 0, "op-retry-10", groupReady: true);
+        var command = SyntheticPackage.Command(GameCommandType.Start, 0, "op-retry-10");
 
         var outcomes = new List<DispatchOutcome>();
         for (var i = 0; i < 10; i++)
@@ -67,12 +67,12 @@ public sealed class IdempotencyTests : IDisposable
         using var _ = store;
 
         await dispatcher.DispatchAsync(
-            SyntheticPackage.Command(GameCommandType.Start, 0, "op-same", groupReady: true),
+            SyntheticPackage.Command(GameCommandType.Start, 0, "op-same"),
             _package,
             TestContext.Current.CancellationToken);
 
         var conflicting = await dispatcher.DispatchAsync(
-            SyntheticPackage.Command(GameCommandType.Advance, 0, "op-same", groupReady: true),
+            SyntheticPackage.Command(GameCommandType.Advance, 0, "op-same"),
             _package,
             TestContext.Current.CancellationToken);
 
@@ -88,12 +88,12 @@ public sealed class IdempotencyTests : IDisposable
         using var _ = store;
 
         await dispatcher.DispatchAsync(
-            SyntheticPackage.Command(GameCommandType.Start, 0, "op-a", groupReady: true),
+            SyntheticPackage.Command(GameCommandType.Start, 0, "op-a"),
             _package,
             TestContext.Current.CancellationToken);
 
         var stale = await dispatcher.DispatchAsync(
-            SyntheticPackage.Command(GameCommandType.Advance, 0, "op-b", groupReady: true),
+            SyntheticPackage.Command(GameCommandType.Advance, 0, "op-b"),
             _package,
             TestContext.Current.CancellationToken);
 
@@ -116,7 +116,7 @@ public sealed class IdempotencyTests : IDisposable
         };
 
         var failed = await dispatcher.DispatchAsync(
-            SyntheticPackage.Command(GameCommandType.Start, 0, "op-crash", groupReady: true),
+            SyntheticPackage.Command(GameCommandType.Start, 0, "op-crash"),
             _package,
             TestContext.Current.CancellationToken);
 
@@ -130,7 +130,7 @@ public sealed class IdempotencyTests : IDisposable
 
         // 崩溃的操作不补执行；用新 operationId 重做
         var retry = await dispatcher.DispatchAsync(
-            SyntheticPackage.Command(GameCommandType.Start, 0, "op-after-crash", groupReady: true),
+            SyntheticPackage.Command(GameCommandType.Start, 0, "op-after-crash"),
             _package,
             TestContext.Current.CancellationToken);
         Assert.Equal(DispatchOutcome.Committed, retry.Outcome);
@@ -144,8 +144,8 @@ public sealed class IdempotencyTests : IDisposable
         using var _ = store;
 
         var session = SyntheticPackage.NewSession();
-        session = await CommitAsync(dispatcher, GameCommandType.Start, session.Revision, "op-1", groupReady: true);
-        session = await CommitAsync(dispatcher, GameCommandType.Advance, session.Revision, "op-2", groupReady: true);
+        session = await CommitAsync(dispatcher, GameCommandType.Start, session.Revision, "op-1");
+        session = await CommitAsync(dispatcher, GameCommandType.Advance, session.Revision, "op-2");
         session = await CommitAsync(dispatcher, GameCommandType.ReleaseMaterials, session.Revision, "op-3", materials: ["M1"]);
 
         var events = await store.ReadEventsAsync("session-1", TestContext.Current.CancellationToken);
@@ -158,11 +158,10 @@ public sealed class IdempotencyTests : IDisposable
         GameCommandType type,
         int revision,
         string operationId,
-        bool groupReady = false,
         IReadOnlyList<string>? materials = null)
     {
         var result = await dispatcher.DispatchAsync(
-            SyntheticPackage.Command(type, revision, operationId, groupReady: groupReady, materials: materials),
+            SyntheticPackage.Command(type, revision, operationId, materials: materials),
             _package,
             TestContext.Current.CancellationToken);
         Assert.Equal(DispatchOutcome.Committed, result.Outcome);

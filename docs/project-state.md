@@ -1,46 +1,100 @@
 # 当前项目状态
 
-更新日期 2026-10-19。本轮执行 `speckit-implement`，按 tasks.md 实施 US1–US5 与收尾。
+更新日期 2026-10-20。本轮执行 `speckit-implement`，按 tasks.md 实施 US1–US5 与收尾；
+随后做了一轮代码审查并修完全部发现（见 `docs/reviews/2026-10-20-code-review.md`）；
+再做五轮交互与界面自检（见 `docs/reviews/2026-10-20-ux-hardening.md`）；
+最后按第二版原型把桌面端重塑为对话式界面，并把流程改成剧本数据驱动、
+确认改成「点击即确认」（见 `docs/progress/conversation-ui-v2.md`）。
 
 功能为 001-local-dm-mvp，活动规范是 specs/001-local-dm-mvp/spec.md。
 宪章 3.0.0；范围为从零自建 Windows 单电脑软件。OpenLess 负责外部转写，Windows Magpie 普通文字模型与 System.Speech TTS 主持。
 
 ## 已实现
 
-- 解决方案 `LocalDm.slnx`（.NET SDK 10.0.402，C# 14，net10.0-windows）：
-  `src/LocalDm.Core`（领域/规则/投影/主持策略）、`src/LocalDm.Infrastructure`（Magpie、TTS、SQLite、MinerU、导入）、
-  `src/LocalDm.App`（WPF）、`tests/LocalDm.Tests`、`tests/LocalDm.UiTests`、`tools/LocalDm.Probe`。
+- **对话式界面（2026-10-20 重塑）**：278 px 左侧轨道（剧目 → 进度 → 当前提示 → 可用动作 → 声音/设置），
+  其余全部给主区；主区是一条连续对话（玩家消息、主持回复、阶段事件同一列表），底部固定输入区；
+  「进行中/失败」行排在对话末尾，空闲不占屏。逐条重播只复用已保存文字，停止随忙碌出现。
+  公开材料与已解锁真相合到宽幅主区。设置页收进音色/自动朗读/模型，caller key 输入与
+  MinerU 路径退出游玩界面（鉴权与密钥读取能力仍在）。
+- **流程由剧本包驱动**：`ScriptFlow` 声明每个环节（标题、提示、条件、材料、动作名、是否投票/揭秘、
+  来源依据），`RealScriptPackageBuilder` 按声明生成阶段；没有声明就只生成一个「流程待确认」阶段并
+  标 NeedsReview，不再套固定七步。环节动作由 `ScriptStepKind` 决定，动作名由数据给出
+  （例如「进入第二轮搜证」）。
+- **点击即确认**：`GameCommand` 不再有 `GroupReady`/`Confirmed`，界面上也没有对应勾选框。
+  保留的仍是机器可验证的条件：剧本包 Ready、阶段允许该动作、投票阶段需合法汇总、
+  票数总数等于人数、材料属于本阶段、`RequiresAllMaterials` 时材料必须发完、revision 与包指纹校验。
+- **冻结身份含流程**：`ScriptPackage.ContentHash` = 来源 + 玩家数 + schema + 规范化阶段，
+  `PackageId` 由它生成。改流程会得到新的包标识与新文件名，旧文件保留；旧存档仍绑原包，
+  拿到被改写的包会 `PACKAGE_MISMATCH` 并说明原因。存档还在、包不在时剧本库显式提示不能恢复
+  （`ISessionStore.ListSessionsAsync`）。
+- **流程声明必须自洽**：空/重复环节 ID、要求材料却没声明材料、以及指向不存在的材料编号 /
+  段落 ID / 来源分组，都会变成点名具体 ID 的阻塞问题，整包 `NeedsReview`。
+- **投票按环节归档**：`Session.VoteSummaryPhaseId` + `VoteHistory`，第二轮投票必须重新提交，
+  揭秘要求每一轮都有记录；`vote_summary` 列换成按环节的记录列表，旧裸数组格式仍可读。
+- **停止入口在轨道上**：生成/播报期间所有页面（对话、复盘、设置、剧本库）都能停；
+  重播也占住会话播报闸，失败显示「重播失败：<原因>」而不是「已重播」。
 - 确定性玩法：`GameEngine` 决定阶段/材料/票数/揭秘；`CommandDispatcher` 事务内去重与 revision 校验；
   单文件 SQLite，event/receipt/投影同一事务。
-- 秘密隔离：`PublicSessionProjector` 只投影 Public 段；`PublicContextBuilder` + `PublicReplyPolicy` 只允许公开原文与白名单过渡句。
+- 秘密隔离：`PublicSessionProjector` 只投影 Public 段；`PublicContextBuilder` 只取当前阶段允许公开的原文（私有与真相段即使被误传也不进上下文）。
+  注：仓库里**没有** `PublicReplyPolicy` 这个文件 —— 早前的 `docs/project-state.md` 与 `specs/.../tasks.md`
+  曾把它记成已完成，属文档漂移，已按实际实现更正（输出侧不做审查，产品决定是「回什么念什么」）。
+- **真相解锁判定收口**：`TruthAccess.IsUnlocked` 是唯一判据（`Revealed`/`Completed`，
+  或 `Paused` 且 `ResumeState=Revealed`），投影、就绪检查、主持口播三处共用；
+  真相原文只从 `Visibility == Truth` 的段取。公共投影重建会话时会把「已解锁」带回去，
+  否则暂停在揭秘态的一局会「屏幕显示真相、提示词里没有真相」。
+- **「进行中」就地反馈**：`HostActivity` + `ActivityDots`（呼吸动效）回答「点了按钮到听见声音之间
+  在干什么」——文字、流水线步骤、已等待秒数、失败与取消。它现在渲染在对话末尾，只在
+  `IsDisplayed`（正在做或已失败）时出现；空闲不再有一块常驻的「就绪」。
+- **真相按块渲染**：`TruthDocument` 把扫描件转出的 Markdown 拆成标题/等宽块/管道表/段落；
+  `MonospaceGrid` 按视觉空间（汉字全角、西文半角）推导列参考线，列位不再漂。
+- **动作按阶段折叠**：投票录入区只在投票环节且未汇总时出现、公开真相只在真相环节出现、
+  发牌只在有本轮待发编号时出现；动作名来自剧本包。
+- **存档 id 规则收口**：`SessionIds.For` 一处决定，演示剧本与真实剧本不再各算各的。
 - 播音：`HostDirector` 串行单段、requestId 失效即丢弃晚到结果、重播不请求模型。
+  微软 Edge-TTS 神经音色是**可选增强**（本机 python + edge-tts），不可用即降级到 Windows 本地语音；
+  引擎契约 `IEdgeTtsEngine` 可注入，降级路径不依赖宿主机环境。
+  详见 `docs/decisions/0002-edge-tts-and-group-classification.md`。
+- **角色本/线索卡分流采信导入源头的事实**（`ExtractedPage.GroupKind`），目录名启发式仅作兜底。
+  分错会让私有角色本的分组名进入公共材料编号，这是秘密隔离的红线。
 - 文档准备：`MineruPrivacyPreflight`（版本/app-owned home/遥测）、`MineruRunner`（ArgumentList + 异步 stdout/stderr）、
   `MineruContinuationReader`（续读到 next_request=null + 循环检测）、`ImportPipeline`（无授权时在调用工具前拦截）。
 - 发布物：自包含 win-x64、便携 ZIP、Inno Setup per-user 安装器。
 
 ## 验证结果（实测）
 
-- `LocalDm.Tests`：94 项通过。`LocalDm.UiTests`：2 项通过（真实 MainWindow + 真实 SQLite）。
-- 真实 Magpie 合成请求 + 真实中文播音通过（10.3 秒），重播 0 ms 不请求模型。
-- 真实窗口经 UI Automation 走完 `Prepared → Playing → Revealed → Completed`（rev 0→8），未勾选准备时被拒。
-- 安装器静默安装 → 启动 → 卸载全部退出码 0，卸载后用户数据保留。
+- `LocalDm.Tests`：172 项通过；`LocalDm.UiTests`：16 项通过，合计 **188 通过 / 0 失败 / 0 跳过**
+  （2026-10-20 对话式界面轮把「勾选确认」相关断言改成「点击即确认」，并新增
+  流程数据驱动、双轮无投票、连点只提交一次、对话与自动朗读/停止/重播等覆盖）。
+- 2026-10-20 全量重建：0 警告 0 错误。
+- 界面快照产物在 `artifacts/ui/`：
+  - `desktop-100-*.png`（8 张）：真实 exe + UI Automation 走完「体验演示 → 开局 → 搜证 → 逐个发牌 →
+    设置 → 回到本局 → 投票 → 公开真相」，主屏 100% 抓客户区；
+  - `desktop-125-*.png`（1 张）：同一窗口移到 125% 副屏，真实 DPI 缩放；
+  - `hostdesk-*.png`（10 张）：真实 WPF 渲染，含 `hostdesk-scale-150.png`（150% 下的 DIP 空间）。
+- 真实窗口脚本：`pwsh -File scripts/verify-live-window.ps1`（数据根指向临时目录，不碰真实存档）。
+- 真实 Magpie 合成请求 + 真实中文播音通过（10.3 秒），重播 0 ms 不请求模型（上一轮记录）。
+- 安装器静默安装 → 启动 → 卸载全部退出码 0，卸载后用户数据保留（上一轮记录）。
 - 详细证据见 `docs/evidence/`，核对表见 `docs/release-checklist.md`。
 
 ## 受阻与未执行（不得当作已交付）
 
 - **真实剧本准备受阻**：本机 MinerU 4.0.1 无 basic/standard/advanced 引擎（`quality_tier_unavailable`）。
-  `stories/<剧本目录>` 全部为 JPG 页面，依赖 OCR，因此尚未成为 Ready 包。
+  `stories/<剧本目录>` 全部为 JPG 页面，依赖 OCR，因此尚未成为 Ready 包；
+  并且现在还需要准备者按原文写出 `--flow` 流程声明才可能 Ready。
+- **真实语音可听性未由人耳确认**：只验证了音色枚举与语音调用链路（界面显示真实的
+  「云希 · 微软神经男声」）。
 - **真实 4–6 人整局未执行**（需真人到场）。
 - OpenLess 真实语音转写落字、20 次发送/取消/重播压力未执行。
-- 125%/150% 缩放截图未执行。
-- 发布物未做代码签名。
+- 150% 缩放未改系统 DPI（属系统设置），改用同等 DIP 空间渲染验证。
+- 发布物未做代码签名；打包版/便携版未在本轮重跑。
 
 ## 下一步
 
-1. 在应用专属 MinerU profile 配置本地解析引擎，重跑 US2 解析与真实剧本准备；
-2. 准备真实剧本并由独立校验者核对来源；
-3. 组织 4–6 名真人完成一局，替换 `docs/evidence/us5/real-tabletop.md` 的「未执行」；
-4. 目标机缩放复核与（可选）代码签名。
+1. 按剧本原文为每个真实剧本写出 `--flow` 声明（示例 `docs/prepare/script-flow.example.json`），
+   再跑 `tools/LocalDm.Probe`，让真实剧本真正成为 Ready 包。
+2. 在目标机用真人耳朵确认 Edge-TTS 与本地 SAPI 两条朗读路径，以及 125%/150% 下的实际观感。
+3. 组织 4–6 名真人完成一局，替换 `docs/evidence/us5/real-tabletop.md` 的「未执行」。
+4. 重跑打包版与便携版验收（含崩溃日志落点 `%LOCALAPPDATA%\LocalDm\logs\crash.log`）。
 
 tasks.md 的完成状态见其末尾「实施状态」表（59 已完成 / 5 部分完成 / 2 受阻 / 1 未执行）。
 

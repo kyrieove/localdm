@@ -40,7 +40,7 @@ public sealed class FaultMatrixTests : IDisposable
         await store.SaveSessionAsync(SyntheticPackage.NewSession(), TestContext.Current.CancellationToken);
         var dispatcher = new CommandDispatcher(store);
         await dispatcher.DispatchAsync(
-            SyntheticPackage.Command(GameCommandType.Start, 0, "op-start", groupReady: true),
+            SyntheticPackage.Command(GameCommandType.Start, 0, "op-start"),
             _package,
             TestContext.Current.CancellationToken);
 
@@ -66,7 +66,7 @@ public sealed class FaultMatrixTests : IDisposable
         await store.SaveSessionAsync(SyntheticPackage.NewSession(), TestContext.Current.CancellationToken);
         var dispatcher = new CommandDispatcher(store);
         await dispatcher.DispatchAsync(
-            SyntheticPackage.Command(GameCommandType.Start, 0, "op-start", groupReady: true),
+            SyntheticPackage.Command(GameCommandType.Start, 0, "op-start"),
             _package,
             TestContext.Current.CancellationToken);
 
@@ -93,15 +93,15 @@ public sealed class FaultMatrixTests : IDisposable
             var dispatcher = new CommandDispatcher(store);
 
             await dispatcher.DispatchAsync(
-                SyntheticPackage.Command(GameCommandType.Start, 0, "op-start", groupReady: true),
+                SyntheticPackage.Command(GameCommandType.Start, 0, "op-start"),
                 _package,
                 TestContext.Current.CancellationToken);
             await dispatcher.DispatchAsync(
-                SyntheticPackage.Command(GameCommandType.Advance, 1, "op-adv-1", groupReady: true),
+                SyntheticPackage.Command(GameCommandType.Advance, 1, "op-adv-1"),
                 _package,
                 TestContext.Current.CancellationToken);
             await dispatcher.DispatchAsync(
-                SyntheticPackage.Command(GameCommandType.Advance, 2, "op-adv-2", groupReady: true),
+                SyntheticPackage.Command(GameCommandType.Advance, 2, "op-adv-2"),
                 _package,
                 TestContext.Current.CancellationToken);
         }
@@ -131,7 +131,7 @@ public sealed class FaultMatrixTests : IDisposable
         var dispatcher = new CommandDispatcher(store);
 
         await dispatcher.DispatchAsync(
-            SyntheticPackage.Command(GameCommandType.Start, 0, "op-1", groupReady: true),
+            SyntheticPackage.Command(GameCommandType.Start, 0, "op-1"),
             _package,
             TestContext.Current.CancellationToken);
 
@@ -143,7 +143,7 @@ public sealed class FaultMatrixTests : IDisposable
             }
         };
         var crashed = await dispatcher.DispatchAsync(
-            SyntheticPackage.Command(GameCommandType.Advance, 1, "op-2", groupReady: true),
+            SyntheticPackage.Command(GameCommandType.Advance, 1, "op-2"),
             _package,
             TestContext.Current.CancellationToken);
         store.FaultInjector = null;

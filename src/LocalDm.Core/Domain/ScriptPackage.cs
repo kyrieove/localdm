@@ -22,6 +22,18 @@ public sealed record ScriptPackage
     /// <summary>包指纹：绑定源文件 hash、页数与来源索引，用于开局与恢复校验。</summary>
     public required string ManifestHash { get; init; }
 
+    /// <summary>
+    /// 内容指纹：来源 + 玩法配置 + 规范化流程。
+    ///
+    /// <see cref="ManifestHash"/> 只描述原始材料；同一批材料换成另一套流程时它是同一个值。
+    /// 判「这是不是同一份剧本」必须看内容指纹，否则改写流程后旧存档会静默接受新包、跳过新环节。
+    /// 旧包没有这一项，读出来为 null，退回 <see cref="ManifestHash"/>。
+    /// </summary>
+    public string? ContentHash { get; init; }
+
+    /// <summary>绑定校验用的内容标识：新包用 <see cref="ContentHash"/>，旧包退回 <see cref="ManifestHash"/>。</summary>
+    public string Identity => string.IsNullOrWhiteSpace(ContentHash) ? ManifestHash : ContentHash;
+
     public required IReadOnlyList<SourceFile> SourceFiles { get; init; }
 
     public required IReadOnlyList<SourceSpan> Spans { get; init; }
@@ -65,9 +77,6 @@ public sealed record ScriptPhase
     /// <summary>原本条件：文本来自剧本原文，由主持窗口无剧透展示。</summary>
     public required IReadOnlyList<string> Conditions { get; init; }
 
-    /// <summary>推进该阶段需要勾选「大家已口头准备好」。</summary>
-    public required bool RequiresGroupReady { get; init; }
-
     /// <summary>该阶段释放的材料包编号。</summary>
     public required IReadOnlyList<string> MaterialIds { get; init; }
 
@@ -76,6 +85,39 @@ public sealed record ScriptPhase
     public required bool IsRevealPhase { get; init; }
 
     public required IReadOnlyList<string> SourceSpanIds { get; init; }
+
+    /// <summary>
+    /// 本环节的一句话当前提示（左侧「当前流程提示」）。
+    /// 为空时界面退回按 <see cref="Conditions"/> 拼接，不编造额外说明。
+    /// </summary>
+    public string? Hint { get; init; }
+
+    /// <summary>
+    /// 推进到下一环节的动作名，例如「进入第二轮搜证」。
+    /// 为空时界面按下一环节标题生成，不写死「下一环节」。
+    /// </summary>
+    public string? AdvanceLabel { get; init; }
+
+    /// <summary>揭秘动作名，例如「公开结局」；为空时用「公开真相」。</summary>
+    public string? RevealLabel { get; init; }
+
+    /// <summary>
+    /// 本环节提供「请主持人开场」动作。由流程声明决定，
+    /// 不按「是不是第一个环节」推断。
+    /// </summary>
+    public bool OffersOpeningSpeech { get; init; }
+
+    /// <summary>
+    /// 本环节的材料必须逐个发放完毕才能推进。
+    /// 这是机器可校验的条件，与「点一下按钮就算大家准备好」是两回事。
+    /// </summary>
+    public bool RequiresAllMaterials { get; init; }
+
+    /// <summary>
+    /// 该环节在剧本来源里的依据位置。为空表示流程本身尚未核实，
+    /// 准备器据此把整包标为 NeedsReview，而不是补一个默认流程。
+    /// </summary>
+    public string? SourceRef { get; init; }
 }
 
 public sealed record Material

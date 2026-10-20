@@ -18,6 +18,35 @@ public sealed record PublicPhaseView
 
     /// <summary>当前阶段允许主持执行的动作。</summary>
     public required IReadOnlyList<PublicAction> AllowedActions { get; init; }
+
+    /// <summary>当前流程提示（一句话）。界面「当前流程提示」直接用这一句。</summary>
+    public string? Hint { get; init; }
+
+    /// <summary>推进动作名，例如「进入第二轮搜证」。为空表示没有下一环节。</summary>
+    public string? AdvanceLabel { get; init; }
+
+    /// <summary>揭秘动作名，例如「公开结局」。</summary>
+    public string? RevealLabel { get; init; }
+
+    /// <summary>本环节材料是否必须发完才能推进。</summary>
+    public bool RequiresAllMaterials { get; init; }
+
+    /// <summary>本环节是否提供「请主持人开场」动作（由流程声明给出）。</summary>
+    public bool CanOpenSession { get; init; }
+
+    /// <summary>本环节在整局里的序号（从 1 开始）。</summary>
+    public required int Index { get; init; }
+
+    /// <summary>整局的环节总数。</summary>
+    public required int Count { get; init; }
+}
+
+/// <summary>进度轨道的一项：只含公开的阶段标题与位置，供左侧「本局进度」渲染。</summary>
+public sealed record PublicPhaseTrackItem
+{
+    public required string PhaseId { get; init; }
+
+    public required string Title { get; init; }
 }
 
 public enum PublicAction
@@ -65,6 +94,9 @@ public sealed record PublicSessionProjection
     public required int Revision { get; init; }
 
     public required PublicPhaseView CurrentPhase { get; init; }
+
+    /// <summary>整局的环节轨道（只有标题与顺序），用于左侧进度列表。</summary>
+    public required IReadOnlyList<PublicPhaseTrackItem> PhaseTrack { get; init; }
 
     /// <summary>已释放的材料编号，只有编号不含内容。</summary>
     public required IReadOnlyList<string> ReleasedMaterialIds { get; init; }

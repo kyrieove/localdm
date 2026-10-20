@@ -9,78 +9,116 @@
         </ResourceDictionary>
     </UserControl.Resources>
 
-    <Grid Margin="44,38,44,32">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="34,34,34,30" MaxWidth="880" HorizontalAlignment="Left">
+            <!-- 扉页 -->
+            <TextBlock Text="剧本库" Style="{StaticResource Display}" FontSize="26" />
+            <TextBlock Text="选一本准备完成的剧本，或接着上次的进度继续。"
+                       Margin="0,8,0,0" FontSize="14" Foreground="{StaticResource InkSoft}" />
+            <Border Height="1" Background="{StaticResource Rule}" Margin="0,22,0,0" />
 
-        <!-- 扉页 -->
-        <StackPanel Grid.Row="0">
-            <TextBlock Text="本局" Style="{StaticResource Display}" />
-            <TextBlock Text="选择一本已装订的剧本，翻开就是这一局。"
-                       Margin="0,8,0,0" FontSize="15" Foreground="{StaticResource InkSoft}" />
-            <Border Height="1" Background="{StaticResource Rule}" Margin="0,20,0,0" />
-            <Border Height="1" Background="{StaticResource Rule}" Margin="0,3,0,0" />
-        </StackPanel>
+            <!-- 上一局还没走完：重启后直接接着玩 -->
+            <Border Margin="0,22,0,0" Padding="18,15"
+                    Background="{StaticResource PaperDim}" BorderBrush="{StaticResource Seal}"
+                    BorderThickness="1" CornerRadius="6"
+                    Visibility="{Binding HasResumableSession, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="上一局还没走完" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{StaticResource Seal}" />
+                        <TextBlock Text="{Binding ResumableTitle}" Style="{StaticResource RailTitle}"
+                                   FontSize="17" Margin="0,6,0,0" />
+                        <TextBlock Text="{Binding ResumableDetail}" Style="{StaticResource ChatMeta}"
+                                   Margin="0,5,0,0" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="继续这一局" Command="{Binding ContinueCommand}"
+                            Style="{StaticResource SealButton}" VerticalAlignment="Center"
+                            Padding="20,10" Margin="22,0,0,0" />
+                </Grid>
+            </Border>
 
-        <Border Grid.Row="1" Background="{StaticResource PaperDim}"
-                BorderBrush="{StaticResource Rule}" BorderThickness="1" Margin="0,24,0,0">
-            <Grid>
-                <!-- 空状态：像一张还没写字的扉页 -->
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="40"
-                            Visibility="{Binding HasPackages, Converter={StaticResource InverseBoolToVisibility}}">
-                    <TextBlock Text="还没有装订好的剧本" Style="{StaticResource DisplaySmall}"
-                               HorizontalAlignment="Center" Foreground="{StaticResource InkSoft}" />
-                    <TextBlock Text="{Binding EmptyStateText}" TextWrapping="Wrap" Margin="0,12,0,0"
-                               MaxWidth="420" TextAlignment="Center"
-                               FontSize="14" Foreground="{StaticResource Muted}" LineHeight="23" />
+            <!-- 存档在、包不在：明说不能恢复，不用新包顶上去跳过环节 -->
+            <Border Margin="0,22,0,0" Padding="16,13" CornerRadius="6"
+                    Background="{StaticResource SealWash}" BorderBrush="#FFD8C8A7" BorderThickness="1"
+                    Visibility="{Binding HasOrphanNotice, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <TextBlock Text="有一局存档暂时打不开" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{StaticResource SealDeep}" />
+                    <TextBlock Text="{Binding OrphanNotice}" TextWrapping="Wrap" FontSize="12"
+                               Foreground="#FF6B5637" LineHeight="20" Margin="0,6,0,0" />
                 </StackPanel>
+            </Border>
 
-                <ListBox x:Name="PackageList" ItemsSource="{Binding Packages}"
-                         SelectedItem="{Binding Selected, Mode=TwoWay}"
-                         Margin="18" VerticalAlignment="Top">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="4" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
+            <!-- 已装订的剧本 -->
+            <TextBlock Text="已装订" Style="{StaticResource RailLabel}" Margin="0,26,0,6" />
+            <ListBox x:Name="PackageList" ItemsSource="{Binding Packages}"
+                     SelectedItem="{Binding Selected, Mode=TwoWay}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="4" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Background="{StaticResource Cloth}" CornerRadius="1" />
+                            <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Title}" Style="{StaticResource RailTitle}" FontSize="17" />
+                                <TextBlock Text="{Binding Summary}" Style="{StaticResource ChatMeta}"
+                                           Margin="0,5,0,0" FontSize="12" />
+                            </StackPanel>
+                            <TextBlock Grid.Column="2" Text="{Binding Readiness}" Style="{StaticResource ChatMeta}"
+                                       VerticalAlignment="Center" Margin="16,0,4,0" />
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
 
-                                <!-- 书脊条 -->
-                                <Border Grid.Column="0" Background="{StaticResource Cloth}" />
+            <!-- 没有剧本时给一条能走的路 -->
+            <Border Margin="0,6,0,0" Padding="18,16" CornerRadius="6"
+                    Background="{StaticResource PaperDim}" BorderBrush="{StaticResource Rule}" BorderThickness="1"
+                    Visibility="{Binding HasPackages, Converter={StaticResource InverseBoolToVisibility}}">
+                <TextBlock Text="{Binding EmptyStateText}" TextWrapping="Wrap" FontSize="13"
+                           Foreground="{StaticResource Muted}" LineHeight="22" />
+            </Border>
 
-                                <StackPanel Grid.Column="1" Margin="18,0,0,0">
-                                    <TextBlock Text="{Binding Title}" Style="{StaticResource DisplaySmall}"
-                                               FontSize="21" />
-                                    <TextBlock Text="{Binding Summary}" Margin="0,6,0,0"
-                                               Style="{StaticResource Figure}" FontSize="13" />
-                                </StackPanel>
+            <!-- 演示剧本：留在剧本库，不摆在游玩界面里 -->
+            <TextBlock Text="熟悉操作" Style="{StaticResource RailLabel}" Margin="0,26,0,6" />
+            <Border Padding="18,15" CornerRadius="6"
+                    Background="{StaticResource PaperDim}" BorderBrush="{StaticResource Rule}" BorderThickness="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="演示剧本" Style="{StaticResource RailTitle}" FontSize="17" />
+                        <TextBlock Text="不含真实剧情，用来熟悉按钮与声音。"
+                                   Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
+                    </StackPanel>
+                    <Button x:Name="DemoButton" Grid.Column="1" Content="体验演示"
+                            Command="{Binding LoadDemoCommand}" Style="{StaticResource QuietButton}"
+                            VerticalAlignment="Center" Padding="18,9" Margin="22,0,0,0" />
+                </Grid>
+            </Border>
 
-                                <TextBlock Grid.Column="2" Text="已装订" VerticalAlignment="Center"
-                                           FontSize="12" Foreground="{StaticResource InkSoft}"
-                                           Margin="18,0,4,0" />
-                            </Grid>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+            <!-- 开局 -->
+            <Grid Margin="0,24,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button x:Name="OpenButton" Grid.Column="0" Content="翻开这本，开始这一局"
+                        Command="{Binding OpenCommand}" Style="{StaticResource SealButton}"
+                        Padding="24,12" Margin="0"
+                        Visibility="{Binding HasPackages, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Grid.Column="1" Text="{Binding Status}" VerticalAlignment="Center"
+                           Margin="16,0,0,0" Style="{StaticResource ChatMeta}" TextWrapping="Wrap" />
             </Grid>
-        </Border>
-
-        <Grid Grid.Row="2" Margin="0,20,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <Button x:Name="OpenButton" Grid.Column="0" Content="翻开这本，开始这一局"
-                    Command="{Binding OpenCommand}" Style="{StaticResource SealButton}"
-                    Padding="26,14" Margin="0" />
-            <TextBlock Grid.Column="1" Text="{Binding Status}" VerticalAlignment="Center"
-                       Margin="18,0,0,0" FontSize="13" Foreground="{StaticResource InkSoft}"
-                       TextWrapping="Wrap" />
-        </Grid>
-    </Grid>
+        </StackPanel>
+    </ScrollViewer>
 </UserControl>

@@ -56,6 +56,11 @@ public interface ITtsService
     bool IsSpeaking { get; }
 }
 
+/// <summary>
+/// 一个可用的中文音色。
+/// 只描述「是什么」，不描述「怎么展示」：面向用户的中文名属于界面层，
+/// 放在 Core 会让领域模型承担展示职责。
+/// </summary>
 public sealed record TtsVoice
 {
     public required string Name { get; init; }
@@ -165,4 +170,20 @@ public interface ISessionStore
     Task<IReadOnlyList<GameEvent>> ReadEventsAsync(string sessionId, CancellationToken cancellationToken);
 
     Task SaveSessionAsync(Session session, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// 列出所有存档的绑定信息（只有 id、包标识、状态与 revision，不含剧情内容）。
+    /// 用来发现「存档还在、绑定的剧本包已经不在」的局面：那种局面必须明说不能恢复。
+    /// </summary>
+    Task<IReadOnlyList<StoredSessionRef>> ListSessionsAsync(CancellationToken cancellationToken);
 }
+
+/// <summary>一个存档绑定了哪份冻结包。只有标识与进度，没有任何剧情文本。</summary>
+public sealed record StoredSessionRef(
+    string SessionId,
+    string PackageId,
+    string PackageVersion,
+    string ManifestHash,
+    SessionState State,
+    string? CurrentPhaseId,
+    int Revision);

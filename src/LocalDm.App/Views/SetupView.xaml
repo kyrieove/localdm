@@ -1,6 +1,7 @@
 <UserControl x:Class="LocalDm.App.Views.SetupView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:LocalDm.App.Controls">
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -10,82 +11,157 @@
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="44,38,44,36" MaxWidth="780" HorizontalAlignment="Left">
-            <TextBlock Text="设置与诊断" Style="{StaticResource Display}" />
-            <TextBlock Text="所有检测都只在点击后执行。首版只连接本机 loopback 模型地址。"
-                       Margin="0,8,0,0" FontSize="15" Foreground="{StaticResource InkSoft}" TextWrapping="Wrap" />
+        <StackPanel Margin="34,34,34,34" MaxWidth="820" HorizontalAlignment="Left">
+            <TextBlock Text="偏好设置" Style="{StaticResource Display}" FontSize="26" />
+            <TextBlock Text="声音与模型，在这里设置一次就好。所有检测都只在点击后执行。"
+                       Margin="0,8,0,0" FontSize="14" Foreground="{StaticResource InkSoft}" TextWrapping="Wrap" />
+
+            <Border Height="1" Background="{StaticResource Rule}" Margin="0,22,0,0" />
+
+            <!-- ===== 声音 ===== -->
+            <TextBlock Text="声音" Style="{StaticResource RailLabel}" Margin="0,26,0,4" />
+
+            <Grid Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                    <TextBlock Text="主持音色" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
+                    <TextBlock Text="回复生成后，用这位主持人的声音朗读。"
+                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ComboBox x:Name="VoiceSelector" ItemsSource="{Binding AvailableVoices}"
+                              SelectedValuePath="Name" SelectedValue="{Binding VoiceId, Mode=TwoWay}"
+                              Width="230" Height="32" VerticalContentAlignment="Center"
+                              ToolTip="鼠标悬停可看音色说明">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding DisplayName}" ToolTip="{Binding Description}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <Button x:Name="PreviewVoiceButton" Content="试听" Command="{Binding PreviewVoiceCommand}"
+                            Style="{StaticResource QuietButton}" Padding="14,7" Margin="8,0,0,0" />
+                </StackPanel>
+            </Grid>
+
             <Border Height="1" Background="{StaticResource Rule}" Margin="0,20,0,0" />
-            <Border Height="1" Background="{StaticResource Rule}" Margin="0,3,0,24" />
 
-            <!-- 模型 -->
-            <Border Style="{StaticResource PaperPanel}" Margin="0,0,0,16">
-                <StackPanel>
-                    <TextBlock Text="文字模型" Style="{StaticResource DisplaySmall}" FontSize="18" />
-                    <TextBlock Text="Windows Magpie，本机 loopback" Margin="0,4,0,16"
-                               FontSize="12" Foreground="{StaticResource Muted}" />
-
-                    <TextBlock Text="模型地址" Style="{StaticResource SectionRule}" Margin="0,0,0,4" />
-                    <TextBox Text="{Binding MagpieBaseUri, UpdateSourceTrigger=PropertyChanged}" />
-
-                    <Button Content="读取模型列表" Command="{Binding CheckConnectionCommand}"
-                            HorizontalAlignment="Left" Margin="0,12,0,0" />
-
-                    <TextBlock Text="model ID（来自实际列表，不按显示名猜测）"
-                               Style="{StaticResource SectionRule}" Margin="0,12,0,4" />
-                    <ComboBox ItemsSource="{Binding AvailableModels}"
-                              SelectedItem="{Binding ModelId, Mode=TwoWay}"
-                              IsEditable="True" />
-
-                    <TextBlock Text="{Binding CallerKeyState}" Margin="0,16,0,0"
-                               FontSize="12" Foreground="{StaticResource InkSoft}" TextWrapping="Wrap" />
-                    <PasswordBox x:Name="CallerKeyBox" Margin="0,8,0,8" PasswordChanged="OnCallerKeyChanged" />
-                    <Button Content="加密保存 caller key" Command="{Binding SaveCallerKeyCommand}"
-                            HorizontalAlignment="Left" />
+            <Grid Margin="0,18,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                    <TextBlock Text="自动朗读回复" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
+                    <TextBlock Text="关闭后只显示文字，仍可在每条回复旁单独重播。"
+                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
                 </StackPanel>
-            </Border>
+                <CheckBox x:Name="AutoReadBox" Grid.Column="1" IsChecked="{Binding AutoRead, Mode=TwoWay}"
+                          VerticalAlignment="Center" Content="回复后自动朗读" />
+            </Grid>
 
-            <!-- 声音 -->
-            <Border Style="{StaticResource PaperPanel}" Margin="0,0,0,16">
-                <StackPanel>
-                    <TextBlock Text="中文声音" Style="{StaticResource DisplaySmall}" FontSize="18" />
-                    <TextBlock Text="Windows System.Speech" Margin="0,4,0,16"
-                               FontSize="12" Foreground="{StaticResource Muted}" />
+            <Border Height="1" Background="{StaticResource Rule}" Margin="0,20,0,0" />
 
-                    <ComboBox ItemsSource="{Binding AvailableVoices}" DisplayMemberPath="Name"
-                              SelectedValuePath="Name" SelectedValue="{Binding VoiceId, Mode=TwoWay}" />
-
-                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                        <Button Content="重新检测声音" Command="{Binding CheckVoicesCommand}"
-                                Margin="0,0,8,0" />
-                        <Button Content="试听" Command="{Binding PreviewVoiceCommand}" Margin="0" />
-                    </StackPanel>
-
-                    <TextBlock Text="自包含发布不包含系统声音；缺失时只显示文字并报告 TTS_UNAVAILABLE。"
-                               Margin="0,12,0,0" FontSize="12" Foreground="{StaticResource Muted}"
-                               TextWrapping="Wrap" />
+            <Grid Margin="0,18,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                    <TextBlock Text="声音输出" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
+                    <TextBlock Text="跟随 Windows 默认输出设备，本软件不单独选择设备。"
+                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
                 </StackPanel>
-            </Border>
+                <TextBlock Grid.Column="1" Text="使用系统设置" Style="{StaticResource ChatMeta}"
+                           VerticalAlignment="Center" />
+            </Grid>
 
-            <!-- 文档工具 -->
-            <Border Style="{StaticResource PaperPanel}" Margin="0,0,0,20">
-                <StackPanel>
-                    <TextBlock Text="文档工具" Style="{StaticResource DisplaySmall}" FontSize="18" />
-                    <TextBlock Text="MinerU 4.0.1，仅准备阶段使用" Margin="0,4,0,16"
-                               FontSize="12" Foreground="{StaticResource Muted}" />
+            <Border Height="1" Background="{StaticResource Rule}" Margin="0,20,0,0" />
 
-                    <TextBlock Text="可执行文件绝对路径" Style="{StaticResource SectionRule}" Margin="0,0,0,4" />
-                    <TextBox Text="{Binding MineruExecutable, UpdateSourceTrigger=PropertyChanged}" />
-
-                    <TextBlock Text="正式游玩读取冻结包，不要求 MinerU 服务运行。"
-                               Margin="0,12,0,0" FontSize="12" Foreground="{StaticResource Muted}"
-                               TextWrapping="Wrap" />
+            <Grid Margin="0,18,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                    <TextBlock Text="声音可用性" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
+                    <TextBlock Text="本机装了哪些中文声音。缺失时只显示文字，不静默改成英文音色。"
+                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
                 </StackPanel>
-            </Border>
+                <Button Grid.Column="1" Content="重新检测声音" Command="{Binding CheckVoicesCommand}"
+                        Style="{StaticResource QuietButton}" Padding="14,7" VerticalAlignment="Center" />
+            </Grid>
+
+            <!-- ===== 模型 ===== -->
+            <TextBlock Text="模型" Style="{StaticResource RailLabel}" Margin="0,30,0,4" />
+
+            <Grid Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                    <TextBlock Text="主持模型" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
+                    <TextBlock Text="从实际读取到的 model ID 里选，不按显示名猜。"
+                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ComboBox x:Name="ModelSelector" ItemsSource="{Binding AvailableModels}"
+                              SelectedItem="{Binding ModelId, Mode=TwoWay}" IsEditable="True"
+                              Width="260" Height="32" VerticalContentAlignment="Center" />
+                    <Button x:Name="ListModelsButton" Content="读取列表" Command="{Binding CheckConnectionCommand}"
+                            Style="{StaticResource QuietButton}" Padding="14,7" Margin="8,0,0,0" />
+                </StackPanel>
+            </Grid>
+
+            <StackPanel Orientation="Horizontal" Margin="0,12,0,0"
+                        Visibility="{Binding Busy, Converter={StaticResource BoolToVisibility}}">
+                <controls:ActivityDots VerticalAlignment="Center" Margin="0,0,10,0"
+                                        IsAnimating="True" DotBrush="{StaticResource Seal}" />
+                <TextBlock Text="正在连接本机模型服务…" VerticalAlignment="Center"
+                           Style="{StaticResource ChatMeta}" />
+            </StackPanel>
+
+            <!-- 高级：连接与鉴权 -->
+            <Expander Margin="0,20,0,0" Foreground="{StaticResource InkSoft}">
+                <Expander.Header>
+                    <TextBlock Text="高级连接设置" FontSize="13" Foreground="{StaticResource Muted}" />
+                </Expander.Header>
+                <StackPanel Margin="0,14,0,0">
+                    <TextBlock Text="本机服务地址" Style="{StaticResource RailLabel}" Margin="0,0,0,6" />
+                    <TextBox x:Name="ModelAddressBox"
+                             Text="{Binding MagpieBaseUri, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Text="首版只允许本机 loopback 地址；换地址后需要重新读取模型列表。"
+                               Style="{StaticResource ChatMeta}" Margin="0,8,0,0" />
+                    <Button Content="重新检测连接" Command="{Binding CheckConnectionCommand}"
+                            Style="{StaticResource QuietButton}" HorizontalAlignment="Left"
+                            Padding="14,7" Margin="0,12,0,0" />
+                    <TextBlock Text="{Binding CallerKeyState}" Style="{StaticResource ChatMeta}"
+                               Margin="0,14,0,0" />
+                </StackPanel>
+            </Expander>
+
+            <!-- 高级：剧本准备工具（不属于游玩界面） -->
+            <Expander Margin="0,6,0,0" Foreground="{StaticResource InkSoft}">
+                <Expander.Header>
+                    <TextBlock Text="高级：剧本准备" FontSize="13" Foreground="{StaticResource Muted}" />
+                </Expander.Header>
+                <StackPanel Margin="0,14,0,0">
+                    <TextBlock Text="文档工具可执行文件路径" Style="{StaticResource RailLabel}" Margin="0,0,0,6" />
+                    <TextBox x:Name="MineruBox"
+                             Text="{Binding MineruExecutable, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Text="只在准备剧本时使用。正式游玩读取冻结好的剧本包，不要求这个工具运行。"
+                               Style="{StaticResource ChatMeta}" Margin="0,8,0,0" />
+                </StackPanel>
+            </Expander>
 
             <Button Content="保存设置" Command="{Binding SaveCommand}" Style="{StaticResource SealButton}"
-                    HorizontalAlignment="Left" Padding="26,13" Margin="0" />
-            <TextBlock Text="{Binding Status}" Margin="0,16,0,0" TextWrapping="Wrap"
-                       FontSize="13" Foreground="{StaticResource InkSoft}" />
+                    HorizontalAlignment="Left" Padding="26,12" Margin="0,26,0,0" />
+            <TextBlock Text="{Binding Status}" Margin="0,14,0,0" TextWrapping="Wrap"
+                       Style="{StaticResource ChatMeta}" FontSize="12" />
         </StackPanel>
     </ScrollViewer>
 </UserControl>

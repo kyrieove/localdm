@@ -24,6 +24,12 @@ public sealed record ToolSettings
     /// <summary>主持台输入框提示（OpenLess 焦点提示）。</summary>
     public string InputHint { get; init; } = DefaultInputHint;
 
+    /// <summary>
+    /// 回复生成后是否自动朗读。关闭后只显示文字，仍可逐条重播。
+    /// 默认开启：这是产品的主要使用方式；关掉是主持人的选择。
+    /// </summary>
+    public bool AutoRead { get; init; } = true;
+
     public const string DefaultInputHint = "聚焦本框后使用 OpenLess 转写，回车发送，Shift+Enter 换行。";
 
     public static readonly Uri DefaultMagpieUri = new("http://127.0.0.1:3425/");

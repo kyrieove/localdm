@@ -1,30 +1,33 @@
 ﻿{
-  "observedAt": "2026-10-19T15:42:31.9117346+03:00",
+  "observedAt": "2026-10-20T01:49:40.6039751+03:00",
   "modelId": "group/auto-deepseek-v4-1-flash",
   "modelsEndpoint": {
     "path": "/v1/models",
     "ok": true,
-    "elapsedMs": 116,
+    "elapsedMs": 146,
     "modelCount": 56,
     "selectedPresent": true
   },
   "chineseVoices": [
-    "Microsoft Huihui Desktop (zh-CN)",
-    "Microsoft Huihui (zh-CN)",
+    "zh-CN-YunxiNeural (zh-CN)",
+    "zh-CN-YunjianNeural (zh-CN)",
+    "zh-CN-XiaoxiaoNeural (zh-CN)",
     "Microsoft Kangkang (zh-CN)",
-    "Microsoft Yaoyao (zh-CN)"
+    "Microsoft Yaoyao (zh-CN)",
+    "Microsoft Huihui Desktop (zh-CN)",
+    "Microsoft Huihui (zh-CN)"
   ],
   "speech": {
     "state": "Idle",
     "late": false,
-    "elapsedMs": 10285,
-    "text": "欢迎五位侦探来到灯塔！请开始阅读第一幕。"
+    "elapsedMs": 10690,
+    "text": "欢迎五位侦探来到灯塔。请开始阅读第一幕。"
   },
   "replay": {
     "state": "Idle",
     "late": false,
     "elapsedMs": 0,
-    "text": "欢迎五位侦探来到灯塔！请开始阅读第一幕。"
+    "text": "欢迎五位侦探来到灯塔。请开始阅读第一幕。"
   },
   "limits": [
     "Only synthetic public text was sent",

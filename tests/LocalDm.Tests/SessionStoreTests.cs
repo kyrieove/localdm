@@ -54,7 +54,6 @@ public sealed class SessionStoreTests : IDisposable
             OperationId = "op1",
             ExpectedRevision = 0,
             Type = GameCommandType.Start,
-            GroupReady = true,
         };
         await store.CommitAsync(
             current,
@@ -85,7 +84,6 @@ public sealed class SessionStoreTests : IDisposable
             OperationId = "op-stale",
             ExpectedRevision = 5,
             Type = GameCommandType.Start,
-            GroupReady = true,
         };
 
         await Assert.ThrowsAsync<DomainRuleException>(() => store.CommitAsync(
@@ -135,7 +133,6 @@ public sealed class SessionStoreTests : IDisposable
             OperationId = "op-dup",
             ExpectedRevision = 0,
             Type = GameCommandType.Start,
-            GroupReady = true,
         };
         await store.CommitAsync(current, next, command, NewEvent(next, command), NewReceipt(next, command), TestContext.Current.CancellationToken);
 
@@ -184,7 +181,6 @@ public sealed class SessionStoreTests : IDisposable
             OperationId = "op-" + point,
             ExpectedRevision = 0,
             Type = GameCommandType.Start,
-            GroupReady = true,
         };
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.CommitAsync(

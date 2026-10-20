@@ -16,15 +16,26 @@ public sealed class LibraryViewModel : ObservableObject
     private bool _hasPackages;
     private string _status = string.Empty;
     private LibraryPackageRow? _selected;
+    private bool _hasResumableSession;
+    private string _resumableTitle = string.Empty;
+    private string _resumableDetail = string.Empty;
 
     public LibraryViewModel(string packagesDir)
     {
         _packagesDir = packagesDir;
         OpenCommand = new RelayCommand(OpenSelectedAsync, () => _selected?.CanStart == true);
+        ContinueCommand = new RelayCommand(ContinueAsync, () => _hasResumableSession);
+        LoadDemoCommand = new RelayCommand(LoadDemoAsync);
     }
 
     /// <summary>用户选定一个剧本包后触发；参数是包本身。</summary>
     public event EventHandler<ScriptPackage>? PackageOpened;
+
+    /// <summary>主持人点了「继续这一局」；参数是要接着玩的包。</summary>
+    public event EventHandler<ScriptPackage>? ContinueRequested;
+
+    /// <summary>主持人想先试试内置演示剧本。</summary>
+    public event EventHandler? DemoRequested;
 
     public ObservableCollection<LibraryPackageRow> Packages { get; } = [];
 
@@ -62,6 +73,105 @@ public sealed class LibraryViewModel : ObservableObject
     }
 
     public RelayCommand OpenCommand { get; }
+
+    public RelayCommand ContinueCommand { get; }
+
+    /// <summary>装载内置演示剧本。第一次用的人不该只看到一句「没有剧本」。</summary>
+    public RelayCommand LoadDemoCommand { get; }
+
+    /// <summary>有没有一局没走完的存档。</summary>
+    public bool HasResumableSession
+    {
+        get => _hasResumableSession;
+        private set
+        {
+            if (SetProperty(ref _hasResumableSession, value))
+            {
+                ContinueCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>没走完的那一局的剧本名。</summary>
+    public string ResumableTitle
+    {
+        get => _resumableTitle;
+        private set => SetProperty(ref _resumableTitle, value);
+    }
+
+    /// <summary>没走完的那一局停在哪里。</summary>
+    public string ResumableDetail
+    {
+        get => _resumableDetail;
+        private set => SetProperty(ref _resumableDetail, value);
+    }
+
+    /// <summary>
+    /// 登记一局没走完的存档。
+    /// 重启后主持人不该自己重新翻包找进度 —— 桌面上的软件要记得上一局。
+    /// </summary>
+    public void SetResumable(ScriptPackage package, Session session)
+    {
+        var phase = package.Phases.FirstOrDefault(p => p.PhaseId == session.CurrentPhaseId);
+        _resumablePackage = package;
+        ResumableTitle = package.Title;
+        ResumableDetail = $"停在「{phase?.Title ?? "当前环节"}」";
+        HasResumableSession = true;
+    }
+
+    /// <summary>
+    /// 存档还在、但它绑定的冻结包不在了（通常是重新准备时流程被改写）时的说明。
+    /// 这种情况必须明说「不能恢复」，不能静默忽略，也不能拿新包顶上去跳过环节。
+    /// </summary>
+    public string? OrphanNotice
+    {
+        get => _orphanNotice;
+        private set
+        {
+            if (SetProperty(ref _orphanNotice, value))
+            {
+                OnPropertyChanged(nameof(HasOrphanNotice));
+            }
+        }
+    }
+
+    private string? _orphanNotice;
+
+    public bool HasOrphanNotice => !string.IsNullOrWhiteSpace(OrphanNotice);
+
+    public void SetOrphanNotice(string? text) => OrphanNotice = text;
+
+    /// <summary>
+    /// 清除「上一局还没走完」的入口。玩下去之后那张卡片就是过期信息，
+    /// 留着会让人以为还有一局没走完。
+    /// </summary>
+    public void ClearResumable()
+    {
+        _resumablePackage = null;
+        ResumableTitle = string.Empty;
+        ResumableDetail = string.Empty;
+        HasResumableSession = false;
+    }
+
+    private Task ContinueAsync()
+    {
+        if (_resumablePackage is not null)
+        {
+            ContinueRequested?.Invoke(this, _resumablePackage);
+            Status = $"继续「{_resumablePackage.Title}」。";
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task LoadDemoAsync()
+    {
+        DemoRequested?.Invoke(this, EventArgs.Empty);
+        Status = "正在装载演示剧本。";
+        return Task.CompletedTask;
+    }
+
+    private ScriptPackage? _resumablePackage;
 
     public Task LoadAsync(CancellationToken cancellationToken)
     {

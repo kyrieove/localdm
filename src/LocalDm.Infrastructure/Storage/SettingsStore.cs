@@ -66,6 +66,12 @@ public sealed class SessionContext
 [SupportedOSPlatform("windows")]
 public sealed class SettingsStore
 {
+    /// <summary>
+    /// 所有写入共用一把锁：主持台切音色与设置页保存可能同时写同一个文件，
+    /// 不串行化会写出交错或截断的 JSON。
+    /// </summary>
+    private static readonly SemaphoreSlim WriteLock = new(1, 1);
+
     private readonly string _settingsPath;
     private readonly string _secretDirectory;
 
@@ -95,9 +101,32 @@ public sealed class SettingsStore
     public ToolSettings Load() =>
         File.Exists(_settingsPath) ? Parse(File.ReadAllText(_settingsPath)) : ToolSettings.Default;
 
-    private static ToolSettings Parse(string json)
+    private ToolSettings Parse(string json)
     {
-        var dto = System.Text.Json.JsonSerializer.Deserialize<SettingsDto>(json) ?? new SettingsDto();
+        SettingsDto dto;
+        try
+        {
+            dto = System.Text.Json.JsonSerializer.Deserialize<SettingsDto>(json) ?? new SettingsDto();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // 设置文件损坏（写入过程中断电等）不应该让整个应用起不来。
+            // 但也不能就这么把默认值写回去 —— 那会把还能人工修复的内容覆盖掉。
+            // 先把坏文件改名备份，再退回默认设置。
+            System.Diagnostics.Debug.WriteLine("[Settings] settings.json 解析失败，已退回默认设置。");
+            try
+            {
+                var backup = _settingsPath + ".corrupt-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
+                File.Move(_settingsPath, backup, overwrite: true);
+            }
+            catch (IOException)
+            {
+                // 备份失败也不影响启动。
+            }
+
+            return ToolSettings.Default;
+        }
+
         var uri = Uri.TryCreate(dto.MagpieBaseUri, UriKind.Absolute, out var parsed)
             ? parsed
             : ToolSettings.DefaultMagpieUri;
@@ -109,33 +138,98 @@ public sealed class SettingsStore
             MineruExecutable = dto.MineruExecutable,
             VoiceId = dto.VoiceId,
             InputHint = dto.InputHint ?? ToolSettings.Default.InputHint,
+            // 旧设置文件没有这一项：默认自动朗读，与旧行为一致。
+            AutoRead = dto.AutoRead ?? true,
         };
     }
 
+    /// <summary>
+    /// 异步保存设置。写临时文件再原子替换，避免中途退出留下半截 JSON。
+    /// </summary>
     public async Task SaveAsync(ToolSettings settings, CancellationToken cancellationToken)
     {
-        settings.Validate();
-        var dto = new SettingsDto
+        var payload = Serialize(settings);
+        await WriteLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            MagpieBaseUri = settings.MagpieBaseUri.ToString(),
-            ModelId = settings.ModelId,
-            CallerKeyRef = settings.CallerKeyRef,
-            MineruExecutable = settings.MineruExecutable,
-            VoiceId = settings.VoiceId,
-            InputHint = settings.InputHint,
-        };
+            WriteAtomically(payload);
+        }
+        finally
+        {
+            WriteLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// 同步保存设置，供界面线程的即时保存使用（例如主持台切换音色）。
+    /// 与 <see cref="SaveAsync"/> 共用同一份序列化与写盘逻辑，两条路径不会分叉。
+    /// </summary>
+    public void Save(ToolSettings settings)
+    {
+        var payload = Serialize(settings);
+        WriteLock.Wait();
+        try
+        {
+            WriteAtomically(payload);
+        }
+        finally
+        {
+            WriteLock.Release();
+        }
+    }
+
+    /// <summary>设置项 → DTO。两条保存路径共用，避免新增设置项时只改一处。</summary>
+    private static SettingsDto ToDto(ToolSettings settings) => new()
+    {
+        MagpieBaseUri = settings.MagpieBaseUri.ToString(),
+        ModelId = settings.ModelId,
+        CallerKeyRef = settings.CallerKeyRef,
+        MineruExecutable = settings.MineruExecutable,
+        VoiceId = settings.VoiceId,
+        InputHint = settings.InputHint,
+        AutoRead = settings.AutoRead,
+    };
+
+    private static string Serialize(ToolSettings settings)
+    {
+        settings.Validate();
+        return System.Text.Json.JsonSerializer.Serialize(ToDto(settings), SerializerOptions);
+    }
+
+    /// <summary>写临时文件后原子替换目标文件：中途失败不会破坏原有设置。</summary>
+    private void WriteAtomically(string payload)
+    {
         var directory = Path.GetDirectoryName(_settingsPath);
         if (!string.IsNullOrEmpty(directory))
         {
             Directory.CreateDirectory(directory);
         }
 
-        // 明文 key 只经 SaveCallerKeyAsync 加密保存；这里只写引用
-        await File.WriteAllTextAsync(
-            _settingsPath,
-            System.Text.Json.JsonSerializer.Serialize(dto, SerializerOptions),
-            Encoding.UTF8,
-            cancellationToken);
+        // 临时名要唯一：同机同时跑两个实例（便携版 + 安装版）时，
+        // 固定名字会互相覆盖对方的半截内容。
+        var tempPath = Path.Combine(
+            string.IsNullOrEmpty(directory) ? "." : directory,
+            $".{Path.GetFileName(_settingsPath)}.{Path.GetRandomFileName()}.tmp");
+
+        try
+        {
+            File.WriteAllText(tempPath, payload, Encoding.UTF8);
+            File.Move(tempPath, _settingsPath, overwrite: true);
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
+            catch (IOException)
+            {
+                // 残留的临时文件不影响下次写入。
+            }
+        }
     }
 
     /// <summary>
@@ -215,6 +309,9 @@ public sealed class SettingsStore
         public string? VoiceId { get; set; }
 
         public string? InputHint { get; set; }
+
+        /// <summary>可空：旧设置文件没有这一项时按默认「自动朗读」处理。</summary>
+        public bool? AutoRead { get; set; }
     }
 }
 

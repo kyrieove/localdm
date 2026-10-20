@@ -18,13 +18,16 @@ public sealed class SetupViewModel : ObservableObject
     private readonly ITtsService _tts;
     private readonly HostDirector _director;
     private ToolSettings _settings = ToolSettings.Default;
+
+    /// <summary>载入时设置页里的音色。用来判断「用户是否真的在设置页改过音色」。</summary>
+    private string _loadedVoiceId = string.Empty;
     private string _status = string.Empty;
     private string _modelId = string.Empty;
     private string _magpieBaseUri = ToolSettings.DefaultMagpieUri.ToString();
     private string _voiceId = string.Empty;
-    private string _callerKeyInput = string.Empty;
     private string _callerKeyState = "未配置 caller key（本机 Magpie 通常不需要）。";
     private string _mineruExecutable = string.Empty;
+    private bool _autoRead = true;
     private bool _busy;
 
     public SetupViewModel(
@@ -42,12 +45,11 @@ public sealed class SetupViewModel : ObservableObject
         CheckVoicesCommand = new RelayCommand(() => { RefreshVoices(); return Task.CompletedTask; }, () => !Busy);
         PreviewVoiceCommand = new RelayCommand(PreviewVoiceAsync, () => !Busy && AvailableVoices.Count > 0);
         SaveCommand = new RelayCommand(SaveAsync, () => !Busy);
-        SaveCallerKeyCommand = new RelayCommand(SaveCallerKeyAsync, () => !Busy);
     }
 
     public ObservableCollection<string> AvailableModels { get; } = [];
 
-    public ObservableCollection<TtsVoice> AvailableVoices { get; } = [];
+    public ObservableCollection<VoiceOption> AvailableVoices { get; } = [];
 
     public string Status
     {
@@ -73,10 +75,13 @@ public sealed class SetupViewModel : ObservableObject
         set => SetProperty(ref _voiceId, value);
     }
 
-    public string CallerKeyInput
+    /// <summary>
+    /// 回复生成后是否自动朗读。关闭后只显示文字，仍可在每条回复旁单独重播。
+    /// </summary>
+    public bool AutoRead
     {
-        get => _callerKeyInput;
-        set => SetProperty(ref _callerKeyInput, value);
+        get => _autoRead;
+        set => SetProperty(ref _autoRead, value);
     }
 
     public string CallerKeyState
@@ -112,8 +117,6 @@ public sealed class SetupViewModel : ObservableObject
 
     public RelayCommand SaveCommand { get; }
 
-    public RelayCommand SaveCallerKeyCommand { get; }
-
     public ToolSettings CurrentSettings => _settings;
 
     /// <summary>设置保存成功后触发；宿主据此让主持台立刻用上新配置，不必重启。</summary>
@@ -125,6 +128,8 @@ public sealed class SetupViewModel : ObservableObject
         MagpieBaseUri = _settings.MagpieBaseUri.ToString();
         ModelId = _settings.ModelId ?? string.Empty;
         VoiceId = _settings.VoiceId ?? string.Empty;
+        AutoRead = _settings.AutoRead;
+        _loadedVoiceId = VoiceId;
         MineruExecutable = _settings.MineruExecutable ?? string.Empty;
         CallerKeyState = string.IsNullOrWhiteSpace(_settings.CallerKeyRef)
             ? "未配置 caller key（本机 Magpie 通常不需要）。"
@@ -160,14 +165,16 @@ public sealed class SetupViewModel : ObservableObject
                 ? _settings.ModelId!
                 : model_id_preferred(AvailableModels);
 
-            // 读到列表并选定 model ID 就是明确选择：立刻落盘，避免用户忘了点保存
+            // 读到列表并选定 model ID 就是明确选择：立刻落盘，避免用户忘了点保存。
+            // 音色不能在这里用启动时的旧快照：主持台可能已经改过音色了。
             _settings = new ToolSettings
             {
                 MagpieBaseUri = uri,
                 ModelId = ModelId,
                 CallerKeyRef = _settings.CallerKeyRef,
                 MineruExecutable = _settings.MineruExecutable,
-                VoiceId = _settings.VoiceId,
+                VoiceId = ResolveVoiceId(),
+                AutoRead = AutoRead,
                 InputHint = _settings.InputHint,
             };
             await _settingsStore.SaveAsync(_settings, CancellationToken.None);
@@ -198,7 +205,7 @@ public sealed class SetupViewModel : ObservableObject
         AvailableVoices.Clear();
         foreach (var voice in _tts.GetChineseVoices())
         {
-            AvailableVoices.Add(voice);
+            AvailableVoices.Add(new VoiceOption(voice));
         }
 
         if (string.IsNullOrWhiteSpace(VoiceId) && AvailableVoices.Count > 0)
@@ -236,6 +243,21 @@ public sealed class SetupViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// 这次要写盘的音色。
+    /// 用户确实在设置页改过 → 用这里的；否则沿用磁盘上的当前值
+    /// （主持台也可能改过音色，设置页拿启动时的旧快照覆盖回去就把它弄丢了）。
+    /// </summary>
+    private string? ResolveVoiceId()
+    {
+        if (VoiceId != _loadedVoiceId)
+        {
+            return string.IsNullOrWhiteSpace(VoiceId) ? null : VoiceId.Trim();
+        }
+
+        return _settingsStore.Load().VoiceId;
+    }
+
     private async Task SaveAsync()
     {
         if (!TryParseBaseUri(out var uri, out var error))
@@ -246,18 +268,26 @@ public sealed class SetupViewModel : ObservableObject
 
         try
         {
+            // 主持台也能改音色。只有「用户确实在设置页动过音色」时才用这里的值；
+            // 否则沿用磁盘上的当前值 —— 否则设置页会拿启动时的旧值把主持台的选择悄悄退回去。
+            var voiceId = ResolveVoiceId();
+
             _settings = new ToolSettings
             {
                 MagpieBaseUri = uri,
                 ModelId = string.IsNullOrWhiteSpace(ModelId) ? null : ModelId.Trim(),
                 CallerKeyRef = _settings.CallerKeyRef,
                 MineruExecutable = string.IsNullOrWhiteSpace(MineruExecutable) ? null : MineruExecutable.Trim(),
-                VoiceId = string.IsNullOrWhiteSpace(VoiceId) ? null : VoiceId.Trim(),
+                VoiceId = voiceId,
+                AutoRead = AutoRead,
                 InputHint = _settings.InputHint,
             };
             _settings.Validate();
             await _settingsStore.SaveAsync(_settings, CancellationToken.None);
-            Status = "设置已保存（caller key 不在普通设置文件中）。";
+            // 只在确实写盘成功后才推进「用户已改过音色」的标记：
+            // 否则校验或写盘失败时，下一次保存会走「没改过」分支把本次选择丢掉。
+            _loadedVoiceId = VoiceId;
+            Status = "设置已保存。";
             OnPropertyChanged(nameof(CurrentSettings));
             SettingsSaved?.Invoke(this, _settings);
         }
@@ -265,24 +295,6 @@ public sealed class SetupViewModel : ObservableObject
         {
             Status = ex.PublicReason;
         }
-    }
-
-    private Task SaveCallerKeyAsync()
-    {
-        try
-        {
-            var keyRef = _settingsStore.SaveCallerKey(CallerKeyInput);
-            _settings = _settings with { CallerKeyRef = keyRef };
-            CallerKeyInput = string.Empty;
-            CallerKeyState = "已配置 caller key（DPAPI 加密，不显示明文）。";
-            Status = "caller key 已加密保存；请再点一次保存设置。";
-        }
-        catch (DomainRuleException ex)
-        {
-            Status = ex.PublicReason;
-        }
-
-        return Task.CompletedTask;
     }
 
     private bool TryParseBaseUri(out Uri uri, out string error)

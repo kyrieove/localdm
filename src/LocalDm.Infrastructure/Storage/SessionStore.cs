@@ -341,11 +341,7 @@ public sealed class SessionStore : ISessionStore, IDisposable
         command.Parameters.AddWithValue("$ph", (object?)session.CurrentPhaseId ?? DBNull.Value);
         command.Parameters.AddWithValue("$r", session.Revision);
         command.Parameters.AddWithValue("$rm", JsonSerializer.Serialize(session.ReleasedMaterialIds));
-        command.Parameters.AddWithValue(
-            "$vs",
-            session.VoteSummary is null
-                ? DBNull.Value
-                : JsonSerializer.Serialize(session.VoteSummary.Counts.Select(c => new VoteCountDto(c.Option, c.Count))));
+        command.Parameters.AddWithValue("$vs", SerializeVotes(session));
         command.Parameters.AddWithValue(
             "$rs",
             session.ResumeState is null ? DBNull.Value : (int)session.ResumeState.Value);
@@ -357,17 +353,77 @@ public sealed class SessionStore : ISessionStore, IDisposable
         "SELECT session_id, package_id, package_version, manifest_hash, state, current_phase_id, revision, " +
         "released_materials, vote_summary, resume_state FROM sessions";
 
+    /// <summary>
+    /// 投票汇总落盘。
+    ///
+    /// 多轮投票时每一轮都要留档，所以新格式是「按环节的记录列表」：
+    /// <c>{"records":[{"phaseId":"…","counts":[{"Option":"A","Count":3}]}]}</c>。
+    /// 旧存档是裸数组（单个汇总、没有环节归属），原样写回旧格式，
+    /// 免得读到旧格式再保存时把它变成另一个形状、丢掉归属不明的历史。
+    /// </summary>
+    private static object SerializeVotes(Session session)
+    {
+        if (session.VoteSummary is null)
+        {
+            return DBNull.Value;
+        }
+
+        if (session.VoteHistory.Count == 0)
+        {
+            return JsonSerializer.Serialize(
+                session.VoteSummary.Counts.Select(c => new VoteCountDto(c.Option, c.Count)));
+        }
+
+        var records = session.VoteHistory
+            .Select(r => new PhaseVoteDto(
+                r.PhaseId,
+                r.Summary.Counts.Select(c => new VoteCountDto(c.Option, c.Count)).ToArray()))
+            .ToArray();
+        return JsonSerializer.Serialize(new VotePayloadDto(records));
+    }
+
     private static Session ReadSession(SqliteDataReader reader)
     {
         var released = JsonSerializer.Deserialize<string[]>(reader.GetString(7)) ?? [];
         VoteSummary? votes = null;
+        string? votePhaseId = null;
+        IReadOnlyList<PhaseVoteRecord> history = [];
+
         if (!reader.IsDBNull(8))
         {
-            var dtos = JsonSerializer.Deserialize<VoteCountDto[]>(reader.GetString(8)) ?? [];
-            votes = new VoteSummary
+            var raw = reader.GetString(8);
+            if (raw.TrimStart().StartsWith('{'))
             {
-                Counts = dtos.Select(d => new VoteCount { Option = d.Option, Count = d.Count }).ToArray(),
-            };
+                var payload = JsonSerializer.Deserialize<VotePayloadDto>(raw);
+                var records = payload?.Records?
+                    .Select(r => new PhaseVoteRecord
+                    {
+                        PhaseId = r.PhaseId ?? string.Empty,
+                        Summary = new VoteSummary
+                        {
+                            Counts = (r.Counts ?? [])
+                                .Select(c => new VoteCount { Option = c.Option, Count = c.Count })
+                                .ToArray(),
+                        },
+                    })
+                    .ToArray() ?? [];
+
+                history = records;
+                if (records.Length > 0)
+                {
+                    votes = records[^1].Summary;
+                    votePhaseId = records[^1].PhaseId;
+                }
+            }
+            else
+            {
+                // 旧格式：单个汇总，没有环节归属。
+                var dtos = JsonSerializer.Deserialize<VoteCountDto[]>(raw) ?? [];
+                votes = new VoteSummary
+                {
+                    Counts = dtos.Select(d => new VoteCount { Option = d.Option, Count = d.Count }).ToArray(),
+                };
+            }
         }
 
         return new Session
@@ -381,8 +437,40 @@ public sealed class SessionStore : ISessionStore, IDisposable
             Revision = reader.GetInt32(6),
             ReleasedMaterialIds = released,
             VoteSummary = votes,
+            VoteSummaryPhaseId = votePhaseId,
+            VoteHistory = history,
             ResumeState = reader.IsDBNull(9) ? null : (SessionState)reader.GetInt32(9),
         };
+    }
+
+    /// <summary>
+    /// 列出所有存档的绑定信息（不含任何剧情内容）。
+    /// 「继续这一局」用它发现「存档还在、但绑定的剧本包已经不在」的情况：
+    /// 那种局面必须明说不能恢复，而不是静静忽略或者拿新包顶上去。
+    /// </summary>
+    public async Task<IReadOnlyList<StoredSessionRef>> ListSessionsAsync(CancellationToken cancellationToken)
+    {
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT session_id, package_id, package_version, manifest_hash, state, current_phase_id, revision " +
+            "FROM sessions ORDER BY updated_at DESC";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var list = new List<StoredSessionRef>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            list.Add(new StoredSessionRef(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                (SessionState)reader.GetInt32(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.GetInt32(6)));
+        }
+
+        return list;
     }
 
     private async Task<SqliteConnection> OpenAsync(CancellationToken cancellationToken)
@@ -402,6 +490,10 @@ public sealed class SessionStore : ISessionStore, IDisposable
     private static string LoadSchema() => SqliteSchemaSql.Text;
 
     private sealed record VoteCountDto(string Option, int Count);
+
+    private sealed record PhaseVoteDto(string? PhaseId, VoteCountDto[]? Counts);
+
+    private sealed record VotePayloadDto(PhaseVoteDto[]? Records);
 }
 
 /// <summary>可注入的事务故障点，覆盖 SC-004 要求的事件写入与提交两个位置。</summary>

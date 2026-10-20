@@ -225,11 +225,11 @@ public static class ScriptPackageBuilder
                 PublicSegmentIds = segments.Take(1).Select(s => s.SegmentId).ToArray(),
                 AllowedActions = [PublicAction.Start, PublicAction.Pause],
                 Conditions = ["全员已就坐并拿到本"],
-                RequiresGroupReady = true,
                 MaterialIds = [],
                 IsVotePhase = false,
                 IsRevealPhase = false,
                 SourceSpanIds = segments.Take(1).SelectMany(s => s.SourceSpanIds).ToArray(),
+                Hint = "请大家就坐并拿到自己的本。",
             },
         };
 

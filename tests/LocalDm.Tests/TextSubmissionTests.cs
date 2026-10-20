@@ -27,6 +27,15 @@ public sealed class TextSubmissionTests
     }
 
     [Fact]
+    public void Ime_processed_key_never_sends()
+    {
+        // WPF 约定：IME 处于活动状态时，KeyDown/KeyUp 的 Key 取值为 Key.ImeProcessed，
+        // 而 ImeProcessedKey 给的是原始按键。所以判据必须落在 Key 上。
+        Assert.NotEqual(System.Windows.Input.Key.Enter, System.Windows.Input.Key.ImeProcessed);
+        Assert.False(HostInputController.ShouldSendOnEnterArgs(System.Windows.Input.Key.ImeProcessed, composing: false, shift: false));
+    }
+
+    [Fact]
     public void Other_keys_never_send()
     {
         Assert.False(HostInputController.ShouldSendOnEnterArgs(System.Windows.Input.Key.A, composing: false, shift: false));

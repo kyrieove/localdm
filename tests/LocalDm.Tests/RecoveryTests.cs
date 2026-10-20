@@ -36,7 +36,7 @@ public sealed class RecoveryTests : IDisposable
             await store.SaveSessionAsync(SyntheticPackage.NewSession(), TestContext.Current.CancellationToken);
             var dispatcher = new CommandDispatcher(store);
             await dispatcher.DispatchAsync(
-                SyntheticPackage.Command(GameCommandType.Start, 0, "op-1", groupReady: true),
+                SyntheticPackage.Command(GameCommandType.Start, 0, "op-1"),
                 _package,
                 TestContext.Current.CancellationToken);
         }

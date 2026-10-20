@@ -40,46 +40,45 @@ public sealed class ReleaseSmokeTests
                 Assert.Equal("Prepared", session.SessionStateText);
                 Assert.Contains("原本条件", string.Join(' ', session.PhaseConditions), StringComparison.Ordinal);
 
-                // 没有勾选「大家已准备好」：开始必须被拒绝，状态不变
-                await session.ExecuteAsync(GameCommandType.Start, null, null);
-                Assert.Equal("Prepared", session.SessionStateText);
-                Assert.Contains("准备好", session.Status, StringComparison.Ordinal);
-
-                session.GroupReady = true;
+                // 没有勾选框：点「开始这一局」就是确认，一下点到 Playing。
+                Assert.True(session.IsStartVisible, "待开局时应给出开始动作。");
                 await session.ExecuteAsync(GameCommandType.Start, null, null);
                 Assert.Equal("Playing", session.SessionStateText);
                 Assert.Equal(1, session.Revision);
 
-                session.GroupReady = true;
-
+                Assert.Equal("进入搜证", session.AdvanceLabel);
                 await session.ExecuteAsync(GameCommandType.Advance, null, null);
                 Assert.Equal("搜证", session.PhaseTitle);
 
+                // 本环节两份材料必须逐个发完才能推进：这是机器条件，不是勾选。
+                Assert.Equal("发放材料 线索包一", session.ReleaseLabel);
                 await session.ExecuteAsync(GameCommandType.ReleaseMaterials, ["线索包一"], null);
                 Assert.Contains("线索包一", session.ReleasedMaterials);
 
-                session.GroupReady = true;
-
                 await session.ExecuteAsync(GameCommandType.Advance, null, null);
-                session.GroupReady = true;
+                Assert.Equal("搜证", session.PhaseTitle);
+                Assert.Contains("没有发放", session.Status, StringComparison.Ordinal);
+
+                await session.ExecuteAsync(GameCommandType.ReleaseMaterials, ["线索包二"], null);
+                await session.ExecuteAsync(GameCommandType.Advance, null, null);
+                Assert.Equal("讨论", session.PhaseTitle);
+
                 await session.ExecuteAsync(GameCommandType.Advance, null, null);
                 Assert.Equal("投票", session.PhaseTitle);
 
+                // 投票入口只在投票环节出现，且点「确认提交汇总」即确认
+                Assert.True(session.IsVoteVisible, "投票环节应给出录入入口。");
                 Assert.True(SessionViewModel.TryParseVotes("A=3, B=2", out var votes, out _));
                 await session.ExecuteAsync(GameCommandType.SubmitVoteSummary, null, votes);
-                Assert.Null(session.Projection!.VoteSummary);
-
-                session.VoteConfirmed = true;
-                await session.ExecuteAsync(GameCommandType.SubmitVoteSummary, null, votes);
                 Assert.Equal(5, session.Projection!.VoteSummary!.TotalVotes);
+                Assert.False(session.IsVoteVisible, "汇总生效后不再重复录入。");
 
-                session.GroupReady = true;
-                session.GroupReady = true;
                 await session.ExecuteAsync(GameCommandType.Advance, null, null);
                 Assert.Equal("真相", session.PhaseTitle);
                 Assert.Null(session.Projection.RevealedTexts);
 
-                session.RevealConfirmed = true;
+                // 揭秘也是点一下：不再勾「确认这是公开揭秘」
+                Assert.True(session.IsRevealVisible, "真相环节应给出公开动作。");
                 await session.ExecuteAsync(GameCommandType.Reveal, null, null);
                 Assert.Equal("Revealed", session.SessionStateText);
                 Assert.NotNull(session.Projection.RevealedTexts);
@@ -112,7 +111,6 @@ public sealed class ReleaseSmokeTests
                 await store.InitializeAsync(CancellationToken.None);
                 var host = NewHost(store);
                 await host.LoadDemoAsync();
-                host.Session.GroupReady = true;
                 await host.Session.ExecuteAsync(GameCommandType.Start, null, null);
                 Assert.Equal(1, host.Session.Revision);
             }

@@ -1,24 +1,15 @@
-using System.Windows;
 using System.Windows.Controls;
-using LocalDm.App.ViewModels;
 
 namespace LocalDm.App.Views;
 
+/// <summary>
+/// 设置页。游玩界面不再出现 caller key 输入与文档工具路径：
+/// 语音、模型与可用性检查收在这里，日常只需要选一次。
+/// </summary>
 public partial class SetupView : UserControl
 {
     public SetupView()
     {
         InitializeComponent();
-    }
-
-    /// <summary>
-    /// PasswordBox.Password 不参与数据绑定（避免明文进绑定系统），只在此处回填到 ViewModel 内存。
-    /// </summary>
-    private void OnCallerKeyChanged(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is SetupViewModel vm && sender is PasswordBox box)
-        {
-            vm.CallerKeyInput = box.Password;
-        }
     }
 }

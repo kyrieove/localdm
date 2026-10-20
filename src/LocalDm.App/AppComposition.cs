@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using LocalDm.App.Demo;
 using LocalDm.App.Input;
 using LocalDm.App.ViewModels;
 using LocalDm.Core.Domain;
@@ -18,15 +19,19 @@ namespace LocalDm.App;
 public sealed class AppComposition : IDisposable
 {
     private readonly SessionContext _context;
+    private readonly Task _ttsWarmup;
+    private HostViewModel? _host;
 
     private AppComposition(
         SessionContext context,
         MagpieGateway magpie,
         TtsService tts,
         HostDirector director,
-        HostInputController input)
+        HostInputController input,
+        Task ttsWarmup)
     {
         _context = context;
+        _ttsWarmup = ttsWarmup;
         Magpie = magpie;
         Tts = tts;
         Director = director;
@@ -69,12 +74,20 @@ public sealed class AppComposition : IDisposable
         var director = new HostDirector(magpie, tts);
         var input = new HostInputController(new HostIntentRouter());
 
-        return new AppComposition(context, magpie, tts, director, input);
+        // 探测 Edge-TTS 依赖要起 python 进程，最多几秒。放到后台先跑，
+        // 之后界面线程问「有没有神经音色」就是瞬时的，不会在启动时卡住。
+        var warmup = EdgeTtsEngine.WarmUpAsync();
+
+        return new AppComposition(context, magpie, tts, director, input, warmup);
     }
 
     public async Task<ShellViewModel> CreateShellAsync(CancellationToken cancellationToken)
     {
         var settings = await Settings.LoadAsync(cancellationToken);
+
+        // 探测最长 5 秒：有界等待，超时先放行。
+        // 别把主窗口的出现推迟到探测结束 —— 那正是我们要解决的「点了没反应」。
+        await Task.WhenAny(_ttsWarmup, Task.Delay(TimeSpan.FromSeconds(1)));
 
         var setup = new SetupViewModel(Settings, Magpie, Tts, Director);
         var dispatcher = new LocalDm.Core.Game.CommandDispatcher(_context.Store);
@@ -84,24 +97,175 @@ public sealed class AppComposition : IDisposable
             () => Settings.Load(),
             Input.Router,
             dispatcher,
-            _context.Store);
+            _context.Store,
+            Tts,
+            // 主持台切换音色：读改写当前设置，不覆盖其它字段。
+            // 写失败要把原因带回界面，不能静默丢掉这次选择。
+            voiceId =>
+            {
+                try
+                {
+                    var current = Settings.Load();
+                    Settings.Save(current with { VoiceId = voiceId });
+                    return null;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine("[Settings] 保存音色失败：" + ex.Message);
+                    return "设置文件写入失败";
+                }
+            });
         var library = new LibraryViewModel(Path.Combine(_context.DataRoot, "packages"));
+        _host = host;
 
-        // 保存设置后把新地址与 caller key 同步到网关，不必重启
+        // 保存设置后把新地址与 caller key 同步到网关，不必重启；
+        // 音色也要同步到主持台，否则主持台还在用启动时的旧音色朗读。
         setup.SettingsSaved += (_, saved) =>
         {
             Magpie.BaseUri = saved.MagpieBaseUri;
             Magpie.CallerKey = Settings.LoadCallerKey(saved.CallerKeyRef);
+            host.ApplySettingsVoice(saved.VoiceId);
         };
 
         // 先建立壳，再让首页的开局动作装入剧本（切页由 ShellViewModel 负责）
         var shell = new ShellViewModel(library, setup, host);
-        library.PackageOpened += async (_, package) => await host.LoadPackageAsync(package);
+        library.PackageOpened += async (_, package) =>
+        {
+            try
+            {
+                await host.LoadPackageAsync(package);
+            }
+            catch (Exception ex)
+            {
+                // 事件处理器是 async void：异常必须在这里吃掉，
+                // 否则会变成未处理异常把整个应用带走。
+                System.Diagnostics.Debug.WriteLine("[App] 装载剧本失败：" + ex);
+                host.ReportProblem("装载剧本失败，请重试或换一个剧本。");
+            }
+        };
 
         _currentSettings = settings;
 
         await shell.InitializeAsync(cancellationToken);
+
+        // 找出一局没走完的存档并给出「继续这一局」入口：
+        // 重启后主持人不该自己重新翻包找进度。
+        var resumable = await FindResumableAsync(library, cancellationToken);
+        if (resumable is not null)
+        {
+            library.SetResumable(resumable.Value.Package, resumable.Value.Session);
+        }
+
+        // 存档还在、绑定的包不在了：必须明说不能恢复。
+        // 否则重新准备时改了流程，旧存档会静静消失（或者更糟：被新包顶上去跳过新环节）。
+        library.SetOrphanNotice(await DescribeOrphanedSessionsAsync(library, cancellationToken));
+
+        library.ContinueRequested += async (_, package) =>
+        {
+            try
+            {
+                await host.LoadPackageAsync(package);
+                shell.ShowHostCommand.Execute(null);
+                // 这一局已经接上了，首页那张卡片不再有代表性。
+                library.ClearResumable();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("[App] 继续上一局失败：" + ex);
+                host.ReportProblem("继续这一局失败，请重试。");
+            }
+        };
+
+        // 每次回到首页都重算一次：那局可能已经玩完了。
+        shell.LibraryShown += async (_, _) =>
+        {
+            var latest = await FindResumableAsync(library, CancellationToken.None);
+            if (latest is null)
+            {
+                library.ClearResumable();
+            }
+            else
+            {
+                library.SetResumable(latest.Value.Package, latest.Value.Session);
+            }
+        };
+
+        // 第一次用的人没有剧本包：首页直接给一条能走的路。
+        library.DemoRequested += async (_, _) =>
+        {
+            try
+            {
+                await host.LoadDemoAsync();
+                shell.ShowHostCommand.Execute(null);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("[App] 装载演示剧本失败：" + ex);
+                host.ReportProblem("装载演示剧本失败，请重试。");
+            }
+        };
+
         return shell;
+    }
+
+    /// <summary>
+    /// 找出「存档还在、绑定的冻结包不在了」的局面并给出一句说明。
+    /// 只读绑定信息，不碰剧情内容。
+    /// </summary>
+    private async Task<string?> DescribeOrphanedSessionsAsync(
+        LibraryViewModel library,
+        CancellationToken cancellationToken)
+    {
+        var knownPackageIds = library.Packages
+            .Select(r => r.PackageId)
+            .Append(DemoPackage.PackageId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var stored = await _context.Store.ListSessionsAsync(cancellationToken);
+        var orphaned = stored
+            .Where(s => s.State != SessionState.Completed
+                        && s.Revision > 0
+                        && !knownPackageIds.Contains(s.PackageId))
+            .ToArray();
+
+        return orphaned.Length == 0
+            ? null
+            : $"有 {orphaned.Length} 局存档绑定的剧本包已经不在了（通常是重新准备时流程被改写）。"
+              + "为了不跳过环节，不会用新包继续这一局；请找回原来的冻结包，或按新流程重开一局。";
+    }
+
+    /// <summary>找出进度最靠前的一局未完成存档。</summary>
+    private async Task<(ScriptPackage Package, Session Session)?> FindResumableAsync(
+        LibraryViewModel library,
+        CancellationToken cancellationToken)
+    {
+        ScriptPackage? bestPackage = null;
+        Session? bestSession = null;
+
+        // 包目录里的剧本 + 内置演示剧本（演示不在目录里，但它的存档也可能没走完）
+        var candidates = library.Packages
+            .Select(r => (Package: r.Package, SessionId: SessionIds.For(r.Package)))
+            .ToList();
+        candidates.Add((DemoPackage.Create(), DemoPackage.SessionId));
+
+        foreach (var (package, sessionId) in candidates)
+        {
+            var session = await _context.Store.LoadSessionAsync(sessionId, cancellationToken);
+            if (session is null || session.State == SessionState.Completed || session.Revision == 0)
+            {
+                continue;
+            }
+
+            if (bestSession is null || session.Revision > bestSession.Revision)
+            {
+                bestPackage = package;
+                bestSession = session;
+            }
+        }
+
+        return bestPackage is null || bestSession is null
+            ? null
+            : (bestPackage, bestSession);
     }
 
     /// <summary>最近一次读到的设置；主持页每次发送前重新读取，避免使用过期 model ID。</summary>
@@ -111,8 +275,8 @@ public sealed class AppComposition : IDisposable
 
     public void Dispose()
     {
+        _host?.Dispose();
         Tts.Dispose();
         Magpie.Dispose();
         _context.Dispose();
-    }
-}
+    }}

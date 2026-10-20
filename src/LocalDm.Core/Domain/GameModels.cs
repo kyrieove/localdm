@@ -23,7 +23,17 @@ public sealed record Session
 
     public required IReadOnlyList<string> ReleasedMaterialIds { get; init; }
 
+    /// <summary>
+    /// 当前生效的票数汇总。它是<b>某个投票环节</b>的汇总，不是整局共用的一个数 ——
+    /// 第二个投票环节必须重新提交，否则会沿用上一轮票数直接推进。
+    /// </summary>
     public VoteSummary? VoteSummary { get; init; }
+
+    /// <summary>当前生效的汇总属于哪个投票环节。旧存档没有这一项，为 null。</summary>
+    public string? VoteSummaryPhaseId { get; init; }
+
+    /// <summary>历次投票汇总，按提交顺序。多轮投票时用来保留每一轮的结果。</summary>
+    public IReadOnlyList<PhaseVoteRecord> VoteHistory { get; init; } = [];
 
     /// <summary>Pause 时记录；Resume 恢复它，不能覆盖揭秘状态。</summary>
     public SessionState? ResumeState { get; init; }
@@ -36,9 +46,17 @@ public sealed record Session
         {
             throw new DomainRuleException(
                 DomainErrorCode.PACKAGE_MISMATCH,
-                "该存档绑定的剧本版本与当前包不一致。");
+                "这份存档绑定的剧本内容与当前包不一致（来源或流程被改写过）。请用原来的冻结包继续这一局。");
         }
     }
+}
+
+/// <summary>某一轮投票的汇总结果：绑定到具体环节，不与其它轮次混用。</summary>
+public sealed record PhaseVoteRecord
+{
+    public required string PhaseId { get; init; }
+
+    public required VoteSummary Summary { get; init; }
 }
 
 public enum SessionState
@@ -99,8 +117,9 @@ public sealed record VoteCount
 }
 
 /// <summary>
-/// 命令载荷只含该命令需要的明确数据：groupReady、confirmed、票数或材料 ID。
+/// 命令载荷只含该命令需要的明确数据：票数或材料 ID。
 /// 不含自由代码，也不含模型可写的状态。
+/// 「确认」不是数据：点的就是那个按钮本身，页面不再保留勾选框字段。
 /// </summary>
 public sealed record GameCommand
 {
@@ -111,12 +130,6 @@ public sealed record GameCommand
     public required int ExpectedRevision { get; init; }
 
     public required GameCommandType Type { get; init; }
-
-    /// <summary>确认大家已口头准备好（Start / Advance）。</summary>
-    public bool GroupReady { get; init; }
-
-    /// <summary>二次确认（SubmitVoteSummary / Reveal）。</summary>
-    public bool Confirmed { get; init; }
 
     public IReadOnlyList<string> MaterialIds { get; init; } = [];
 
@@ -147,8 +160,6 @@ public sealed record GameCommand
             '|',
             Type,
             ExpectedRevision,
-            GroupReady ? '1' : '0',
-            Confirmed ? '1' : '0',
             materials,
             votes);
     }

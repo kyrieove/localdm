@@ -17,16 +17,21 @@ public sealed class HostInputController
     }
 
     /// <summary>
-    /// 判断一次按键是否应当发送。IME 正在组合、候选确认或 ImeProcessed 时一律不发送。
+    /// 判断一次按键是否应当发送。IME 正在组合或候选确认时一律不发送。
+    ///
+    /// 判据是 <c>e.Key == Key.ImeProcessed</c>：按 WPF 的约定，IME 处于活动状态时
+    /// KeyDown/KeyUp 的 <c>Key</c> 取值为 <c>Key.ImeProcessed</c>，而
+    /// <c>ImeProcessedKey</c> 给的是<b>原始按键</b>（例如 Key.Enter），不是 ImeProcessed 本身。
+    /// 因此拿 ImeProcessedKey 去比 ImeProcessed 永远不成立，是条死判据。
     /// </summary>
-    public static bool ShouldSendOnEnter(KeyEventArgs e, bool isImeComposing)
+    public static bool ShouldSendOnEnter(KeyEventArgs e)
     {
-        if (isImeComposing || e.ImeProcessedKey == Key.ImeProcessed)
+        if (e.Key == Key.ImeProcessed)
         {
             return false;
         }
 
-        return ShouldSendOnEnterArgs(e.Key, isImeComposing, (Keyboard.Modifiers & ModifierKeys.Shift) != 0);
+        return ShouldSendOnEnterArgs(e.Key, composing: false, (Keyboard.Modifiers & ModifierKeys.Shift) != 0);
     }
 
     /// <summary>

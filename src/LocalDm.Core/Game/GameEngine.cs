@@ -23,11 +23,11 @@ public static class GameEngine
 
         var next = command.Type switch
         {
-            GameCommandType.Start => Start(current, package, command),
-            GameCommandType.Advance => Advance(current, package, command),
+            GameCommandType.Start => Start(current, package),
+            GameCommandType.Advance => Advance(current, package),
             GameCommandType.ReleaseMaterials => ReleaseMaterials(current, package, command),
             GameCommandType.SubmitVoteSummary => SubmitVoteSummary(current, package, command),
-            GameCommandType.Reveal => Reveal(current, package, command),
+            GameCommandType.Reveal => Reveal(current, package),
             GameCommandType.Pause => Pause(current),
             GameCommandType.Resume => Resume(current, package),
             GameCommandType.Complete => Complete(current, package),
@@ -38,7 +38,7 @@ public static class GameEngine
         return next with { Revision = current.Revision + 1 };
     }
 
-    private static Session Start(Session current, ScriptPackage package, GameCommand command)
+    private static Session Start(Session current, ScriptPackage package)
     {
         if (package.Validation != PackageValidationState.Ready)
         {
@@ -48,11 +48,6 @@ public static class GameEngine
         if (current.State != SessionState.Prepared)
         {
             throw new DomainRuleException(DomainErrorCode.INVALID_INPUT, "只有准备完成的一局可以开始。");
-        }
-
-        if (!command.GroupReady)
-        {
-            throw new DomainRuleException(DomainErrorCode.GROUP_NOT_READY, "请先确认大家已口头准备好。");
         }
 
         var first = package.Phases.FirstOrDefault()
@@ -65,16 +60,11 @@ public static class GameEngine
         };
     }
 
-    private static Session Advance(Session current, ScriptPackage package, GameCommand command)
+    private static Session Advance(Session current, ScriptPackage package)
     {
         if (current.State != SessionState.Playing)
         {
             throw new DomainRuleException(DomainErrorCode.PHASE_CONDITION_UNMET, "当前不在游戏中，不能推进。");
-        }
-
-        if (!command.GroupReady)
-        {
-            throw new DomainRuleException(DomainErrorCode.GROUP_NOT_READY, "请先确认大家已口头准备好。");
         }
 
         var phase = CurrentPhase(current, package);
@@ -83,10 +73,10 @@ public static class GameEngine
             throw new DomainRuleException(DomainErrorCode.PHASE_CONDITION_UNMET, "原本条件不允许在此阶段推进。");
         }
 
-        // 投票阶段未提交合法汇总时不能推进
-        if (phase.IsVotePhase && current.VoteSummary is null)
+        // 投票环节必须提交「属于这一轮」的汇总：上一轮的汇总不能带过来。
+        if (phase.IsVotePhase && !HasSummaryFor(current, package, phase))
         {
-            throw new DomainRuleException(DomainErrorCode.PHASE_CONDITION_UNMET, "投票阶段需要先提交有效的票数汇总。");
+            throw new DomainRuleException(DomainErrorCode.PHASE_CONDITION_UNMET, "这一轮投票还没有提交汇总。");
         }
 
         var index = IndexOfPhase(package, phase.PhaseId);
@@ -97,7 +87,36 @@ public static class GameEngine
 
         var next = package.Phases[index + 1];
         var released = current.ReleasedMaterialIds;
-        if (next.MaterialIds.Count > 0)
+
+        // 允许手动发放的阶段（真实剧本的搜证阶段）：材料不在「进入阶段时」整批并入，
+        // 否则主持人一进搜证就看到全部牌堆已发放，逐个发牌的按钮全程灰显。
+        // 改为由主持人在本阶段内按需发放。
+        if (phase.AllowedActions.Contains(PublicAction.ReleaseMaterials))
+        {
+            var pending = phase.MaterialIds
+                .Where(id => !released.Contains(id, StringComparer.Ordinal))
+                .ToArray();
+
+            // 剧本声明「本轮材料必须发完才能继续」时，这是机器条件：
+            // 少发一份就拒绝推进，而不是替主持人补发。
+            if (phase.RequiresAllMaterials && pending.Length > 0)
+            {
+                throw new DomainRuleException(
+                    DomainErrorCode.PHASE_CONDITION_UNMET,
+                    $"本环节还有 {pending.Length} 份材料没有发放。");
+            }
+
+            // 但离开本阶段时仍要把没发完的编号补齐：主持人若直接推进跳过本阶段，
+            // 这些线索不允许永久丢失（否则该阶段之后再也无处可发）。
+            if (pending.Length > 0)
+            {
+                released = [.. released.Union(pending, StringComparer.Ordinal)];
+            }
+        }
+
+        // 进入下一阶段：若下一阶段不允许手动发放（如被动随阶段公开的材料包），
+        // 则在进入时自动释放。
+        if (next.MaterialIds.Count > 0 && !next.AllowedActions.Contains(PublicAction.ReleaseMaterials))
         {
             released = [.. released.Union(next.MaterialIds, StringComparer.Ordinal)];
         }
@@ -154,27 +173,54 @@ public static class GameEngine
             throw new DomainRuleException(DomainErrorCode.PHASE_CONDITION_UNMET, "本阶段原本不包含投票。");
         }
 
-        if (!command.Confirmed)
-        {
-            throw new DomainRuleException(DomainErrorCode.CONFIRMATION_REQUIRED, "提交票数需要二次确认。");
-        }
-
         var votes = (command.Votes ?? throw new DomainRuleException(DomainErrorCode.VOTE_INVALID, "缺少票数。"))
             .Validate(package.PlayerCount);
 
-        return current with { VoteSummary = votes };
+        // 汇总绑定到这一轮：下一轮投票必须重新提交，历史按顺序留着。
+        return current with
+        {
+            VoteSummary = votes,
+            VoteSummaryPhaseId = phase.PhaseId,
+            VoteHistory =
+            [
+                .. current.VoteHistory,
+                new PhaseVoteRecord { PhaseId = phase.PhaseId, Summary = votes },
+            ],
+        };
     }
 
-    private static Session Reveal(Session current, ScriptPackage package, GameCommand command)
+    /// <summary>
+    /// 这个投票环节是否已经有属于它自己的合法汇总。
+    ///
+    /// 判据是历史里有没有这一轮的记录 —— 只看「最新汇总」会把第二轮顶掉第一轮，
+    /// 于是揭秘时第一轮看起来又没投过。
+    /// 旧存档没有历史（当时只支持单个投票环节）：那种剧本按「属于本轮」处理，不会卡死。
+    /// </summary>
+    private static bool HasSummaryFor(Session session, ScriptPackage package, ScriptPhase phase)
+    {
+        if (session.VoteHistory.Any(r => string.Equals(r.PhaseId, phase.PhaseId, StringComparison.Ordinal)))
+        {
+            return true;
+        }
+
+        if (session.VoteSummary is null)
+        {
+            return false;
+        }
+
+        if (session.VoteSummaryPhaseId is not null)
+        {
+            return string.Equals(session.VoteSummaryPhaseId, phase.PhaseId, StringComparison.Ordinal);
+        }
+
+        return package.Phases.Count(p => p.IsVotePhase) == 1;
+    }
+
+    private static Session Reveal(Session current, ScriptPackage package)
     {
         if (current.State is not SessionState.Playing)
         {
             throw new DomainRuleException(DomainErrorCode.PHASE_CONDITION_UNMET, "只有游戏进行中可以揭秘。");
-        }
-
-        if (!command.Confirmed)
-        {
-            throw new DomainRuleException(DomainErrorCode.CONFIRMATION_REQUIRED, "揭秘需要明确确认。");
         }
 
         var phase = CurrentPhase(current, package);
@@ -183,11 +229,15 @@ public static class GameEngine
             throw new DomainRuleException(DomainErrorCode.PHASE_CONDITION_UNMET, "本阶段原本不允许揭秘。");
         }
 
-        // 原本要求投票的剧本必须先有合法汇总
-        var votePhaseExists = package.Phases.Any(p => p.IsVotePhase);
-        if (votePhaseExists && current.VoteSummary is null)
+        // 已经过去的每一轮投票都必须有自己的合法汇总，不能拿第一轮的票数顶第二轮。
+        var revealIndex = IndexOfPhase(package, phase.PhaseId);
+        for (var i = 0; i < revealIndex; i++)
         {
-            throw new DomainRuleException(DomainErrorCode.VOTE_INVALID, "尚未提交投票结果，不能揭秘。");
+            var earlier = package.Phases[i];
+            if (earlier.IsVotePhase && !HasSummaryFor(current, package, earlier))
+            {
+                throw new DomainRuleException(DomainErrorCode.VOTE_INVALID, "还有一轮投票没有合法汇总，不能揭秘。");
+            }
         }
 
         return current with { State = SessionState.Revealed, ResumeState = null };
@@ -222,18 +272,31 @@ public static class GameEngine
 
     private static Session Complete(Session current, ScriptPackage package)
     {
-        if (current.State == SessionState.Paused && current.ResumeState == SessionState.Revealed)
-        {
-            // 已揭秘后暂停：允许直接复盘
-            return current with { State = SessionState.Completed, ResumeState = null };
-        }
-
-        if (current.State != SessionState.Revealed)
+        if (current.State != SessionState.Revealed
+            && !(current.State == SessionState.Paused && current.ResumeState == SessionState.Revealed))
         {
             throw new DomainRuleException(DomainErrorCode.PHASE_CONDITION_UNMET, "需要先揭秘才能复盘。");
         }
 
-        return current with { State = SessionState.Completed, ResumeState = null };
+        var nextPhaseId = current.CurrentPhaseId;
+        if (!string.IsNullOrEmpty(current.CurrentPhaseId))
+        {
+            var index = IndexOfPhase(package, current.CurrentPhaseId);
+            // 只在「下一阶段就是剧本的最后一个阶段」时才前进。
+            // 复盘是终态，不能指向一个仍可继续推进的中间阶段（否则投影会按那个阶段
+            // 的标题与公开段渲染，公开内容与真相错位）。剧本没有复盘阶段时保持原阶段。
+            if (index >= 0 && index + 2 == package.Phases.Count)
+            {
+                nextPhaseId = package.Phases[index + 1].PhaseId;
+            }
+        }
+
+        return current with
+        {
+            State = SessionState.Completed,
+            CurrentPhaseId = nextPhaseId,
+            ResumeState = null
+        };
     }
 
     private static ScriptPhase CurrentPhase(Session current, ScriptPackage package)

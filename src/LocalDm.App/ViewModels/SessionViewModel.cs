@@ -5,19 +5,22 @@ using LocalDm.Core.Game;
 namespace LocalDm.App.ViewModels;
 
 /// <summary>
-/// 一局主持：展示无剧透阶段条件、大家准备勾选、材料提示、纸笔汇总与揭秘确认。
-/// 只拿公共投影；命令一律经 CommandDispatcher。
+/// 一局的公共视图：左侧进度轨道、当前流程提示、可用动作与材料编号。
+///
+/// 两条硬规则：
+/// 1) 阶段数量、顺序、标题、提示、动作名与材料全部来自剧本包，不按固定序号或中文标题判断；
+/// 2) 点击即确认 —— 界面上没有「大家准备好了」「已核对」这类勾选框，
+///    真正拦人的只有机器能验证的条件（阶段、票数、材料、版本），由规则核心裁决。
 /// </summary>
 public sealed class SessionViewModel : ObservableObject
 {
     private readonly CommandDispatcher _dispatcher;
     private ScriptPackage? _package;
     private PublicSessionProjection? _projection;
-    private bool _groupReady;
-    private bool _voteConfirmed;
-    private bool _revealConfirmed;
     private string _status = string.Empty;
     private string _voteInput = string.Empty;
+    private bool _busy;
+    private bool _narrationBusy;
 
     public SessionViewModel(CommandDispatcher dispatcher)
     {
@@ -25,8 +28,7 @@ public sealed class SessionViewModel : ObservableObject
         StartCommand = new RelayCommand(() => ExecuteAsync(GameCommandType.Start));
         AdvanceCommand = new RelayCommand(() => ExecuteAsync(GameCommandType.Advance));
         RevealCommand = new RelayCommand(() => ExecuteAsync(GameCommandType.Reveal));
-        PauseCommand = new RelayCommand(() => ExecuteAsync(GameCommandType.Pause));
-        ResumeCommand = new RelayCommand(() => ExecuteAsync(GameCommandType.Resume));
+        PauseResumeCommand = new RelayCommand(() => ExecuteAsync(IsPaused ? GameCommandType.Resume : GameCommandType.Pause));
         CompleteCommand = new RelayCommand(() => ExecuteAsync(GameCommandType.Complete));
         SubmitVoteCommand = new RelayCommand(SubmitVoteAsync);
         ReleaseMaterialsCommand = new RelayCommand(ReleaseMaterialsAsync);
@@ -38,12 +40,35 @@ public sealed class SessionViewModel : ObservableObject
 
     public ObservableCollection<string> ReleasedMaterials { get; } = [];
 
-    public ObservableCollection<string> AllowedActionLabels { get; } = [];
-
     /// <summary>阶段章标：整局的阶段顺序，标出已过与当前，供主持人一眼看清进度。</summary>
     public ObservableCollection<PhaseRailItem> PhaseRail { get; } = [];
 
     public string PhaseTitle => _projection?.CurrentPhase.Title ?? "（未开始）";
+
+    /// <summary>进度读数，例如「2 / 7」。阶段总数来自剧本包，不是常量。</summary>
+    public string PhaseProgress => _projection is null
+        ? string.Empty
+        : $"{_projection.CurrentPhase.Index} / {_projection.CurrentPhase.Count}";
+
+    /// <summary>当前流程提示：剧本给的那一句，没给就退回按原本条件拼接。</summary>
+    public string Hint
+    {
+        get
+        {
+            var phase = _projection?.CurrentPhase;
+            if (phase is null)
+            {
+                return string.Empty;
+            }
+
+            if (!string.IsNullOrWhiteSpace(phase.Hint))
+            {
+                return phase.Hint;
+            }
+
+            return string.Join("；", PhaseConditions);
+        }
+    }
 
     /// <summary>契约状态原文（Prepared/Playing/...），供测试与存档对齐。</summary>
     public string SessionStateText => _projection?.State ?? "Prepared";
@@ -55,7 +80,7 @@ public sealed class SessionViewModel : ObservableObject
         nameof(SessionState.Playing) => "进行中",
         nameof(SessionState.Paused) => "已暂停",
         nameof(SessionState.Revealed) => "已揭秘",
-        nameof(SessionState.Completed) => "已复盘",
+        nameof(SessionState.Completed) => "已结束",
         _ => "　",
     };
 
@@ -63,29 +88,19 @@ public sealed class SessionViewModel : ObservableObject
 
     public string PublicTitle => _projection?.PublicTitle ?? string.Empty;
 
-    public bool GroupReady
-    {
-        get => _groupReady;
-        set => SetProperty(ref _groupReady, value);
-    }
-
-    public bool VoteConfirmed
-    {
-        get => _voteConfirmed;
-        set => SetProperty(ref _voteConfirmed, value);
-    }
-
-    /// <summary>揭秘的独立二次确认：不能复用票数汇总的确认，两者是不同的操作。</summary>
-    public bool RevealConfirmed
-    {
-        get => _revealConfirmed;
-        set => SetProperty(ref _revealConfirmed, value);
-    }
+    public int PlayerCount => _projection?.PlayerCount ?? 0;
 
     public string VoteInput
     {
         get => _voteInput;
-        set => SetProperty(ref _voteInput, value);
+        set
+        {
+            if (SetProperty(ref _voteInput, value))
+            {
+                OnPropertyChanged(nameof(VoteHint));
+                OnPropertyChanged(nameof(CanSubmitVote));
+            }
+        }
     }
 
     public string Status
@@ -96,7 +111,7 @@ public sealed class SessionViewModel : ObservableObject
 
     public PublicSessionProjection? Projection => _projection;
 
-    /// <summary>一次状态提交成功后被触发；参数是命令类型。供主持台接上模型播报。</summary>
+    /// <summary>一次状态提交成功后被触发；参数是命令类型。供主持台接上对话与播报。</summary>
     public event EventHandler<GameCommandType>? Committed;
 
     /// <summary>当前装载的剧本包；未装载时为 null。仅供主持台构造提示词与公开依据。</summary>
@@ -118,32 +133,245 @@ public sealed class SessionViewModel : ObservableObject
             CurrentPhaseId = _projection.CurrentPhase.PhaseId,
             Revision = _projection.Revision,
             ReleasedMaterialIds = _projection.ReleasedMaterialIds,
+            // 投影里没有 ResumeState，但「投影里有真相」就等价于「已解锁」。
+            // 暂停态下必须把这件事带回去：否则真相会从提示词里消失，
+            // 而屏幕上还明明白白显示着真相 —— 那是模型与界面各说各话。
+            ResumeState = state == SessionState.Paused && _projection.RevealedTexts is { Count: > 0 }
+                ? SessionState.Revealed
+                : null,
         };
 
+    /// <summary>
+    /// 忙碌闸：命令派发中或播报中都不接受新的阶段命令。
+    /// 两者分开记，是因为命令派发结束得比播报早 —— 用同一个标志会被派发结束提前清掉。
+    /// </summary>
+    public bool Busy => _busy || _narrationBusy;
+
+    private bool IsPrepared => _projection?.State == nameof(SessionState.Prepared);
+
+    private bool IsPlaying => _projection?.State == nameof(SessionState.Playing);
+
+    private bool IsPaused => _projection?.State == nameof(SessionState.Paused);
+
+    private bool IsRevealed =>
+        _projection?.State is nameof(SessionState.Revealed);
+
+    private bool IsCompleted => _projection?.State is nameof(SessionState.Completed);
+
+    private bool Allows(PublicAction action) =>
+        _projection?.CurrentPhase.AllowedActions.Contains(action) == true;
+
+    /// <summary>标记一次状态提交后的播报正在进行。</summary>
+    public void SetNarrationBusy(bool value)
+    {
+        if (_narrationBusy == value)
+        {
+            return;
+        }
+
+        _narrationBusy = value;
+        RaiseBusyChanged();
+    }
+
+    private void SetCommandBusy(bool value)
+    {
+        if (_busy == value)
+        {
+            return;
+        }
+
+        _busy = value;
+        RaiseBusyChanged();
+    }
+
+    private void RaiseBusyChanged()
+    {
+        OnPropertyChanged(nameof(Busy));
+        OnPropertyChanged(nameof(CanStart));
+        OnPropertyChanged(nameof(CanAdvance));
+        OnPropertyChanged(nameof(IsBlockedByMaterials));
+        OnPropertyChanged(nameof(CanSubmitVote));
+        OnPropertyChanged(nameof(CanReveal));
+        OnPropertyChanged(nameof(CanReleaseMaterials));
+        OnPropertyChanged(nameof(CanPauseResume));
+        OnPropertyChanged(nameof(CanComplete));
+    }
+
+    // ===== 开局 =====
+
     /// <summary>只有 Prepared 才能开局；已开始的局再点开始没有意义。</summary>
-    public bool CanStart => _projection?.State == nameof(SessionState.Prepared);
+    public bool IsStartVisible => IsPrepared;
 
-    /// <summary>按钮可用性：让不可用的操作直接灰掉，而不是点了没反应。</summary>
-    public bool CanAdvance => _projection?.State == nameof(SessionState.Playing);
+    public bool CanStart => !Busy && IsPrepared;
 
-    public bool CanSubmitVote => _projection?.State == nameof(SessionState.Playing) && IsCurrentPhaseVote;
+    public string StartLabel => "开始这一局";
 
-    public bool CanReveal => _projection?.State == nameof(SessionState.Playing) && IsCurrentPhaseReveal;
+    // ===== 推进：动作名来自剧本包 =====
 
-    public bool CanReleaseMaterials => _projection?.State == nameof(SessionState.Playing) && PendingMaterials.Count > 0;
+    /// <summary>
+    /// 推进按钮只在「点了真的能走」时出现：
+    /// 投票未汇总、真相未公开、已到最后一环节，都不给一个点了会报错的按钮。
+    /// </summary>
+    public bool IsAdvanceVisible =>
+        IsPlaying
+        && Allows(PublicAction.Advance)
+        && !(IsCurrentPhaseVote && !HasVoteSummary)
+        && !IsCurrentPhaseReveal;
 
-    public bool CanPause => _projection?.State is nameof(SessionState.Playing) or nameof(SessionState.Revealed);
+    public bool CanAdvance => !Busy && IsAdvanceVisible && !IsBlockedByMaterials;
 
-    public bool CanResume => _projection?.State == nameof(SessionState.Paused);
+    /// <summary>
+    /// 剧本声明「本轮材料必须发完才能推进」时，按钮先灰掉：
+    /// 让人一眼看出还差材料，而不是点了才被规则核心拒绝。
+    /// </summary>
+    public bool IsBlockedByMaterials =>
+        _projection?.CurrentPhase.RequiresAllMaterials == true && PendingMaterials.Count > 0;
 
-    public bool CanComplete => _projection?.State is nameof(SessionState.Revealed) or nameof(SessionState.Paused)
-                               && _projection.RevealedTexts is not null;
+    /// <summary>例如「进入第二轮搜证」；剧本没给下一环节时退回固定文案。</summary>
+    public string AdvanceLabel =>
+        string.IsNullOrWhiteSpace(_projection?.CurrentPhase.AdvanceLabel)
+            ? "结束本局"
+            : _projection!.CurrentPhase.AdvanceLabel!;
 
-    private bool IsCurrentPhaseVote =>
-        _package?.Phases.FirstOrDefault(p => p.PhaseId == _projection?.CurrentPhase.PhaseId)?.IsVotePhase == true;
+    // ===== 材料 =====
 
-    private bool IsCurrentPhaseReveal =>
-        _package?.Phases.FirstOrDefault(p => p.PhaseId == _projection?.CurrentPhase.PhaseId)?.IsRevealPhase == true;
+    public bool IsReleaseVisible => IsPlaying && Allows(PublicAction.ReleaseMaterials) && PendingMaterials.Count > 0;
+
+    public bool CanReleaseMaterials => !Busy && IsReleaseVisible;
+
+    /// <summary>逐个发放：按钮上直接写清这一次要发哪个编号。</summary>
+    public string ReleaseLabel => PendingMaterials.Count > 0
+        ? $"发放材料 {PendingMaterials[0]}"
+        : "发放材料";
+
+    /// <summary>本环节有没有材料编号可发。没有就不占位。</summary>
+    public bool HasMaterialSection => PendingMaterials.Count > 0 || ReleasedMaterials.Count > 0;
+
+    /// <summary>还有几个编号没发。主持人一眼知道这一轮要发几堆牌。</summary>
+    public string PendingMaterialSummary =>
+        PendingMaterials.Count == 0
+            ? string.Empty
+            : $"还有 {PendingMaterials.Count} 个编号未发放";
+
+    // ===== 投票 =====
+
+    /// <summary>只有投票环节、且还没汇总时才出现录入入口。</summary>
+    public bool IsVoteVisible => IsPlaying && IsCurrentPhaseVote && !HasVoteSummary;
+
+    public bool CanSubmitVote => !Busy && IsVoteVisible && TryParseVoteInput(out _, out _);
+
+    /// <summary>录入过程中的即时反馈：已录入多少票、还差几人。</summary>
+    public string VoteHint
+    {
+        get
+        {
+            if (!TryParseVoteInput(out var summary, out var error))
+            {
+                return error;
+            }
+
+            var total = summary.Total;
+            var players = PlayerCount;
+            return total == players
+                ? $"已录入 {total} / {players} 票，点击下方即确认提交。"
+                : $"已录入 {total} / {players} 票" + (total > players ? "，票数超过人数。" : "。");
+        }
+    }
+
+    /// <summary>票数汇总按钮：点击即确认，没有额外的「已核对」勾选。</summary>
+    public string SubmitVoteLabel => "确认提交汇总";
+
+    /// <summary>投票成功后公开生效的票数汇总展示；未录入前为 null。</summary>
+    public string? VoteSummaryDisplay => _projection?.VoteSummary is { Counts.Count: > 0 } vs
+        ? "已生效票数：" + string.Join("，", vs.Counts.Select(c => $"{c.Option}={c.Count}")) + $"（共 {vs.TotalVotes} 票）"
+        : null;
+
+    public bool HasVoteSummary => !string.IsNullOrEmpty(VoteSummaryDisplay);
+
+    // ===== 揭秘与复盘 =====
+
+    /// <summary>揭秘只在真相环节、且尚未公开时出现。</summary>
+    public bool IsRevealVisible => IsPlaying && IsCurrentPhaseReveal;
+
+    public bool CanReveal => !Busy && IsRevealVisible;
+
+    /// <summary>揭秘动作名，例如「公开结局」。剧本没写就用「公开真相」。</summary>
+    public string RevealLabel =>
+        string.IsNullOrWhiteSpace(_projection?.CurrentPhase.RevealLabel)
+            ? "公开真相"
+            : _projection!.CurrentPhase.RevealLabel!;
+
+    /// <summary>按钮旁必须说清后果：点一下就对所有玩家公开结局。</summary>
+    public string RevealWarning => $"点击「{RevealLabel}」会向所有玩家公开结局，无需再次确认。";
+
+    public bool IsCompleteVisible => IsRevealed || (IsPaused && HasRevealedText);
+
+    public bool CanComplete => !Busy && IsCompleteVisible;
+
+    public string CompleteLabel => "进入复盘";
+
+    // ===== 暂停 / 继续 =====
+
+    public bool IsPauseResumeVisible =>
+        IsPlaying || IsPaused || IsRevealed;
+
+    public bool CanPauseResume => !Busy && ((IsPlaying || IsRevealed) || IsPaused);
+
+    public string PauseResumeLabel => IsPaused ? "继续本局" : "暂停本局";
+
+    public bool IsPausedNow => IsPaused;
+
+    /// <summary>
+    /// 当前是不是投票环节。决定左侧是否给出投票录入入口。
+    /// </summary>
+    public bool IsVotePhase => IsCurrentPhaseVote;
+
+    /// <summary>当前是不是真相环节（或已经揭秘）。</summary>
+    public bool IsRevealPhase => IsCurrentPhaseReveal || IsRevealed || IsCompleted;
+
+    /// <summary>动作区下方那行说明：机器人条件与「点击即确认」的区别写在这里。</summary>
+    public string ActionHint
+    {
+        get
+        {
+            if (_projection is null)
+            {
+                return string.Empty;
+            }
+
+            if (IsPaused)
+            {
+                return "进度已保存。继续后仍停在本步骤。";
+            }
+
+            if (IsCompleted)
+            {
+                return "本局已结束，对话与公开内容仍可查看。";
+            }
+
+            if (IsRevealed)
+            {
+                return "公开内容已在大屏展开，点「进入复盘」一起回顾。";
+            }
+
+            if (IsVoteVisible)
+            {
+                return $"汇总总票数应等于参与人数 {PlayerCount}。点击提交即确认。";
+            }
+
+            if (IsRevealVisible)
+            {
+                return "点击即向所有玩家公开结局，不再重复确认。";
+            }
+
+            if (PendingMaterials.Count > 0)
+            {
+                return $"还有 {PendingMaterials.Count} 份本环节材料待发放。";
+            }
+
+            return "完成当前步骤后，直接点击动作继续，不需要额外勾选。";
+        }
+    }
 
     public bool HasRevealedText => _projection?.RevealedTexts is { Count: > 0 };
 
@@ -152,16 +380,22 @@ public sealed class SessionViewModel : ObservableObject
         ? string.Join("\n", texts)
         : null;
 
-    public string ActionAvailability =>
-        _projection is null
-            ? string.Empty
-            : "可用动作：" + string.Join("、", AllowedActionLabels);
+    /// <summary>
+    /// 去掉 Markdown 语法与扫描页码后的揭秘文字。
+    /// 原样上屏会把 <c>##</c>、<c>```</c> 这些语法直接糊到桌面上。
+    /// </summary>
+    public string RevealedTextClean => TruthDocument.Clean(RevealedText);
 
-    private bool CurrentPhaseIsVote =>
-        _package?.Phases.FirstOrDefault(p => p.PhaseId == _projection?.CurrentPhase.PhaseId)?.IsVotePhase == true;
+    /// <summary>
+    /// 揭秘原文拆成的块：标题 / 等宽块 / 管道表格 / 段落。
+    /// 复盘大屏按块渲染，等宽块才会带上列参考线。
+    /// </summary>
+    public IReadOnlyList<TruthBlock> TruthBlocks => _truthBlocks;
 
-    private bool CurrentPhaseIsReveal =>
-        _package?.Phases.FirstOrDefault(p => p.PhaseId == _projection?.CurrentPhase.PhaseId)?.IsRevealPhase == true;
+    private IReadOnlyList<TruthBlock> _truthBlocks = [];
+
+    /// <summary>已解析的原文指纹，避免每次刷新都重新拆一遍。</summary>
+    private string? _parsedTruthSource;
 
     public RelayCommand StartCommand { get; }
 
@@ -169,15 +403,19 @@ public sealed class SessionViewModel : ObservableObject
 
     public RelayCommand RevealCommand { get; }
 
-    public RelayCommand PauseCommand { get; }
-
-    public RelayCommand ResumeCommand { get; }
+    public RelayCommand PauseResumeCommand { get; }
 
     public RelayCommand CompleteCommand { get; }
 
     public RelayCommand SubmitVoteCommand { get; }
 
     public RelayCommand ReleaseMaterialsCommand { get; }
+
+    private bool IsCurrentPhaseVote => _projection?.CurrentPhase.PhaseId is { } id
+                                       && _package?.Phases.FirstOrDefault(p => p.PhaseId == id)?.IsVotePhase == true;
+
+    private bool IsCurrentPhaseReveal => _projection?.CurrentPhase.PhaseId is { } id
+                                         && _package?.Phases.FirstOrDefault(p => p.PhaseId == id)?.IsRevealPhase == true;
 
     public void Attach(ScriptPackage package, Session session)
     {
@@ -188,34 +426,25 @@ public sealed class SessionViewModel : ObservableObject
 
     /// <summary>
     /// 执行一次命令。模型与自然语言都不能走到这里；只有明确的界面动作会调用。
+    ///
+    /// 一次点击只提交一次：入口由 <see cref="Busy"/> 挡住重入，命令自带唯一 operationId，
+    /// 并带上点击时的 ExpectedRevision —— 连点或重试只会得到 STALE_REVISION，不会重复生效。
     /// </summary>
     public async Task ExecuteAsync(
         GameCommandType type,
         IReadOnlyList<string>? materials = null,
         VoteSummary? votes = null)
     {
+        if (Busy)
+        {
+            // 正在派发或播报：给一句提示，别让主持人以为按钮坏了。
+            Status = "上一条操作还在进行中，请稍候。";
+            return;
+        }
+
         if (_package is null || _projection is null)
         {
             Status = "当前没有可操作的一局。";
-            return;
-        }
-
-        // 需要二次确认的操作，先给出明确提示，避免用户以为按钮坏了
-        if (type == GameCommandType.Reveal && !RevealConfirmed)
-        {
-            Status = "揭秘需要先勾选「确认这是公开揭秘，且原本条件已满足」。";
-            return;
-        }
-
-        if (type == GameCommandType.SubmitVoteSummary && !VoteConfirmed)
-        {
-            Status = "请先勾选「确认这是大家核对过的汇总」。";
-            return;
-        }
-
-        if (type is GameCommandType.Start or GameCommandType.Advance && !GroupReady)
-        {
-            Status = "请先勾选「大家已口头准备好」。";
             return;
         }
 
@@ -225,59 +454,61 @@ public sealed class SessionViewModel : ObservableObject
             OperationId = Guid.NewGuid().ToString("N"),
             ExpectedRevision = _projection.Revision,
             Type = type,
-            GroupReady = GroupReady,
-            // 两类操作各有独立确认：票数汇总用汇总勾选，揭秘用揭秘勾选
-            Confirmed = type == GameCommandType.Reveal ? RevealConfirmed : VoteConfirmed,
             MaterialIds = materials ?? [],
             Votes = votes,
         };
 
-        var result = await _dispatcher.DispatchAsync(command, _package, CancellationToken.None);
-        switch (result.Outcome)
+        SetCommandBusy(true);
+        try
         {
-            case DispatchOutcome.Committed when result.Projection is not null:
-                _projection = result.Projection;
-                RefreshView(_package, _projection);
+            var result = await _dispatcher.DispatchAsync(command, _package, CancellationToken.None);
+            switch (result.Outcome)
+            {
+                case DispatchOutcome.Committed when result.Projection is not null:
+                    _projection = result.Projection;
+                    RefreshView(_package, _projection);
+                    Status = CommandStatus(type, _projection);
 
-                // 只清除「这次用掉了」的勾选，不能连带清掉主持人已经勾好的另一个确认
-                if (type is GameCommandType.Start or GameCommandType.Advance)
-                {
-                    GroupReady = false;
-                }
-
-                if (type == GameCommandType.SubmitVoteSummary)
-                {
-                    VoteConfirmed = false;
-                }
-
-                if (type == GameCommandType.Reveal)
-                {
-                    RevealConfirmed = false;
-                }
-
-                Status = $"已提交：{_projection.CurrentPhase.Title}，revision={_projection.Revision}。";
-
-                // 状态已由程序裁决；主持台据此请求模型生成播报措辞
-                Committed?.Invoke(this, type);
-                break;
-            case DispatchOutcome.Duplicate:
-                Status = "这条操作之前已经提交过，没有重复执行。";
-                break;
-            default:
-                Status = result.Rejection?.PublicReason ?? "操作被拒绝。";
-                break;
+                    // 状态已由程序裁决；主持台据此写入阶段事件并请求播报措辞
+                    Committed?.Invoke(this, type);
+                    break;
+                case DispatchOutcome.Duplicate:
+                    Status = "这条操作之前已经提交过，没有重复执行。";
+                    break;
+                default:
+                    Status = result.Rejection?.PublicReason ?? "操作被拒绝。";
+                    break;
+            }
         }
+        finally
+        {
+            SetCommandBusy(false);
+        }
+    }
+
+    /// <summary>
+    /// 提交后的公开结果文案。只写玩家需要知道的事，不出现 revision、回执或工具细节。
+    /// </summary>
+    private string CommandStatus(GameCommandType type, PublicSessionProjection projection)
+    {
+        var phase = projection.CurrentPhase.Title;
+        return type switch
+        {
+            GameCommandType.Start => $"本局已开始。现在是「{phase}」。",
+            GameCommandType.Advance => $"已进入「{phase}」。",
+            GameCommandType.ReleaseMaterials => "材料编号已公开。",
+            GameCommandType.SubmitVoteSummary => "票数汇总已生效。",
+            GameCommandType.Reveal => "结局已公开。",
+            GameCommandType.Pause => "本局已暂停，进度已保存。",
+            GameCommandType.Resume => $"已继续，仍停在「{phase}」。",
+            GameCommandType.Complete => "已进入复盘。",
+            _ => "已提交。",
+        };
     }
 
     private async Task SubmitVoteAsync()
     {
-        if (!VoteConfirmed)
-        {
-            Status = "请先勾选「确认这是大家核对过的汇总」。";
-            return;
-        }
-
-        if (!TryParseVotes(VoteInput, out var votes, out var error))
+        if (!TryParseVoteInput(out var votes, out var error))
         {
             Status = error;
             return;
@@ -297,6 +528,9 @@ public sealed class SessionViewModel : ObservableObject
 
         await ExecuteAsync(GameCommandType.ReleaseMaterials, materials: [material]);
     }
+
+    private bool TryParseVoteInput(out VoteSummary summary, out string error) =>
+        TryParseVotes(VoteInput, out summary, out error);
 
     /// <summary>解析「A=3, B=2」形式的纸笔汇总；负数、非整数、空选项都拒绝。</summary>
     public static bool TryParseVotes(string text, out VoteSummary summary, out string error)
@@ -341,17 +575,21 @@ public sealed class SessionViewModel : ObservableObject
     {
         var phase = package.Phases.FirstOrDefault(p => p.PhaseId == projection.CurrentPhase.PhaseId);
 
-        // 阶段章标：按剧本阶段顺序，标出当前与已过
-        var currentIndex = package.Phases
+        // 阶段章标：按剧本包给的阶段顺序，标出当前与已过
+        var track = projection.PhaseTrack;
+        var currentIndex = track
             .Select((p, i) => (p.PhaseId, Index: i))
             .FirstOrDefault(t => t.PhaseId == projection.CurrentPhase.PhaseId).Index;
+
         PhaseRail.Clear();
-        for (var i = 0; i < package.Phases.Count; i++)
+        for (var i = 0; i < track.Count; i++)
         {
+            var isCurrent = i == currentIndex;
             PhaseRail.Add(new PhaseRailItem(
-                package.Phases[i].Title,
-                IsCurrent: i == currentIndex,
-                IsPast: i < currentIndex));
+                track[i].Title,
+                IsCurrent: isCurrent,
+                IsPast: i < currentIndex,
+                Status: isCurrent ? SessionStateLabel : string.Empty));
         }
 
         PhaseConditions.Clear();
@@ -375,43 +613,64 @@ public sealed class SessionViewModel : ObservableObject
             ReleasedMaterials.Add(material);
         }
 
-        AllowedActionLabels.Clear();
-        foreach (var action in projection.CurrentPhase.AllowedActions)
-        {
-            AllowedActionLabels.Add(ActionLabel(action));
-        }
-
         OnPropertyChanged(nameof(PhaseTitle));
+        OnPropertyChanged(nameof(PhaseProgress));
+        OnPropertyChanged(nameof(Hint));
         OnPropertyChanged(nameof(SessionStateText));
         OnPropertyChanged(nameof(SessionStateLabel));
         OnPropertyChanged(nameof(Revision));
         OnPropertyChanged(nameof(PublicTitle));
+        OnPropertyChanged(nameof(PlayerCount));
         OnPropertyChanged(nameof(HasRevealedText));
         OnPropertyChanged(nameof(RevealedText));
-        OnPropertyChanged(nameof(ActionAvailability));
+        OnPropertyChanged(nameof(RevealedTextClean));
+        RefreshTruthBlocks();
+        OnPropertyChanged(nameof(VoteSummaryDisplay));
+        OnPropertyChanged(nameof(HasVoteSummary));
+        OnPropertyChanged(nameof(VoteHint));
+        OnPropertyChanged(nameof(ActionHint));
+        OnPropertyChanged(nameof(IsStartVisible));
         OnPropertyChanged(nameof(CanStart));
+        OnPropertyChanged(nameof(IsAdvanceVisible));
         OnPropertyChanged(nameof(CanAdvance));
-        OnPropertyChanged(nameof(CanSubmitVote));
-        OnPropertyChanged(nameof(CanReveal));
+        OnPropertyChanged(nameof(IsBlockedByMaterials));
+        OnPropertyChanged(nameof(AdvanceLabel));
+        OnPropertyChanged(nameof(IsReleaseVisible));
         OnPropertyChanged(nameof(CanReleaseMaterials));
-        OnPropertyChanged(nameof(CanPause));
-        OnPropertyChanged(nameof(CanResume));
+        OnPropertyChanged(nameof(ReleaseLabel));
+        OnPropertyChanged(nameof(IsVoteVisible));
+        OnPropertyChanged(nameof(CanSubmitVote));
+        OnPropertyChanged(nameof(IsRevealVisible));
+        OnPropertyChanged(nameof(CanReveal));
+        OnPropertyChanged(nameof(RevealLabel));
+        OnPropertyChanged(nameof(RevealWarning));
+        OnPropertyChanged(nameof(IsCompleteVisible));
         OnPropertyChanged(nameof(CanComplete));
+        OnPropertyChanged(nameof(IsPauseResumeVisible));
+        OnPropertyChanged(nameof(CanPauseResume));
+        OnPropertyChanged(nameof(PauseResumeLabel));
+        OnPropertyChanged(nameof(IsPausedNow));
+        OnPropertyChanged(nameof(IsVotePhase));
+        OnPropertyChanged(nameof(IsRevealPhase));
+        OnPropertyChanged(nameof(HasMaterialSection));
+        OnPropertyChanged(nameof(PendingMaterialSummary));
+        OnPropertyChanged(nameof(Busy));
     }
 
-    private static string ActionLabel(PublicAction action) => action switch
+    /// <summary>重新解析揭秘原文（只在原文变化时做，桌边刷新不用反复拆）。</summary>
+    private void RefreshTruthBlocks()
     {
-        PublicAction.Start => "开始这一局",
-        PublicAction.Advance => "下一环节",
-        PublicAction.ReleaseMaterials => "发放材料",
-        PublicAction.SubmitVoteSummary => "录入选票汇总",
-        PublicAction.Reveal => "揭秘",
-        PublicAction.Pause => "暂停并保存",
-        PublicAction.Resume => "继续",
-        PublicAction.Complete => "进入复盘",
-        _ => action.ToString(),
-    };
+        var source = RevealedText;
+        if (string.Equals(source, _parsedTruthSource, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _parsedTruthSource = source;
+        _truthBlocks = TruthDocument.Parse(source);
+        OnPropertyChanged(nameof(TruthBlocks));
+    }
 }
 
 /// <summary>阶段章标的一项：标题与它在整局中的位置。</summary>
-public sealed record PhaseRailItem(string Title, bool IsCurrent, bool IsPast);
+public sealed record PhaseRailItem(string Title, bool IsCurrent, bool IsPast, string Status = "");

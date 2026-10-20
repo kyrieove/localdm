@@ -104,6 +104,7 @@
 - [ ] T044 [US3] 在 src/LocalDm.App/Views/AdvanceConfirmView.xaml 与 AdvanceConfirmViewModel.cs 展示无剧透条件和大家准备勾选，取消对话框不提交。
 - [ ] T045 [US3] 在 src/LocalDm.App/Views/VoteSummaryView.xaml 与 VoteSummaryViewModel.cs 实现纸笔汇总、票数校验与二次确认；开始前明确接受该方式且原本允许。
 - [ ] T046 [US3] 在 src/LocalDm.Core/Hosting/PublicContextBuilder.cs 与 PublicReplyPolicy.cs 仅使用当前公开原文及批准过渡句；不确定或无有效来源返回安全说明，不靠 LLM 自审放行。
+  - 2026-10-20 更正：`PublicReplyPolicy.cs` 从未实现。实际做法是秘密隔离放在拼提示词处（`HostNarration` 只取 Public 段与已解锁真相），输出侧按产品决定不审查模型输出。上下文构造部分由 `PublicContextBuilder` 覆盖。
 - [ ] T047 [US3] 在 src/LocalDm.App/ViewModels/HostViewModel.cs 接入真实 session、固定口播、下一环节和材料包提示，只有显式有效操作触发口播。
 - [ ] T048 [US3] 在 src/LocalDm.Infrastructure/Storage/SessionRecovery.cs 与 src/LocalDm.App/Views/LibraryView.xaml 实现包指纹检查及继续一局；恢复后 SpeechState=Idle，不补做未确认操作。
 - [ ] T049 [US3] 在 docs/evidence/us3/flow-recovery.md 记录固定包完整局、MinerU 不运行时开局、重复10次操作、两个事务故障点及提前揭秘拒绝，运行核心安全/状态用例。
@@ -248,7 +249,7 @@ TextSubmissionTests.cs 与独立 HostUncertaintyTests.cs 可分别编写，HostI
 | T043 | 已完成 | src/LocalDm.Core/Game/PublicSessionProjector.cs |
 | T044 | 已完成 | HostView 阶段面板：无剧透条件 + 大家准备勾选 |
 | T045 | 已完成 | HostView 纸笔汇总录入 + 二次确认（SessionViewModel.TryParseVotes） |
-| T046 | 已完成 | src/LocalDm.Core/Hosting/PublicContextBuilder.cs + PublicReplyPolicy |
+| T046 | 已完成（实现方式已变更） | src/LocalDm.Core/Hosting/PublicContextBuilder.cs（只取当前阶段允许公开的原文）。**没有** `PublicReplyPolicy.cs`：输出侧按产品决定不做审查（秘密隔离放在拼提示词处），原描述的「批准过渡句白名单」未实现。 |
 | T047 | 已完成 | HostViewModel 接入真实 session 与阶段操作 |
 | T048 | 已完成 | src/LocalDm.Infrastructure/Storage/SessionRecovery.cs + 继续一局 |
 | T049 | 已完成 | docs/evidence/us3/flow-recovery.md + ui-session-steps.json |

@@ -1,0 +1,88 @@
+{
+  // 剧本流程声明示例。真实剧本必须由准备者按剧本原文写出这一份，
+  // 软件不提供默认流程、不猜环节。
+  //
+  // 用法：
+  //   dotnet run --project tools/LocalDm.Probe -- build --story <剧本目录> \
+  //       --flow docs/prepare/script-flow.example.json --players 5
+  //
+  // 规则：
+  // - 每个环节都必须有 sourceRef，指到原文里写清楚这一步的那一页/那句话。缺了就整包待复核。
+  // - kind 决定规则核心允许哪些动作：Read/Intro/Talk 只能推进，Search 才能发牌，
+  //   Vote 才能提交票数，Reveal 才能公开真相。第一个环节自动带「开始」。
+  // - materialIds 必须是包里真实存在的线索卡分组名（导入时的目录名），写错的编号会被忽略。
+  // - publicGroups 写导入时的目录名（例如「组织」「序章」），由软件解析成具体段落；
+  //   也可以直接写 publicSegmentIds（`seg-<分组>-<页标签>`）。
+  // - advanceLabel / revealLabel 留空时按下一环节标题与「公开真相」生成。
+  // - offersOpeningSpeech 决定「请主持人开场」出现在哪个环节（不按环节序号推断）。
+  // - 引用了不存在的材料编号 / 段落 / 分组时，整包停在 NeedsReview 并点名具体 ID；
+  //   写错名字不会被悄悄忽略。
+  // - 环节 ID 必须非空且唯一：重复 ID 会让「推进」永远停在同一个环节。
+  // - 同一份流程重复准备得到同一个内容指纹；改了流程就会得到新的包标识，
+  //   旧存档仍然绑定原包，不会被新流程顶掉。
+  "steps": [
+    {
+      "stepId": "read",
+      "title": "阅本",
+      "kind": "Read",
+      "sourceRef": "组织手册 第 1 页：请全体阅读自己的角色本",
+      "hint": "拿到角色本，读完属于自己的内容，暂时不要交换。",
+      "conditions": ["全员拿到角色本", "读完自己的部分"],
+      "publicGroups": ["组织"],
+      "offersOpeningSpeech": true
+    },
+    {
+      "stepId": "intro",
+      "title": "开场说明",
+      "kind": "Intro",
+      "sourceRef": "组织手册 第 2 页：主持人说明规则与时长",
+      "hint": "一起了解规则与时长。",
+      "conditions": ["主持人已说明规则与时长"],
+      "advanceLabel": "进入第一轮搜证"
+    },
+    {
+      "stepId": "search-one",
+      "title": "第一轮搜证",
+      "kind": "Search",
+      "sourceRef": "组织手册 第 3 页：第一轮发放 1 楼线索",
+      "hint": "按编号逐个发放本轮线索，发完再继续。",
+      "conditions": ["本轮线索全部发放"],
+      "materialIds": ["1楼51-55", "现场30-35"],
+      "requiresAllMaterials": true
+    },
+    {
+      "stepId": "talk-one",
+      "title": "第一轮讨论",
+      "kind": "Talk",
+      "sourceRef": "组织手册 第 4 页：自由讨论",
+      "hint": "交流第一轮的发现。",
+      "conditions": ["玩家自由讨论"]
+    },
+    {
+      "stepId": "search-two",
+      "title": "第二轮搜证",
+      "kind": "Search",
+      "sourceRef": "组织手册 第 5 页：第二轮只发新增线索",
+      "hint": "本轮只发放新增线索，不重复上一轮。",
+      "conditions": ["新增线索已发放"],
+      "materialIds": ["回忆10-12"],
+      "requiresAllMaterials": true
+    },
+    {
+      "stepId": "vote",
+      "title": "投票",
+      "kind": "Vote",
+      "sourceRef": "组织手册 第 6 页：纸笔投票后由主持人汇总",
+      "hint": "完成纸笔投票，录入大家核对后的票数汇总。",
+      "conditions": ["纸笔投票完成"]
+    },
+    {
+      "stepId": "reveal",
+      "title": "真相",
+      "kind": "Reveal",
+      "sourceRef": "组织手册 第 7 页之后为案件真相",
+      "hint": "点击会向全体公开结局。",
+      "revealLabel": "公开真相"
+    }
+  ]
+}

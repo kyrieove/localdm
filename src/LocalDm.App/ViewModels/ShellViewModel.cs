@@ -80,41 +80,67 @@ public sealed class ShellViewModel : ObservableObject
         // 首页选定剧本后自动切到主持台，用户不必自己再找入口
         _library.PackageOpened += (_, _) => Current = _host;
 
-        // 书脊摘要跟随会话状态，主持人抬头就能确认当前环节
+        // 会话状态变了：左侧轨道可能刚出现「回到本局」入口
         _host.Session.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(SessionViewModel.SessionStateText)
                 or nameof(SessionViewModel.PhaseTitle)
                 or nameof(SessionViewModel.Revision))
             {
-                RefreshSpine();
+                OnPropertyChanged(nameof(CanReturnToSession));
+            }
+        };
+
+        // 模型选择在设置页改完后，页脚那行连接状态要跟着变
+        _setup.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(SetupViewModel.ModelId)
+                or nameof(SetupViewModel.AvailableModels))
+            {
+                OnPropertyChanged(nameof(ModelStatusLine));
             }
         };
     }
 
-    public ObservableCollection<string> NavigationItems { get; } = ["本局", "设置", "主持"];
+    /// <summary>页脚那行：模型到底选好了没有。只说结论，不报地址与 ID。</summary>
+    public string ModelStatusLine =>
+        string.IsNullOrWhiteSpace(_setup.ModelId) ? "模型未选择" : "模型已就绪";
 
-    /// <summary>书脊底部：当前装载的剧本名与人数，没有装载时为提示语。</summary>
-    public string CurrentPackageLine =>
-        _host.Session.Projection is { } p ? p.PublicTitle : "尚未装载剧本";
+    /// <summary>当前是否停在主持台：左侧轨道据此决定显示本局面板还是剧本库入口。</summary>
+    public bool IsHostActive => ReferenceEquals(Current, _host);
 
-    /// <summary>书脊底部：当前环节与状态，供主持人抬头一眼确认。</summary>
-    public string CurrentPhaseLine =>
-        _host.Session.Projection is { } p
-            ? $"{p.CurrentPhase.Title} · {_host.Session.SessionStateLabel} · 第 {p.Revision} 次提交"
-            : "　";
+    /// <summary>当前是否停在设置页。</summary>
+    public bool IsSetupActive => ReferenceEquals(Current, _setup);
 
-    private void RefreshSpine()
-    {
-        OnPropertyChanged(nameof(CurrentPackageLine));
-        OnPropertyChanged(nameof(CurrentPhaseLine));
-    }
+    /// <summary>
+    /// 能不能「回到本局」：已经装载了一局、但当前不在主持台。
+    /// 没有这个入口，从设置页回来只能重新走一遍剧本库。
+    /// </summary>
+    public bool CanReturnToSession => _host.Session.Projection is not null && !IsHostActive;
 
     public object? Current
     {
         get => _current;
-        private set => SetProperty(ref _current, value);
+        private set
+        {
+            if (SetProperty(ref _current, value))
+            {
+                OnPropertyChanged(nameof(IsHostActive));
+                OnPropertyChanged(nameof(IsSetupActive));
+                OnPropertyChanged(nameof(CanReturnToSession));
+
+                if (ReferenceEquals(value, _library))
+                {
+                    // 回到剧本库：刷新「上一局还没走完」的入口，
+                    // 否则那张卡片会一直停在启动时的旧阶段上。
+                    LibraryShown?.Invoke(this, EventArgs.Empty);
+                }
+            }
+        }
     }
+
+    /// <summary>切回首页时触发。</summary>
+    public event EventHandler? LibraryShown;
 
     public RelayCommand ShowLibraryCommand { get; }
 

@@ -14,20 +14,19 @@ public static class PublicSessionProjector
                     ?? package.Phases.FirstOrDefault()
                     ?? throw new DomainRuleException(DomainErrorCode.INVALID_INPUT, "剧本包没有可用阶段。");
 
+        var phaseIndex = package.Phases
+            .Select((p, i) => (p.PhaseId, Index: i))
+            .FirstOrDefault(t => t.PhaseId == phase.PhaseId).Index;
+
         // 只有 Public 段允许出现在公共投影里；Private / Truth 永远不进入
         var publicSegmentIds = phase.PublicSegmentIds
             .Where(id => package.Segments.Any(s =>
                 s.SegmentId == id && s.Visibility == SegmentVisibility.Public))
             .ToArray();
 
-        var unlocked = session.State is SessionState.Revealed or SessionState.Completed;
+        var unlocked = TruthAccess.IsUnlocked(session);
         var revealed = unlocked
-            ? package.Truth.RevealedSegmentIds
-                .Select(id => package.Segments.FirstOrDefault(s => s.SegmentId == id))
-                .Where(s => s is not null && s.Visibility == SegmentVisibility.Truth)
-                .Select(s => s!.OriginalText)
-                .Where(t => !string.IsNullOrWhiteSpace(t))
-                .ToArray()
+            ? TruthAccess.RevealedTexts(package, session).ToArray()
             : null;
 
         var projection = new PublicSessionProjection
@@ -43,7 +42,17 @@ public static class PublicSessionProjector
                 Title = phase.Title,
                 PublicSegmentIds = publicSegmentIds,
                 AllowedActions = AllowedActionsFor(session, phase),
+                Hint = phase.Hint,
+                AdvanceLabel = phase.AdvanceLabel,
+                RevealLabel = phase.RevealLabel,
+                RequiresAllMaterials = phase.RequiresAllMaterials,
+                CanOpenSession = phase.OffersOpeningSpeech,
+                Index = phaseIndex + 1,
+                Count = package.Phases.Count,
             },
+            PhaseTrack = package.Phases
+                .Select(p => new PublicPhaseTrackItem { PhaseId = p.PhaseId, Title = p.Title })
+                .ToArray(),
             ReleasedMaterialIds = session.ReleasedMaterialIds,
             VoteSummary = session.VoteSummary is null
                 ? null
