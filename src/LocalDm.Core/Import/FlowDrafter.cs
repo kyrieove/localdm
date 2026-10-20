@@ -164,11 +164,31 @@ public sealed class FlowDrafter
             return null;
         }
 
-        var steps = dto.Steps.Select(step => new ScriptFlowStep
+        var kinds = new List<ScriptStepKind>();
+        foreach (var step in dto.Steps)
+        {
+            if (string.IsNullOrWhiteSpace(step.Kind))
+            {
+                // 模型没给类别时按讨论处理，后面还有「必须有揭示环节」这条兜底。
+                kinds.Add(ScriptStepKind.Talk);
+                continue;
+            }
+
+            var parsed = ParseKind(step.Kind);
+            if (parsed is null)
+            {
+                failure = $"环节类别不认识：{step.Kind}";
+                return null;
+            }
+
+            kinds.Add(parsed.Value);
+        }
+
+        var steps = dto.Steps.Select((step, index) => new ScriptFlowStep
         {
             StepId = step.StepId ?? string.Empty,
             Title = step.Title ?? string.Empty,
-            Kind = step.Kind,
+            Kind = kinds[index],
             Hint = string.IsNullOrWhiteSpace(step.Hint) ? null : step.Hint,
             Conditions = step.Conditions ?? [],
             SourceRef = string.IsNullOrWhiteSpace(step.SourceRef) ? null : step.SourceRef,
@@ -197,6 +217,31 @@ public sealed class FlowDrafter
 
         failure = null;
         return flow;
+    }
+
+    /// <summary>
+    /// 类别解析：英文枚举名与中文说法都认（提示词全是中文，模型常常直接答「阅本」「揭秘」）。
+    /// 认不出返回 null，由调用方判为不合格。
+    /// </summary>
+    private static ScriptStepKind? ParseKind(string raw)
+    {
+        var text = raw.Trim();
+        if (Enum.TryParse<ScriptStepKind>(text, ignoreCase: true, out var parsed))
+        {
+            return parsed;
+        }
+
+        return text switch
+        {
+            "阅本" or "读本" or "阅读" => ScriptStepKind.Read,
+            "开场" or "开场说明" or "介绍" => ScriptStepKind.Intro,
+            "搜证" or "调查" or "搜查" => ScriptStepKind.Search,
+            "讨论" or "交流" or "自由交流" => ScriptStepKind.Talk,
+            "投票" or "表决" => ScriptStepKind.Vote,
+            "揭秘" or "真相" or "公开真相" or "揭晓" => ScriptStepKind.Reveal,
+            "复盘" or "回顾" => ScriptStepKind.Review,
+            _ => null,
+        };
     }
 
     /// <summary>结构校验：声明自身的问题、唯一 Reveal、Reveal 之后才有 Review、页号在手册范围内。</summary>
@@ -278,7 +323,8 @@ public sealed class FlowDrafter
 
         public string? Title { get; set; }
 
-        public ScriptStepKind Kind { get; set; } = ScriptStepKind.Talk;
+        /// <summary>模型可能给英文枚举名，也可能给中文（阅本/搜证/揭秘…）：两种都认。</summary>
+        public string? Kind { get; set; }
 
         public string? Hint { get; set; }
 

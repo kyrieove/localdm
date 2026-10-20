@@ -622,7 +622,9 @@ public sealed class ImportWizardViewModel : ObservableObject
 
             await DraftFlowAsync();
             Step = ImportWizardStep.Flow;
-            Status = "流程由 AI 起草，请逐条确认；带剧情的提示会显示「已隐藏」。";
+            Status = DraftFailureReason is null
+                ? "流程由 AI 起草，请逐条确认；带剧情的提示会显示「已隐藏」。"
+                : "AI 没能起草流程：" + DraftFailureReason + " 请自行填写环节。";
             ImportingText = string.Empty;
         }
         catch (OperationCanceledException)
@@ -650,6 +652,7 @@ public sealed class ImportWizardViewModel : ObservableObject
     private async Task DraftFlowAsync()
     {
         FlowSteps.Clear();
+        DraftFailureReason = null;
         if (_extraction is null)
         {
             return;
@@ -679,6 +682,7 @@ public sealed class ImportWizardViewModel : ObservableObject
         var modelId = _modelId();
         if (string.IsNullOrWhiteSpace(modelId))
         {
+            DraftFailureReason = "还没有选择主持模型";
             Status = "还没有选择主持模型：流程要等模型起草。请先在偏好设置里选模型。";
             AddBlankStep();
             UpdateLayeringPages(truthPages: [], ignoredPages: []);
@@ -689,6 +693,7 @@ public sealed class ImportWizardViewModel : ObservableObject
         if (!result.Succeeded)
         {
             // 起草失败就给空白环节表，不套默认流程。
+            DraftFailureReason = result.FailureReason;
             Status = "AI 没能起草流程：" + result.FailureReason + " 请自行填写环节。";
             AddBlankStep();
             UpdateLayeringPages(truthPages: [], ignoredPages: []);
@@ -915,6 +920,9 @@ public sealed class ImportWizardViewModel : ObservableObject
     }
 
     private ScriptPackage? _built;
+
+    /// <summary>起草失败的原因（给界面与验收看）；成功时为 null。</summary>
+    public string? DraftFailureReason { get; private set; }
 
     private Task OpenBuiltAsync()
     {

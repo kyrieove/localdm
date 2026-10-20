@@ -114,6 +114,36 @@ public sealed class FlowDrafterTests
     }
 
     [Fact]
+    public async Task Chinese_kind_names_from_the_model_are_accepted()
+    {
+        // 提示词全是中文，模型常常直接答「阅本」「揭秘」：这两种写法都要认。
+        var json = GoodJson
+            .Replace("\"kind\": \"Read\"", "\"kind\": \"阅本\"")
+            .Replace("\"kind\": \"Search\"", "\"kind\": \"搜证\"")
+            .Replace("\"kind\": \"Reveal\"", "\"kind\": \"揭秘\"");
+
+        var result = await new FlowDrafter(new ScriptedGateway(json))
+            .DraftAsync(Input(), "test-model", TestContext.Current.CancellationToken);
+
+        Assert.True(result.Succeeded, result.FailureReason);
+        Assert.Equal(ScriptStepKind.Read, result.Flow!.Steps[0].Kind);
+        Assert.Equal(ScriptStepKind.Search, result.Flow.Steps[1].Kind);
+        Assert.Equal(ScriptStepKind.Reveal, result.Flow.Steps[2].Kind);
+    }
+
+    [Fact]
+    public async Task Unknown_kind_is_rejected_instead_of_guessed()
+    {
+        var json = GoodJson.Replace("\"kind\": \"Read\"", "\"kind\": \"随便写点什么\"");
+
+        var result = await new FlowDrafter(new ScriptedGateway(json, json))
+            .DraftAsync(Input(), "test-model", TestContext.Current.CancellationToken);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("环节类别不认识", result.FailureReason!, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Request_carries_every_manual_page_and_both_group_name_lists()
     {
         var input = Input();
