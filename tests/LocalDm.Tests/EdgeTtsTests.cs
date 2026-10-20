@@ -69,9 +69,25 @@ public sealed class EdgeTtsTests
         Assert.Equal(first, second);
     }
 
+    /// <summary>
+    /// 会真的出声的用例一律跳过。
+    ///
+    /// 这些用例要走完整的本地合成与播放链路，跑一次测试就在机器上念一句中文，
+    /// 反复跑测试时特别吵。人工授权跳过；断言原样保留，需要真听声音时去掉这个判断即可。
+    /// </summary>
+    private static void SkipBecauseItActuallySpeaks()
+    {
+        if (HasChineseSystemVoice())
+        {
+            Assert.Skip("这条用例会真的出声（本机有中文系统音色），按人工授权跳过；需要真听声音时去掉此判断。");
+        }
+    }
+
     [Fact]
     public async Task Edge_voice_is_used_when_engine_is_available()
     {
+        SkipBecauseItActuallySpeaks();
+
         var edge = new FakeEdgeTtsEngine(available: true, succeeds: true);
         using var tts = new TtsService(edge);
 
@@ -89,6 +105,8 @@ public sealed class EdgeTtsTests
         {
             Assert.Skip("本机没有中文系统音色，跳过降级路径用例。");
         }
+
+        SkipBecauseItActuallySpeaks();
 
         var edge = new FakeEdgeTtsEngine(available: false, succeeds: false);
         using var tts = new TtsService(edge);
@@ -108,6 +126,8 @@ public sealed class EdgeTtsTests
             Assert.Skip("本机没有中文系统音色，跳过降级路径用例。");
         }
 
+        SkipBecauseItActuallySpeaks();
+
         var edge = new FakeEdgeTtsEngine(available: true, succeeds: false);
         using var tts = new TtsService(edge);
 
@@ -126,6 +146,8 @@ public sealed class EdgeTtsTests
             Assert.Skip("本机没有中文系统音色，跳过本地语音用例。");
         }
 
+        SkipBecauseItActuallySpeaks();
+
         var edge = new FakeEdgeTtsEngine(available: true, succeeds: true);
         using var tts = new TtsService(edge);
 
@@ -139,6 +161,8 @@ public sealed class EdgeTtsTests
     [Fact]
     public async Task Stop_ends_the_edge_playback()
     {
+        SkipBecauseItActuallySpeaks();
+
         var edge = new FakeEdgeTtsEngine(available: true, succeeds: true);
         using var tts = new TtsService(edge);
 
@@ -172,6 +196,8 @@ public sealed class EdgeTtsTests
 
         using var tts = new TtsService();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+        SkipBecauseItActuallySpeaks();
 
         await tts.SpeakAsync(Item("sp-real"), "zh-CN-YunxiNeural", cts.Token);
 
