@@ -14,6 +14,15 @@ public static class SyntheticPackage
     public const string PublicVote = "请用纸笔投票，由主持人汇总。";
     public const string PublicTruth = "这是合成真相，只用于验证揭秘投影。";
 
+    /// <summary>角色本正文：属于某个角色，DM 也不该看到。</summary>
+    public const string RoleBookText = "这是合成角色的秘密，公共界面不应出现。";
+
+    /// <summary>线索卡正文：属于材料分组，DM 要读、玩家自己翻。</summary>
+    public const string ClueCardText = "这是合成线索卡正文，只给 DM 看。";
+
+    /// <summary>主持人专用页正文：既不属于角色也不属于材料。</summary>
+    public const string HostOnlyText = "这是合成主持人专用说明。";
+
     public static ScriptPackage Create()
     {
         var file = new SourceFile
@@ -21,7 +30,7 @@ public static class SyntheticPackage
             FileId = "synthetic-file",
             PrivatePath = "synthetic.pdf",
             ContentHash = new string('a', 64),
-            PageCount = 5,
+            PageCount = 8,
             Origin = SourceOrder.PageOrder,
             ToolIdentity = "mineru 4.0.1",
             ParseState = FileParseState.Complete,
@@ -30,6 +39,7 @@ public static class SyntheticPackage
         var spans = new[]
         {
             Span("s1", 1), Span("s2", 2), Span("s3", 3), Span("s4", 4), Span("s5", 5),
+            Span("s6", 6), Span("s7", 7), Span("s8", 8),
         };
 
         var segments = new[]
@@ -39,7 +49,12 @@ public static class SyntheticPackage
             Segment("seg-discuss", PublicDiscuss, SegmentVisibility.Public, "s3"),
             Segment("seg-vote", PublicVote, SegmentVisibility.Public, "s4"),
             Segment("seg-truth", PublicTruth, SegmentVisibility.Truth, "s5"),
-            Segment("seg-secret", "这是合成角色的秘密，公共界面不应出现。", SegmentVisibility.Private, "s5"),
+            // 角色本：私有，且落在角色自己的来源 span 里
+            Segment("seg-secret", RoleBookText, SegmentVisibility.Private, "s6"),
+            // 线索卡：私有，但属于材料分组，DM 要读、玩家自己翻
+            Segment("seg-clue", ClueCardText, SegmentVisibility.Private, "s7"),
+            // 主持人专用页：私有，既不属于任何角色也不属于任何材料
+            Segment("seg-host", HostOnlyText, SegmentVisibility.Private, "s8"),
         };
 
         var phases = new[]
@@ -64,12 +79,12 @@ public static class SyntheticPackage
             Segments = segments,
             Roles =
             [
-                new RoleIndex { RoleId = "role-1", PrivateMaterialRef = "外部材料包 #1", SourceSpanIds = ["s5"] },
+                new RoleIndex { RoleId = "role-1", PrivateMaterialRef = "外部材料包 #1", SourceSpanIds = ["s6"] },
             ],
             Phases = phases,
             Materials =
             [
-                new Material { MaterialId = "M1", Label = "线索包一", SourceSpanIds = ["s2"] },
+                new Material { MaterialId = "M1", Label = "线索包一", SourceSpanIds = ["s2", "s7"] },
                 new Material { MaterialId = "M2", Label = "线索包二", SourceSpanIds = ["s2"] },
             ],
             Truth = new TruthSection
