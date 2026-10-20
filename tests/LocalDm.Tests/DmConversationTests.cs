@@ -266,6 +266,25 @@ public sealed class DmConversationTests : IDisposable
         Assert.Equal(turn.Messages[0].Content, compaction.Messages[0].Content);
     }
 
+    [Fact]
+    public async Task Compaction_request_forbids_filling_in_details_from_the_host_materials()
+    {
+        // 人工验收里备忘把未发放的卡面细节写了进去：整理请求必须明确禁止从主持资料补充。
+        var gateway = new ScriptedGateway();
+        var host = await NewHostAsync(gateway);
+        await host.LoadDemoAsync();
+
+        await TalkUntilAsync(host, h => h.Conversation.CompactionCount >= 1);
+
+        var compaction = Assert.Single(CompactionRequests(gateway));
+        var prompt = compaction.Messages[^1].Content;
+        Assert.Contains(
+            "只能写【要整理的对话】和【之前的备忘】里实际出现过的内容，不能从主持资料补充任何细节",
+            prompt,
+            StringComparison.Ordinal);
+        Assert.Contains("玩家没有亲口读出来的卡面内容一律不写", prompt, StringComparison.Ordinal);
+    }
+
     // ===== 整理失败 =====
 
     [Fact]
