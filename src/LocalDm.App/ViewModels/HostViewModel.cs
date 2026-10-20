@@ -311,9 +311,10 @@ public sealed class HostViewModel : ObservableObject, IDisposable
     public RelayCommand CompactCommand { get; }
 
     /// <summary>
-    /// 能不能整理上下文：忙着的时候不行，对话太短也没必要。
+    /// 能不能整理上下文：忙着的时候不行；保留最近 2 轮之后前面还剩至少一条消息才行。
+    /// 否则没有可整理的内容，模型只会凭空生成一份备忘。
     /// </summary>
-    public bool CanCompact => !IsBusy && _conversation.Turns.Count >= 3;
+    public bool CanCompact => !IsBusy && ContextBudget.CanCompact(_conversation);
 
     /// <summary>本局备忘的正文；没整理过时是空的。</summary>
     public string? Memo => _conversation.Memo;
@@ -923,6 +924,25 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         var keepFromIndex = manual
             ? ContextBudget.ManualKeepFromIndex(_conversation)
             : ContextBudget.KeepFromIndex(_conversation, contextWindowTokens);
+
+        if (keepFromIndex == 0)
+        {
+            // 前面没有可整理的内容：不发请求，免得模型凭空生成一份备忘。
+            if (manual)
+            {
+                Status = "最近 2 轮之前的对话都整理过了，这次没有需要整理的内容。";
+                return true;
+            }
+
+            // 整段对话都在预算内，却已经占满窗口：压缩帮不上忙，只能提示换更大的窗口。
+            if (ContextBudget.UsageRatio(_conversation, system, nextUserMessage, contextWindowTokens) >= 1.0)
+            {
+                AppendEvent("主持资料和最近的对话已经占满上下文窗口，压缩帮不上忙。请在设置里调大模型上下文长度，或换一个上下文更长的模型。");
+            }
+
+            // 这一轮照常发送，不丢任何轮次。
+            return true;
+        }
 
         IsGenerating = true;
         Activity.Begin(ActivityKind.Thinking, "正在整理较早的对话…", ["整理记忆"], PhaseDetail());

@@ -18,6 +18,9 @@ public sealed class DmConversationTests : IDisposable
 {
     private const int Window = 10_000;
 
+    /// <summary>小到主持资料自己就占九成以上的窗口。</summary>
+    private const int TinyWindow = 8_192;
+
     private readonly string _root = Path.Combine(
         Path.GetTempPath(),
         "localdm-dmconv-" + Guid.NewGuid().ToString("N"));
@@ -59,6 +62,28 @@ public sealed class DmConversationTests : IDisposable
     }
 
     // ===== 保留原话的起点 =====
+
+    [Fact]
+    public void Round_start_counts_player_turns_from_the_end()
+    {
+        // 10 条交替消息（5 轮）：最近 2 轮的起点是第 3 轮的 user，下标 6。
+        var conversation = ShortRounds(5);
+        var turns = conversation.Turns;
+        Assert.Equal(10, turns.Count);
+
+        Assert.Equal(6, ContextBudget.RoundStart(turns, 2));
+        Assert.Equal(8, ContextBudget.RoundStart(turns, 1));
+        Assert.Equal(2, ContextBudget.RoundStart(turns, 4));
+    }
+
+    [Fact]
+    public void Round_start_is_zero_when_there_are_not_enough_rounds()
+    {
+        var conversation = ShortRounds(1);
+
+        Assert.Equal(0, ContextBudget.RoundStart(conversation.Turns, 2));
+        Assert.Equal(0, ContextBudget.RoundStart(Array.Empty<MagpieMessage>(), 2));
+    }
 
     [Fact]
     public void Large_window_keeps_more_than_the_minimum_two_rounds()
@@ -112,8 +137,23 @@ public sealed class DmConversationTests : IDisposable
         var index = ContextBudget.ManualKeepFromIndex(conversation);
 
         Assert.Equal("user", conversation.Turns[index].Role);
-        // 起点向前移到「第一问」，最近的 2 轮连同开场白一起留下
+        // 起点向前移到「第一问」，开场白与它一起留给整理
         Assert.Equal(1, index);
+        Assert.True(ContextBudget.CanCompact(conversation));
+    }
+
+    [Fact]
+    public void Only_two_rounds_mean_nothing_to_compact()
+    {
+        // 4 条正好是最近 2 轮：起点落在第一条 user 上，前面没有可整理的内容。
+        var conversation = ShortRounds(2);
+
+        Assert.Equal(0, ContextBudget.ManualKeepFromIndex(conversation));
+        Assert.False(ContextBudget.CanCompact(conversation));
+
+        conversation.AppendUser("第三问");
+        conversation.AppendAssistant("第三答", null);
+        Assert.True(ContextBudget.CanCompact(conversation));
     }
 
     /// <summary>若干轮对话，每轮 2 条、约 150 token（200 个汉字加一句回复）。</summary>
@@ -134,24 +174,17 @@ public sealed class DmConversationTests : IDisposable
     [Fact]
     public async Task Occupancy_below_eighty_percent_sends_without_compacting()
     {
+        // 对话不长，占用一直低于 80%：一轮都不整理。
         var gateway = new ScriptedGateway();
         var host = await NewHostAsync(gateway);
         await host.LoadDemoAsync();
 
-        host.InputText = "现在该做什么？";
-        await host.SendAsync();
+        for (var i = 0; i < 4; i++)
+        {
+            await SendAsync(host, "现在该做什么？");
+        }
 
-        // 下一轮要发的最后一条 user 消息：占用比例要按它算。
-        var nextTokens = ContextBudget.EstimateTokens(gateway.Requests[0].Messages[^1].Content);
-        var usable = ContextBudget.UsableTokens(Window);
-
-        // 上一轮返回的用量决定这一轮要不要整理：先发一轮把用量放进去。
-        gateway.Usage = new MagpieUsage((int)(usable * 0.79) - nextTokens - 1, 0, null);
-        host.InputText = "现在该做什么？";
-        await host.SendAsync();
-        host.InputText = "现在该做什么？";
-        await host.SendAsync();
-
+        Assert.True(LastRatio(host) < ContextBudget.AutoCompactRatio, "这一组用例要求占用低于 80%。");
         Assert.Empty(CompactionRequests(gateway));
         Assert.Equal(0, host.Conversation.CompactionCount);
     }
@@ -159,100 +192,64 @@ public sealed class DmConversationTests : IDisposable
     [Fact]
     public async Task Occupancy_at_eighty_percent_compacts_before_sending()
     {
+        // 一直聊到占用越过 80%：整理会自动发生，而且发生在越线那一轮之前。
         var gateway = new ScriptedGateway();
         var host = await NewHostAsync(gateway);
         await host.LoadDemoAsync();
 
-        host.InputText = "现在该做什么？";
-        await host.SendAsync();
+        await TalkUntilFirstCompactionAsync(host);
 
-        var nextTokens = ContextBudget.EstimateTokens(gateway.Requests[0].Messages[^1].Content);
-        var usable = ContextBudget.UsableTokens(Window);
-
-        // 79%：先不整理
-        gateway.Usage = new MagpieUsage((int)(usable * 0.79) - nextTokens - 1, 0, null);
-        host.InputText = "现在该做什么？";
-        await host.SendAsync();
-        host.InputText = "现在该做什么？";
-        await host.SendAsync();
-        Assert.Empty(CompactionRequests(gateway));
-
-        // 80%：这一轮先整理再发
-        gateway.Usage = new MagpieUsage((int)Math.Ceiling(usable * 0.80) - nextTokens, 0, null);
-        host.InputText = "现在该做什么？";
-        await host.SendAsync();
-        host.InputText = "现在该做什么？";
-        await host.SendAsync();
-
-        var compactions = CompactionRequests(gateway);
-        Assert.Single(compactions);
         Assert.Equal(1, host.Conversation.CompactionCount);
+        Assert.Single(CompactionRequests(gateway));
+        // 整理之后占用必须真的降下来
+        Assert.True(LastRatio(host) < ContextBudget.AutoCompactRatio, "整理之后占用应当回到 80% 以下。");
     }
+
 
     [Fact]
     public async Task Automatic_compaction_keeps_at_least_the_last_two_rounds_and_the_first_kept_turn_is_a_player_turn()
     {
+        // 靠对话本身变长把占用顶上去，不用假用量。
         var gateway = new ScriptedGateway();
         var host = await NewHostAsync(gateway);
         await host.LoadDemoAsync();
 
-        // 先聊几轮，让历史足够长
-        for (var i = 0; i < 4; i++)
-        {
-            host.InputText = $"第 {i} 轮问题：" + new string('问', 120);
-            await host.SendAsync();
-        }
+        await TalkUntilAsync(host, h => h.Conversation.CompactionCount >= 1);
 
-        var nextTokens = ContextBudget.EstimateTokens(gateway.Requests[0].Messages[^1].Content);
-        var usable = ContextBudget.UsableTokens(Window);
-        gateway.Usage = new MagpieUsage((int)(usable * 0.85) - nextTokens, 0, null);
-
-        host.InputText = "再问一句";
-        await host.SendAsync();
-        host.InputText = "再问一句";
-        await host.SendAsync();
-
-        // 更早的轮次被备忘取代；15% 预算（989 token）只够留下最近几轮
+        // 更早的轮次被备忘取代；保留部分从玩家的提问开始，且不少于最近 2 轮
         Assert.Equal(1, host.Conversation.CompactionCount);
         Assert.Equal("本局备忘：已经查过书房。", host.Conversation.Memo);
         Assert.True(host.Conversation.Turns.Count >= 4, "至少要保留最近 2 轮。");
         Assert.Equal("user", host.Conversation.Turns[0].Role);
 
-        // 第 0 轮是 4 轮之前的事，必须已经被整理进备忘
+        // 最早那一轮必须已经被整理进备忘
         Assert.DoesNotContain(
             host.Conversation.Turns,
-            turn => turn.Role == "user" && turn.Content.StartsWith("0 轮问题", StringComparison.Ordinal));
+            turn => turn.Role == "user" && turn.Content.StartsWith("第 0 轮", StringComparison.Ordinal));
     }
+
 
     [Fact]
     public async Task Second_compaction_contains_the_previous_memo_and_replaces_it()
     {
+        // 靠对话变长连续整理两次，第二份备忘里要能看到第一份。
         var gateway = new ScriptedGateway();
         var host = await NewHostAsync(gateway);
         await host.LoadDemoAsync();
 
-        var nextTokens = ContextBudget.EstimateTokens(gateway.Requests.Count > 0 ? gateway.Requests[0].Messages[^1].Content : "x");
-        var usable = ContextBudget.UsableTokens(Window);
-        gateway.Usage = new MagpieUsage((int)(usable * 0.85) - nextTokens, 0, null);
-
-        host.InputText = "第一轮";
-        await host.SendAsync();
-        host.InputText = "第二轮";
-        await host.SendAsync();
-        host.InputText = "第三轮";
-        await host.SendAsync();
+        await TalkUntilAsync(host, h => h.Conversation.CompactionCount >= 1);
+        Assert.Equal(1, host.Conversation.CompactionCount);
+        Assert.Equal("本局备忘：已经查过书房。", host.Conversation.Memo);
 
         gateway.CompactionMemo = "第二份备忘";
-        gateway.Usage = new MagpieUsage((int)(usable * 0.85) - nextTokens, 0, null);
-        host.InputText = "第四轮";
-        await host.SendAsync();
-        host.InputText = "第五轮";
-        await host.SendAsync();
+        await TalkUntilAsync(host, h => h.Conversation.CompactionCount >= 2);
 
-        var compactions = CompactionRequests(gateway);
-        Assert.True(compactions.Count >= 2, "应该整理过两次。");
-        Assert.Contains("本局备忘：已经查过书房。", compactions[1].Messages[^1].Content, StringComparison.Ordinal);
+        Assert.Equal(2, host.Conversation.CompactionCount);
         Assert.Equal("第二份备忘", host.Conversation.Memo);
+
+        // 第二次整理请求里带着旧备忘
+        var compactions = CompactionRequests(gateway);
+        Assert.Contains("本局备忘：已经查过书房。", compactions[1].Messages[^1].Content, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -262,16 +259,7 @@ public sealed class DmConversationTests : IDisposable
         var host = await NewHostAsync(gateway);
         await host.LoadDemoAsync();
 
-        host.InputText = "现在该做什么？";
-        await host.SendAsync();
-
-        var nextTokens = ContextBudget.EstimateTokens(gateway.Requests[0].Messages[^1].Content);
-        var usable = ContextBudget.UsableTokens(Window);
-        gateway.Usage = new MagpieUsage((int)(usable * 0.85) - nextTokens, 0, null);
-        host.InputText = "现在该做什么？";
-        await host.SendAsync();
-        host.InputText = "现在该做什么？";
-        await host.SendAsync();
+        await TalkUntilAsync(host, h => h.Conversation.CompactionCount >= 1);
 
         var compaction = Assert.Single(CompactionRequests(gateway));
         var turn = gateway.Requests.Last(r => !IsCompaction(r));
@@ -283,23 +271,12 @@ public sealed class DmConversationTests : IDisposable
     [Fact]
     public async Task Failed_compaction_keeps_the_conversation_and_still_sends_the_turn()
     {
-        var gateway = new ScriptedGateway();
+        var gateway = new ScriptedGateway { FailCompaction = true };
         var host = await NewHostAsync(gateway);
         await host.LoadDemoAsync();
 
-        host.InputText = "现在该做什么？";
-        await host.SendAsync();
-
-        var nextTokens = ContextBudget.EstimateTokens(gateway.Requests[0].Messages[^1].Content);
-        var usable = ContextBudget.UsableTokens(Window);
-        gateway.Usage = new MagpieUsage((int)(usable * 0.85) - nextTokens, 0, null);
-        gateway.FailCompaction = true;
-
         var before = gateway.Requests.Count;
-        host.InputText = "现在该做什么？";
-        await host.SendAsync();
-        host.InputText = "现在该做什么？";
-        await host.SendAsync();
+        await TalkUntilAsync(host, h => h.Messages.Any(m => m.IsEvent && m.Text.Contains("整理较早的对话失败", StringComparison.Ordinal)));
 
         // 记忆没被动过，这一轮照常发出去
         Assert.Equal(0, host.Conversation.CompactionCount);
@@ -372,19 +349,153 @@ public sealed class DmConversationTests : IDisposable
     }
 
     [Fact]
-    public async Task Compact_command_is_unavailable_when_there_is_too_little_to_compact()
-    {
+    public async Task Compact_command_is_unavailable_when_there_is_nothing_left_to_compact()    {
         var gateway = new ScriptedGateway();
         var host = await NewHostAsync(gateway);
         await host.LoadDemoAsync();
 
         Assert.False(host.CompactCommand.CanExecute(null));
 
-        host.InputText = "一句话";
+        // 1 轮 = 2 条：保留 2 轮之后前面什么都不剩
+        host.InputText = "第一问";
         await host.SendAsync();
-
-        // 一轮对话（两条）还太少：整理不出什么来。
         Assert.False(host.CompactCommand.CanExecute(null));
+
+        // 2 轮 = 4 条：起点被挪到第一条 user 上，前面仍然没有可整理的内容
+        host.InputText = "第二问";
+        await host.SendAsync();
+        Assert.Equal(4, host.Conversation.Turns.Count);
+        Assert.False(host.CompactCommand.CanExecute(null));
+
+        // 3 轮 = 6 条：前面还剩一条 assistant 与它之前的 user
+        host.InputText = "第三问";
+        await host.SendAsync();
+        Assert.Equal(6, host.Conversation.Turns.Count);
+        Assert.True(host.CompactCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Manual_compaction_sends_the_rounds_before_the_last_two()
+    {
+        var gateway = new ScriptedGateway();
+        var host = await NewHostAsync(gateway);
+        await host.LoadDemoAsync();
+
+        for (var i = 0; i < 3; i++)
+        {
+            host.InputText = $"第 {i} 问";
+            await host.SendAsync();
+        }
+
+        Assert.True(host.CompactCommand.CanExecute(null));
+
+        host.CompactCommand.Execute(null);
+        await WaitUntilAsync(() => host.Conversation.CompactionCount == 1);
+
+        // 整理请求里必须真有要整理的对话，而不是一份空清单
+        var compaction = Assert.Single(CompactionRequests(gateway));
+        var prompt = compaction.Messages[^1].Content;
+        var dialogue = prompt[prompt.IndexOf("【要整理的对话】", StringComparison.Ordinal)..];
+        Assert.Contains("玩家：第 0 问", dialogue, StringComparison.Ordinal);
+        Assert.DoesNotContain("玩家：第 2 问", dialogue, StringComparison.Ordinal);
+    }
+
+    // ===== 窗口本身就装不下 =====
+
+    [Fact]
+    public async Task A_tiny_window_sends_a_hint_instead_of_compacting()
+    {
+        // 主持资料自己就占了九成以上：最近 2 轮之外没有可整理的内容，
+        // 压缩帮不上忙，只能提示调大窗口，而且不丢任何轮次。
+        var gateway = new ScriptedGateway();
+        var host = await NewHostAsync(gateway, TinyWindow);
+        await host.LoadPackageAsync(HeavyHandbookPackage());
+
+        Assert.True(LastRatio(host) >= 1.0, "这一组用例要求主持资料自己就把窗口占满。");
+        Assert.Equal(0, ContextBudget.KeepFromIndex(host.Conversation, TinyWindow));
+
+        await SendAsync(host, "第一个问题");
+        await SendAsync(host, "第二个问题");
+
+        Assert.Empty(CompactionRequests(gateway));
+        Assert.Contains(
+            host.Messages,
+            m => m.IsEvent && m.Text.Contains("占满上下文窗口", StringComparison.Ordinal));
+        // 不丢任何轮次：说过的都在
+        Assert.Equal(4, host.Conversation.Turns.Count);
+    }
+
+    /// <summary>主持资料本身就撑满小窗口的剧本包：手册段写得很长。</summary>
+    private static ScriptPackage HeavyHandbookPackage()
+    {
+        var handbook = new string('册', 4_000);
+        var page = (int n) => new CanonicalSegment
+        {
+            SegmentId = $"seg-重手册-{n}",
+            OriginalText = handbook,
+            SourceSpanIds = [$"hs{n}"],
+            Visibility = SegmentVisibility.Private,
+        };
+
+        var spans = Enumerable.Range(1, 3).Select(n => new SourceSpan
+        {
+            SpanId = $"hs{n}",
+            FileId = "heavy-file",
+            PageNumber = n,
+            BlockNumber = 1,
+            ToolLocator = $"doc:heavy/page:{n}/block:1",
+            TextHash = ManifestFingerprint.ComputeSha256Text("重手册页 " + n),
+            OriginalText = "重手册页 " + n,
+        }).ToArray();
+
+        return new ScriptPackage
+        {
+            SchemaVersion = ScriptPackage.CurrentSchemaVersion,
+            PackageId = "pkg-heavy-handbook",
+            Version = "1",
+            Title = "重手册合成剧本",
+            PlayerCount = 5,
+            ManifestHash = new string('c', 64),
+            SourceFiles =
+            [
+                new SourceFile
+                {
+                    FileId = "heavy-file",
+                    PrivatePath = "heavy.pdf",
+                    ContentHash = new string('a', 64),
+                    PageCount = 3,
+                    Origin = SourceOrder.PageOrder,
+                    ToolIdentity = "synthetic",
+                    ParseState = FileParseState.Complete,
+                },
+            ],
+            Spans = spans,
+            Segments = [page(1), page(2), page(3)],
+            Roles = [],
+            Phases =
+            [
+                new ScriptPhase
+                {
+                    PhaseId = "phase-read",
+                    Title = "阅本",
+                    PublicSegmentIds = [],
+                    AllowedActions = [PublicAction.Start, PublicAction.Advance, PublicAction.Pause],
+                    Conditions = ["读完自己的本"],
+                    MaterialIds = [],
+                    IsVotePhase = false,
+                    IsRevealPhase = false,
+                    SourceSpanIds = [],
+                },
+            ],
+            Materials = [],
+            Truth = new TruthSection
+            {
+                RevealedSegmentIds = [],
+                PrivateText = string.Empty,
+                IsConfirmedByHuman = false,
+            },
+            Validation = PackageValidationState.Ready,
+        };
     }
 
     // ===== 记忆与消息 =====
@@ -465,7 +576,10 @@ public sealed class DmConversationTests : IDisposable
 
     // ===== 夹具 =====
 
-    private async Task<HostViewModel> NewHostAsync(ScriptedGateway gateway)
+    private async Task<HostViewModel> NewHostAsync(ScriptedGateway gateway) =>
+        await NewHostAsync(gateway, Window);
+
+    private async Task<HostViewModel> NewHostAsync(ScriptedGateway gateway, int contextWindow)
     {
         var store = new SessionStore(Path.Combine(_root, "sessions.db"));
         await store.InitializeAsync(TestContext.Current.CancellationToken);
@@ -473,20 +587,68 @@ public sealed class DmConversationTests : IDisposable
         {
             ModelId = "test-model",
             AutoRead = false,
-            ContextWindowTokens = Window,
+            ContextWindowTokens = contextWindow,
         };
 
-        return new HostViewModel(
+        var host = new HostViewModel(
             new HostDirector(gateway, new SilentTts()),
             () => settings,
             new HostIntentRouter(),
             new CommandDispatcher(store),
             store,
             new SilentTts());
+        gateway.Attach(host);
+        return host;
     }
 
     private static List<MagpieCompletionRequest> CompactionRequests(ScriptedGateway gateway) =>
         gateway.Requests.Where(IsCompaction).ToList();
+
+    private static async Task SendAsync(HostViewModel host, string text)
+    {
+        host.InputText = text;
+        await host.SendAsync();
+    }
+
+    /// <summary>一条足够长的玩家提问：约 400 个汉字，逼近真实的长句子。</summary>
+    private static string LongQuestion(int index) => $"第 {index} 轮：" + new string('问', 400);
+
+    /// <summary>
+    /// 一直聊下去，直到条件成立（最多 40 轮）。
+    /// 占用靠对话本身变长堆起来，不靠假用量。
+    /// </summary>
+    private static async Task TalkUntilAsync(HostViewModel host, Func<HostViewModel, bool> done)
+    {
+        for (var i = 0; i < 40 && !done(host); i++)
+        {
+            await SendAsync(host, LongQuestion(i));
+        }
+    }
+
+    /// <summary>一直聊到刚好发生第一次整理为止。</summary>
+    private static async Task TalkUntilFirstCompactionAsync(HostViewModel host)
+    {
+        for (var i = 0; i < 40 && host.Conversation.CompactionCount == 0; i++)
+        {
+            await SendAsync(host, LongQuestion(i));
+        }
+    }
+
+    /// <summary>当前上下文占用比例，算法与主持台内部一致。</summary>
+    private static double LastRatio(HostViewModel host) =>
+        ContextBudget.UsageRatio(
+            host.Conversation,
+            HostNarration.BuildSystemPrompt(host.Session.Package!),
+            BuildNextUserMessage(host),
+            Window);
+
+    /// <summary>主持台下一轮会发出的最后一条 user 消息，用来算占用。</summary>
+    private static string BuildNextUserMessage(HostViewModel host) =>
+        HostNarration.BuildAskUserMessage(
+            host.Session.Package!,
+            host.Session.Session!,
+            host.InputText,
+            host.Conversation.Memo);
 
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
@@ -504,8 +666,16 @@ public sealed class DmConversationTests : IDisposable
     {
         public List<MagpieCompletionRequest> Requests { get; } = [];
 
-        /// <summary>每次模型调用返回的用量；为空时按请求内容估算。</summary>
+        /// <summary>
+        /// 每次模型调用返回的用量；为空时按请求内容估算。
+        ///
+        /// 需要稳定复现某个占用比例时改设 <see cref="UsageFor"/>：
+        /// 固定值只在它自己那一轮生效，下一轮再发就换成下一轮的读数了。
+        /// </summary>
         public MagpieUsage? Usage { get; set; }
+
+        /// <summary>按这一轮的情况算用量，优先级高于 <see cref="Usage"/>。</summary>
+        public Func<HostViewModel, MagpieCompletionRequest, MagpieUsage?>? UsageFor { get; set; }
 
         /// <summary>整理请求要返回的备忘。</summary>
         public string CompactionMemo { get; set; } = "本局备忘：已经查过书房。";
@@ -537,8 +707,14 @@ public sealed class DmConversationTests : IDisposable
                 throw new DomainRuleException(DomainErrorCode.MODEL_FAILED, "模型这次没有给出可用内容。");
             }
 
-            return Task.FromResult(new MagpieCompletion(ReplyFor(request), Usage ?? RequestUsage(request)));
+            var usage = (UsageFor is { } provider ? provider(_host!, request) : null) ?? Usage ?? RequestUsage(request);
+            return Task.FromResult(new MagpieCompletion(ReplyFor(request), usage));
         }
+
+        /// <summary>当前这套夹具正在跑的宿主，UsageFor 用它读对话状态。</summary>
+        private HostViewModel? _host;
+
+        public void Attach(HostViewModel host) => _host = host;
 
         /// <summary>按请求内容估算用量：真实服务端的读数就是这样随对话变长。</summary>
         private static MagpieUsage RequestUsage(MagpieCompletionRequest request) => new(

@@ -225,13 +225,22 @@ public static class ContextBudget
         SelectKeepStart(conversation.Turns, contextWindowTokens: null, MinKeptRounds);
 
     /// <summary>
+    /// 现在手动整理有没有意义：起点之前至少还有一条消息。
+    ///
+    /// 起点是 0 说明整段对话都要留下来，那就没有可整理的内容；
+    /// 这时不该发整理请求，免得模型凭空生成一份备忘。
+    /// </summary>
+    public static bool CanCompact(DmConversation conversation) =>
+        ManualKeepFromIndex(conversation) > 0;
+
+    /// <summary>
     /// 选出保留部分的起点，规则只写这一处：
     ///
-    /// 先按「至少保留最近 minRounds 轮」定出最晚起点，
-    /// 给了窗口就再往前累加到可用窗口的一成半；
+    /// 从最新往前累加，累加到可用窗口的一成半就停；
+    /// 但起点不能晚于「最近 minRounds 轮」的起点；
     /// 最后把起点挪到最近的 user 上。
     ///
-    /// 两条保证因此不会互相打架：预算吃得下就多留，
+    /// 两条保证因此不会互相打架：预算吃得下就多留几轮，
     /// 一条超长的回复把预算一口气用完时，也仍然留下最近 2 轮。
     /// </summary>
     private static int SelectKeepStart(
@@ -245,7 +254,7 @@ public static class ContextBudget
         }
 
         // 至少保留最近 minRounds 轮：起点就是最近那条 user 往前数第 minRounds 条 user。
-        var roundStart = RoundStart(turns, Math.Max(1, minRounds));
+        var roundStart = RoundStart(turns, minRounds);
         if (contextWindowTokens is not { } window)
         {
             return AlignToUser(turns, roundStart);
@@ -253,10 +262,8 @@ public static class ContextBudget
 
         var budget = (int)(UsableTokens(window) * KeepRatio);
         var tokens = 0;
-        var index = roundStart;
-
-        // 预算吃得下就再往前留；一条超长的回复把预算一次用完时，也不会少留这 2 轮。
-        for (var i = roundStart - 1; i >= 0; i--)
+        var index = turns.Count;
+        for (var i = turns.Count - 1; i >= 0; i--)
         {
             tokens += EstimateTokens(turns[i].Content);
             index = i;
@@ -266,16 +273,17 @@ public static class ContextBudget
             }
         }
 
-        return AlignToUser(turns, index);
+        // 预算撑不住最近 2 轮时，也别再往回退：起点不能晚于 roundStart。
+        return AlignToUser(turns, Math.Min(index, roundStart));
     }
 
     /// <summary>
-    /// 最近 minRounds 轮的起点：从末尾往前数第 minRounds 条 user 的下标。
-    /// 轮数不够时返回 0。
+    /// 最近 n 轮的起点：从末尾往前数第 n 条 user 的下标。
+    /// 不足 n 条 user 时返回 0，表示整段都是最近的对话。
     /// </summary>
-    private static int RoundStart(IReadOnlyList<MagpieMessage> turns, int minRounds)
+    public static int RoundStart(IReadOnlyList<MagpieMessage> turns, int rounds)
     {
-        var remaining = minRounds;
+        var remaining = Math.Max(1, rounds);
         for (var i = turns.Count - 1; i >= 0; i--)
         {
             if (turns[i].Role != "user")
