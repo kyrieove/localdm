@@ -29,6 +29,8 @@ public sealed class SetupViewModel : ObservableObject
     private string _mineruExecutable = string.Empty;
     private bool _autoRead = true;
     private int _contextWindowTokens = ToolSettings.DefaultContextWindowTokens;
+    private double _uiScale = ToolSettings.DefaultUiScale;
+    private ChatWidthMode _chatWidthMode = ChatWidthMode.Standard;
     private bool _busy;
 
     public SetupViewModel(
@@ -95,6 +97,78 @@ public sealed class SetupViewModel : ObservableObject
         set => SetProperty(ref _contextWindowTokens, value);
     }
 
+    /// <summary>
+    /// 界面缩放倍数。与窗口上的 Ctrl+加号 / Ctrl+滚轮改的是同一个值：
+    /// 在这里改会立即作用到窗口，窗口上改也会立刻反映到这个滑块。
+    /// </summary>
+    public double UiScale
+    {
+        get => _uiScale;
+        set
+        {
+            var clamped = Math.Clamp(Math.Round(value, 2), ToolSettings.MinUiScale, ToolSettings.MaxUiScale);
+            if (SetProperty(ref _uiScale, clamped))
+            {
+                OnPropertyChanged(nameof(UiScaleHint));
+            }
+        }
+    }
+
+    /// <summary>滑块旁边那行说明：写出当前倍数与快捷键。</summary>
+    public string UiScaleHint =>
+        $"当前 {UiScale:P0}；Ctrl+加号、Ctrl+减号、Ctrl+0 恢复，Ctrl+滚轮同样生效。";
+
+    /// <summary>对话宽度档位：标准 / 宽 / 满宽。</summary>
+    public ChatWidthMode ChatWidthMode
+    {
+        get => _chatWidthMode;
+        set
+        {
+            if (SetProperty(ref _chatWidthMode, value))
+            {
+                OnPropertyChanged(nameof(IsChatWidthStandard));
+                OnPropertyChanged(nameof(IsChatWidthWide));
+                OnPropertyChanged(nameof(IsChatWidthFull));
+            }
+        }
+    }
+
+    public bool IsChatWidthStandard
+    {
+        get => ChatWidthMode == ChatWidthMode.Standard;
+        set
+        {
+            if (value)
+            {
+                ChatWidthMode = ChatWidthMode.Standard;
+            }
+        }
+    }
+
+    public bool IsChatWidthWide
+    {
+        get => ChatWidthMode == ChatWidthMode.Wide;
+        set
+        {
+            if (value)
+            {
+                ChatWidthMode = ChatWidthMode.Wide;
+            }
+        }
+    }
+
+    public bool IsChatWidthFull
+    {
+        get => ChatWidthMode == ChatWidthMode.Full;
+        set
+        {
+            if (value)
+            {
+                ChatWidthMode = ChatWidthMode.Full;
+            }
+        }
+    }
+
     public string CallerKeyState
     {
         get => _callerKeyState;
@@ -141,6 +215,8 @@ public sealed class SetupViewModel : ObservableObject
         VoiceId = _settings.VoiceId ?? string.Empty;
         AutoRead = _settings.AutoRead;
         ContextWindowTokens = _settings.ContextWindowTokens;
+        UiScale = _settings.UiScale;
+        ChatWidthMode = _settings.ChatWidthMode;
         _loadedVoiceId = VoiceId;
         MineruExecutable = _settings.MineruExecutable ?? string.Empty;
         CallerKeyState = string.IsNullOrWhiteSpace(_settings.CallerKeyRef)
@@ -189,6 +265,8 @@ public sealed class SetupViewModel : ObservableObject
                 AutoRead = AutoRead,
                 InputHint = _settings.InputHint,
                 ContextWindowTokens = ContextWindowTokens,
+                UiScale = UiScale,
+                ChatWidthMode = ChatWidthMode,
             };
             await _settingsStore.SaveAsync(_settings, CancellationToken.None);
             SettingsSaved?.Invoke(this, _settings);
@@ -295,6 +373,8 @@ public sealed class SetupViewModel : ObservableObject
                 AutoRead = AutoRead,
                 InputHint = _settings.InputHint,
                 ContextWindowTokens = ContextWindowTokens,
+                UiScale = UiScale,
+                ChatWidthMode = ChatWidthMode,
             };
             _settings.Validate();
             await _settingsStore.SaveAsync(_settings, CancellationToken.None);

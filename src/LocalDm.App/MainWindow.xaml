@@ -27,7 +27,15 @@
         </ResourceDictionary>
     </Window.Resources>
 
-    <Grid>
+    <Grid x:Name="UiScaleRoot">
+        <!--
+            整窗缩放：放在内容根的 LayoutTransform 上，布局跟着一起缩放，
+            放大后按钮与左栏才会落到真实的可用范围里。
+        -->
+        <Grid.LayoutTransform>
+            <ScaleTransform x:Name="UiScale" ScaleX="1" ScaleY="1" />
+        </Grid.LayoutTransform>
+
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="278" />
             <ColumnDefinition Width="*" />
@@ -44,22 +52,27 @@
                 DataContext="{Binding Host}">
             <Grid Margin="0,0,0,14">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <!-- 书名 -->
-                <StackPanel Grid.Row="0" Margin="20,18,20,10">
+                <!--
+                    书签、本局信息与进度放在同一个滚动区里：缩放到 200%、窗口 1280×720 时这块放不下，
+                    改为滚动而不是被裁掉；下面的「可用动作」与页脚仍然钉在底部。
+                -->
+                <ScrollViewer x:Name="RailScroll" Grid.Row="0"
+                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+
+                        <!-- 书名 -->
+                        <StackPanel Margin="20,18,20,10">
                     <TextBlock Text="本局主持" Style="{StaticResource Display}" FontSize="22" />
                     <TextBlock Text="一台电脑，一场桌上戏" Style="{StaticResource RailLabel}" FontSize="11"
                                Margin="0,4,0,0" />
                 </StackPanel>
 
-                <StackPanel Grid.Row="1" Margin="12,0,12,0">
+                        <StackPanel Margin="12,0,12,0">
                     <Button x:Name="NavLibrary" Content="剧本库" Style="{StaticResource RailButton}"
                             Command="{Binding DataContext.ShowLibraryCommand,
                                               RelativeSource={RelativeSource AncestorType=Window}}" />
@@ -71,11 +84,11 @@
                                                  Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
 
-                <!-- 当前这一局：剧目与人数 -->
-                <StackPanel Grid.Row="2" Margin="20,14,20,0"
-                            Visibility="{Binding DataContext.IsHostActive,
-                                                 RelativeSource={RelativeSource AncestorType=Window},
-                                                 Converter={StaticResource BoolToVisibility}}">
+                        <!-- 当前这一局：剧目与人数 -->
+                        <StackPanel Margin="20,14,20,0"
+                                    Visibility="{Binding DataContext.IsHostActive,
+                                                         RelativeSource={RelativeSource AncestorType=Window},
+                                                         Converter={StaticResource BoolToVisibility}}">
                     <Border Height="1" Background="{StaticResource Rule}" Margin="0,0,0,12" />
                     <TextBlock Text="{Binding Session.PublicTitle}" Style="{StaticResource RailTitle}" FontSize="16" />
                     <StackPanel Orientation="Horizontal" Margin="0,5,0,10">
@@ -89,12 +102,11 @@
                     </StackPanel>
                 </StackPanel>
 
-                <!-- 进度与提示：只有这一块滚动 -->
-                <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" Padding="20,0,16,0"
-                              Visibility="{Binding DataContext.IsHostActive,
-                                                   RelativeSource={RelativeSource AncestorType=Window},
-                                                   Converter={StaticResource BoolToVisibility}}">
-                    <StackPanel>
+                        <!-- 进度与提示 -->
+                        <StackPanel Margin="20,0,16,0"
+                                    Visibility="{Binding DataContext.IsHostActive,
+                                                         RelativeSource={RelativeSource AncestorType=Window},
+                                                         Converter={StaticResource BoolToVisibility}}">
                         <ItemsControl x:Name="PhaseRail" ItemsSource="{Binding Session.PhaseRail}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -161,11 +173,12 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
 
                 <!-- ===== 可用动作：点一下就是确认 ===== -->
-                <StackPanel Grid.Row="4" Margin="20,10,20,0"
+                <StackPanel Grid.Row="1" Margin="20,10,20,0"
                             Visibility="{Binding DataContext.IsHostActive,
                                                  RelativeSource={RelativeSource AncestorType=Window},
                                                  Converter={StaticResource BoolToVisibility}}">
@@ -267,7 +280,7 @@
                 </StackPanel>
 
                 <!-- 页脚：声音入口与连接状态 -->
-                <StackPanel Grid.Row="5" Margin="12,8,12,0">
+                <StackPanel Grid.Row="2" Margin="12,8,12,0">
                     <Border Height="1" Background="{StaticResource Rule}" Margin="8,0,8,8" />
                     <!--
                         停止放在轨道上而不是输入区里：生成或播音期间可能已经切到

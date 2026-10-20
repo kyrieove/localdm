@@ -30,7 +30,18 @@ public partial class App : Application
         {
             _composition = await AppComposition.CreateAsync(CancellationToken.None);
             var shell = await _composition.CreateShellAsync(CancellationToken.None);
-            var window = new MainWindow { DataContext = shell };
+            MainWindow window = new() { DataContext = shell };
+
+            // 缩放与对话宽度由窗口落实：启动时读一次，设置页保存后再同步。
+            var settings = _composition.Settings.Load();
+            window.ApplyUiSettings(_composition.Settings, settings);
+            UiWidth.ApplyChatWidth(shell, settings.ChatWidthMode);
+            _composition.ApplyUiSettings = saved =>
+            {
+                window.ApplyUiSettings(_composition.Settings, saved);
+                UiWidth.ApplyChatWidth(shell, saved.ChatWidthMode);
+            };
+
             MainWindow = window;
             window.Closed += (_, _) =>
             {

@@ -329,6 +329,27 @@ public sealed class HostViewModel : ObservableObject, IDisposable
     public string CompactionCountText => $"已整理 {_conversation.CompactionCount} 次";
 
     /// <summary>
+    /// 对话列表与底部输入区的最大宽度（DIP）。满宽档是无穷大，即只留两端边距。
+    /// 由窗口在读到设置时写入，界面直接绑定，换档不必重建页面。
+    /// </summary>
+    public double ChatMaxWidth
+    {
+        get => _chatMaxWidth;
+        set => SetProperty(ref _chatMaxWidth, value);
+    }
+
+    private double _chatMaxWidth = 980;
+
+    /// <summary>玩家消息气泡的最大宽度：跟着对话宽度同比放宽。</summary>
+    public double BubbleMaxWidth
+    {
+        get => _bubbleMaxWidth;
+        set => SetProperty(ref _bubbleMaxWidth, value);
+    }
+
+    private double _bubbleMaxWidth = 620;
+
+    /// <summary>
     /// 上下文占用：百分比与估算的 token 数，例如「上下文 42% · 约 27k / 65k」。
     /// 到 80% 会变提醒色：再聊下去就要自动整理了。
     /// </summary>

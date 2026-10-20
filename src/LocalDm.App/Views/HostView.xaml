@@ -53,7 +53,7 @@
         <ScrollViewer x:Name="ChatScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled" Padding="0,26,0,10"
                       Visibility="{Binding ShowConversation, Converter={StaticResource BoolToVisibility}}">
-            <StackPanel MaxWidth="980" HorizontalAlignment="Stretch" Margin="34,0">
+            <StackPanel MaxWidth="{Binding ChatMaxWidth}" HorizontalAlignment="Stretch" Margin="34,0">
                 <TextBlock Text="本局对话，从这里继续" Style="{StaticResource ChatMeta}" FontSize="11"
                            HorizontalAlignment="Center" Margin="0,0,0,26" />
 
@@ -91,7 +91,7 @@
                                 <StackPanel HorizontalAlignment="Right"
                                             Visibility="{Binding IsPlayer, Converter={StaticResource BoolToVisibility}}">
                                     <Border Background="{StaticResource Bubble}" CornerRadius="13,13,3,13"
-                                            Padding="16,11" MaxWidth="620" HorizontalAlignment="Right">
+                                            Padding="16,11" MaxWidth="{Binding BubbleMaxWidth}" HorizontalAlignment="Right">
                                         <TextBlock Text="{Binding Text}" FontSize="15" TextWrapping="Wrap"
                                                    LineHeight="26" LineStackingStrategy="BlockLineHeight"
                                                    Foreground="{StaticResource Ink}" />
@@ -348,7 +348,7 @@
         <!-- ===== 底边固定输入区 ===== -->
         <Border Grid.Row="3" Padding="0,10,0,18" Background="{DynamicResource Paper}"
                 Visibility="{Binding ShowConversation, Converter={StaticResource BoolToVisibility}}">
-            <Grid MaxWidth="980" HorizontalAlignment="Stretch" Margin="34,0,34,0">
+            <Grid MaxWidth="{Binding ChatMaxWidth}" HorizontalAlignment="Stretch" Margin="34,0,34,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />

@@ -48,6 +48,12 @@ public sealed class AppComposition : IDisposable
 
     public SettingsStore Settings => _context.Settings;
 
+    /// <summary>
+    /// 界面缩放与对话宽度变了：窗口据此改 LayoutTransform 与宽度绑定。
+    /// 组合根不认识窗口，由宿主（App）挂上来。
+    /// </summary>
+    public Action<ToolSettings>? ApplyUiSettings { get; set; }
+
     public string DataRoot => _context.DataRoot;
 
     public ISessionStore Store => _context.Store;
@@ -125,7 +131,11 @@ public sealed class AppComposition : IDisposable
             Magpie.BaseUri = saved.MagpieBaseUri;
             Magpie.CallerKey = Settings.LoadCallerKey(saved.CallerKeyRef);
             host.ApplySettingsVoice(saved.VoiceId);
+            ApplyUiSettings?.Invoke(saved);
         };
+
+        // 启动时先把上次的缩放与对话宽度交给窗口。
+        ApplyUiSettings?.Invoke(settings);
 
         // 先建立壳，再让首页的开局动作装入剧本（切页由 ShellViewModel 负责）
         var shell = new ShellViewModel(library, setup, host);

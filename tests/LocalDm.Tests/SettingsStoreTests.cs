@@ -74,6 +74,65 @@ public sealed class SettingsStoreTests : IDisposable
             Assert.Throws<DomainRuleException>(() => tooLarge.Validate()).Code);
     }
 
+    [Fact]
+    public async Task Ui_scale_and_chat_width_round_trip_through_the_settings_file()
+    {
+        var store = NewStore();
+        var settings = ToolSettings.Default with { UiScale = 1.5, ChatWidthMode = ChatWidthMode.Wide };
+
+        await store.SaveAsync(settings, TestContext.Current.CancellationToken);
+        var loaded = await store.LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1.5, loaded.UiScale);
+        Assert.Equal(ChatWidthMode.Wide, loaded.ChatWidthMode);
+    }
+
+    [Fact]
+    public async Task Settings_file_without_ui_fields_falls_back_to_defaults()
+    {
+        // 旧设置文件没有这两项：保持原来的观感（1.0 倍、标准宽度）。
+        var path = Path.Combine(_root, "settings.json");
+        await File.WriteAllTextAsync(
+            path,
+            """{"MagpieBaseUri":"http://127.0.0.1:3425/","ModelId":"deepseek-chat"}""",
+            TestContext.Current.CancellationToken);
+
+        var loaded = NewStore().Load();
+
+        Assert.Equal(ToolSettings.DefaultUiScale, loaded.UiScale);
+        Assert.Equal(ChatWidthMode.Standard, loaded.ChatWidthMode);
+    }
+
+    [Fact]
+    public void Ui_scale_and_chat_width_outside_the_allowed_range_are_rejected()
+    {
+        foreach (var scale in new[] { 0.5, 2.5, double.NaN })
+        {
+            var settings = ToolSettings.Default with { UiScale = scale };
+            Assert.Equal(
+                DomainErrorCode.INVALID_INPUT,
+                Assert.Throws<DomainRuleException>(() => settings.Validate()).Code);
+        }
+
+        var badMode = ToolSettings.Default with { ChatWidthMode = (ChatWidthMode)9 };
+        Assert.Equal(
+            DomainErrorCode.INVALID_INPUT,
+            Assert.Throws<DomainRuleException>(() => badMode.Validate()).Code);
+    }
+
+    [Fact]
+    public void Chat_width_tiers_map_to_the_agreed_widths()
+    {
+        Assert.Equal(980, ToolSettings.ChatMaxWidth(ChatWidthMode.Standard));
+        Assert.Equal(1320, ToolSettings.ChatMaxWidth(ChatWidthMode.Wide));
+        Assert.Null(ToolSettings.ChatMaxWidth(ChatWidthMode.Full));
+
+        // 玩家气泡按同一比例放宽（标准档 620 / 980）。
+        Assert.Equal(620, ToolSettings.ChatBubbleMaxWidth(ChatWidthMode.Standard));
+        Assert.Equal(620 * 1320 / 980.0, ToolSettings.ChatBubbleMaxWidth(ChatWidthMode.Wide));
+        Assert.Null(ToolSettings.ChatBubbleMaxWidth(ChatWidthMode.Full));
+    }
+
     private SettingsStore NewStore() =>
         new(Path.Combine(_root, "settings.json"), Path.Combine(_root, "secrets"));
 }

@@ -142,6 +142,9 @@ public sealed class SettingsStore
             AutoRead = dto.AutoRead ?? true,
             // 旧设置文件同样没有上下文长度：按默认值处理，不让旧存档开不了局。
             ContextWindowTokens = dto.ContextWindowTokens ?? ToolSettings.DefaultContextWindowTokens,
+            // 旧设置文件没有界面缩放与对话宽度：保持原来的观感（1.0 倍、标准宽度）。
+            UiScale = dto.UiScale ?? ToolSettings.DefaultUiScale,
+            ChatWidthMode = dto.ChatWidthMode ?? ChatWidthMode.Standard,
         };
     }
 
@@ -191,6 +194,8 @@ public sealed class SettingsStore
         InputHint = settings.InputHint,
         AutoRead = settings.AutoRead,
         ContextWindowTokens = settings.ContextWindowTokens,
+        UiScale = settings.UiScale,
+        ChatWidthMode = settings.ChatWidthMode,
     };
 
     private static string Serialize(ToolSettings settings)
@@ -318,6 +323,12 @@ public sealed class SettingsStore
 
         /// <summary>可空：旧设置文件没有这一项时按默认上下文长度处理。</summary>
         public int? ContextWindowTokens { get; set; }
+
+        /// <summary>可空：旧设置文件没有这一项时按 1.0 倍处理。</summary>
+        public double? UiScale { get; set; }
+
+        /// <summary>可空：旧设置文件没有这一项时按标准宽度处理。</summary>
+        public ChatWidthMode? ChatWidthMode { get; set; }
     }
 }
 
