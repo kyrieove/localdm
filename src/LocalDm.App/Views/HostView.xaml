@@ -57,14 +57,6 @@
                 <TextBlock Text="本局对话，从这里继续" Style="{StaticResource ChatMeta}" FontSize="11"
                            HorizontalAlignment="Center" Margin="0,0,0,26" />
 
-                <!-- 本局备忘：只记桌上公开发生过的事，可以放在公共屏幕上 -->
-                <Expander x:Name="MemoExpander" Header="查看本局备忘" Margin="0,0,0,22"
-                          Foreground="{StaticResource InkSoft}"
-                          Visibility="{Binding HasMemo, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock Text="{Binding Memo}" TextWrapping="Wrap" Style="{StaticResource ChatBody}"
-                               Margin="0,10,0,0" />
-                </Expander>
-
                 <ItemsControl x:Name="MessageList" ItemsSource="{Binding Messages}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
@@ -448,6 +440,12 @@
                                 </Style>
                             </TextBlock.Style>
                         </TextBlock>
+                        <!-- 整理过几次：备忘正文不上屏，只报次数 -->
+                        <TextBlock x:Name="CompactionCountText" Text="{Binding CompactionCountText}"
+                                   Style="{StaticResource ChatMeta}" FontSize="10" Margin="10,0,0,0"
+                                   VerticalAlignment="Center"
+                                   ToolTip="较早的对话已经整理成备忘，只发给模型；屏幕上不显示备忘正文"
+                                   Visibility="{Binding HasMemo, Converter={StaticResource BoolToVisibility}}" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <Button x:Name="CompactButton" Content="压缩上下文" Command="{Binding CompactCommand}"

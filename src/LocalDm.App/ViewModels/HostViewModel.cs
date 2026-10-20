@@ -316,11 +316,17 @@ public sealed class HostViewModel : ObservableObject, IDisposable
     /// </summary>
     public bool CanCompact => !IsBusy && ContextBudget.CanCompact(_conversation);
 
-    /// <summary>本局备忘的正文；没整理过时是空的。</summary>
+    /// <summary>
+    /// 本局备忘的正文。只给测试与诊断用，不绑定到任何界面：
+    /// 备忘里可能夹带还没发出去的卡面细节，上公共屏等于提前给玩家看卡。
+    /// </summary>
     public string? Memo => _conversation.Memo;
 
-    /// <summary>有没有备忘：没有就不显示「查看本局备忘」。</summary>
+    /// <summary>整理过没有：没整理过就不显示次数。</summary>
     public bool HasMemo => !string.IsNullOrWhiteSpace(_conversation.Memo);
+
+    /// <summary>已整理几次，例如「已整理 2 次」。</summary>
+    public string CompactionCountText => $"已整理 {_conversation.CompactionCount} 次";
 
     /// <summary>
     /// 上下文占用：百分比与估算的 token 数，例如「上下文 42% · 约 27k / 65k」。
@@ -978,6 +984,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         AppendEvent($"已整理较早的对话（第 {_conversation.CompactionCount} 次），保留了最近 {kept} 轮原话。");
         OnPropertyChanged(nameof(Memo));
         OnPropertyChanged(nameof(HasMemo));
+        OnPropertyChanged(nameof(CompactionCountText));
         RefreshContextUsage();
         await SaveConversationAsync();
         return true;
@@ -1230,6 +1237,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
 
         OnPropertyChanged(nameof(Memo));
         OnPropertyChanged(nameof(HasMemo));
+        OnPropertyChanged(nameof(CompactionCountText));
         RefreshContextUsage();
         CompactCommand.RaiseCanExecuteChanged();
     }
