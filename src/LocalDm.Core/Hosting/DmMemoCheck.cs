@@ -25,7 +25,7 @@ public static class DmMemoCheck
     /// 被切在两个来源块里，而主持人的原话是「可以转述或编造」，两边正好有五个字一样。
     /// 七个字能把这种拼接撞上挡掉，照抄卡面的句子仍然判得到。
     /// </summary>
-    private const int VerbatimRunLength = 7;
+    public const int VerbatimRunLength = 7;
 
     /// <summary>对照的依据：旧备忘加上这一轮要整理的原话。</summary>
     public static string BuildSupportingText(DmConversation conversation, int keepFromIndex)
