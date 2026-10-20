@@ -45,6 +45,47 @@ public static class DmMemoCheck
     }
 
     /// <summary>
+    /// 线索卡原文，逐段给出（卡面正面与卡背都算；组织者手册不算）。
+    ///
+    /// 卡背是「1楼-书房（现场）」「调查抽屉」这类导航信息，主持人本来就要报出来，
+    /// 调用方要按需剔掉，别拿它判主持人念卡。
+    /// </summary>
+    public static IReadOnlyList<string> CardTexts(ScriptPackage package)
+    {
+        var materialSpans = package.Materials
+            .SelectMany(material => material.SourceSpanIds)
+            .ToHashSet(StringComparer.Ordinal);
+        return package.Spans
+            .Where(span => materialSpans.Contains(span.SpanId))
+            .Select(span => span.OriginalText)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// 一段文字里有哪些片段与卡面原文连续相同（每段 7 个字以上）。
+    /// 验收用它判「主持人有没有念出卡面」。
+    /// </summary>
+    public static IReadOnlyList<string> CardFragments(string text, IReadOnlyList<string> cardTexts)
+    {
+        var fragments = new List<string>();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return fragments;
+        }
+
+        foreach (var sentence in Sentences(text))
+        {
+            var verbatim = LongestSharedRun(sentence, cardTexts);
+            if (verbatim.Length >= VerbatimRunLength)
+            {
+                fragments.Add(verbatim);
+            }
+        }
+
+        return fragments;
+    }
+
+    /// <summary>
     /// 找出备忘里没依据的短句：句中出现线索卡里有、依据里没有的词。
     ///
     /// 只比线索卡（材料分组的来源 span），不比组织者手册：主持人自己的话本来就可以
@@ -68,14 +109,8 @@ public static class DmMemoCheck
             return offences;
         }
 
-        var materialSpans = package.Materials
-            .SelectMany(material => material.SourceSpanIds)
-            .ToHashSet(StringComparer.Ordinal);
-        var cardTexts = package.Spans
-            .Where(span => materialSpans.Contains(span.SpanId))
-            .Select(span => span.OriginalText)
-            .ToArray();
-        if (cardTexts.Length == 0)
+        var cardTexts = CardTexts(package);
+        if (cardTexts.Count == 0)
         {
             return offences;
         }
