@@ -82,8 +82,11 @@ public sealed class HostUncertaintyTests
     {
         var router = new HostIntentRouter();
 
-        Assert.Equal(HostIntentKind.ProposeCommand, router.Route("我们进入下一环节吧").Kind);
-        Assert.Equal(HostIntentKind.ProposeCommand, router.Route("可以揭秘了").Kind);
+        // 整句说出来才是命令：「我们进入下一环节吧」是在问，不是在下令。
+        Assert.Equal(HostIntentKind.ProposeCommand, router.Route("进入下一环节").Kind);
+        Assert.Equal(PublicAction.Advance, router.Route("进入下一环节").ProposedAction);
+        Assert.Equal(HostIntentKind.ProposeCommand, router.Route("揭秘").Kind);
+        Assert.Equal(PublicAction.Reveal, router.Route("揭秘").ProposedAction);
         Assert.Equal(HostIntentKind.PublicQuestion, router.Route("现在轮到谁发言").Kind);
         Assert.Null(router.Route("现在轮到谁发言").ProposedAction);
     }

@@ -46,7 +46,8 @@ public sealed class TextSubmissionTests
     {
         var controller = new HostInputController(new HostIntentRouter());
 
-        var intent = controller.ResolveIntent("请进入下一环节");
+        // 整句说出来才是命令：「请进入下一环节」是在问，不是在下令。
+        var intent = controller.ResolveIntent("进入下一环节");
 
         Assert.Equal(HostIntentKind.ProposeCommand, intent.Kind);
         Assert.NotNull(intent.ProposedAction);

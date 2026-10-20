@@ -8,23 +8,20 @@ namespace LocalDm.Core.Hosting;
 /// </summary>
 public sealed class HostIntentRouter
 {
-    private static readonly string[] AdvanceKeywords =
+    /// <summary>整句说出来才是推进命令。</summary>
+    private static readonly string[] AdvanceCommands =
     [
-        "下一环节", "下一步", "下一个阶段", "推进", "开始下一轮", "进入下一阶段",
+        "下一环节", "进入下一环节", "下一阶段", "进入下一阶段", "开始下一轮", "推进",
     ];
 
-    private static readonly string[] RevealKeywords =
+    /// <summary>整句说出来才是揭秘命令。</summary>
+    private static readonly string[] RevealCommands =
     [
-        "揭秘", "公布真相", "揭露真相",
-    ];
-
-    private static readonly string[] SecretProbeKeywords =
-    [
-        "真相是什么", "谁是凶手", "告诉我凶手", "秘密是什么", "给我看真相", "剧透",
+        "揭秘", "公布真相", "揭露真相", "公开真相",
     ];
 
     /// <summary>整句输入就等于这条命令，不夹带别的意思。</summary>
-    private static readonly string[] CompactKeywords =
+    private static readonly string[] CompactCommands =
     [
         "/compact", "压缩上下文",
     ];
@@ -37,26 +34,25 @@ public sealed class HostIntentRouter
             return new HostIntent(HostIntentKind.PublicQuestion, null);
         }
 
-        if (IsWholeSentence(trimmed, CompactKeywords))
+        // 整句匹配：「下一步我该做什么？」是在问，不是在下令。
+        var sentence = StripTrailingPunctuation(trimmed);
+
+        if (IsWholeSentence(sentence, CompactCommands))
         {
             return new HostIntent(HostIntentKind.Compact, null);
         }
 
-        if (ContainsAny(trimmed, SecretProbeKeywords))
-        {
-            return new HostIntent(HostIntentKind.PublicQuestion, null);
-        }
-
-        if (ContainsAny(trimmed, RevealKeywords))
+        if (IsWholeSentence(sentence, RevealCommands))
         {
             return new HostIntent(HostIntentKind.ProposeCommand, PublicAction.Reveal);
         }
 
-        if (ContainsAny(trimmed, AdvanceKeywords))
+        if (IsWholeSentence(sentence, AdvanceCommands))
         {
             return new HostIntent(HostIntentKind.ProposeCommand, PublicAction.Advance);
         }
 
+        // 其余一律交给模型：「谁是凶手？」这类问题由主持提示词里的准则回应。
         return new HostIntent(HostIntentKind.PublicQuestion, null);
     }
 
@@ -65,7 +61,7 @@ public sealed class HostIntentRouter
     /// 「帮我压缩上下文吧」不是命令，「压缩上下文」才是。
     /// </summary>
     private static bool IsWholeSentence(string text, IEnumerable<string> commands) =>
-        commands.Contains(StripTrailingPunctuation(text), StringComparer.Ordinal);
+        commands.Contains(text, StringComparer.Ordinal);
 
     /// <summary>去掉末尾的标点与空白。</summary>
     private static string StripTrailingPunctuation(string text)
@@ -78,9 +74,6 @@ public sealed class HostIntentRouter
 
         return trimmed;
     }
-
-    private static bool ContainsAny(string text, IEnumerable<string> keywords) =>
-        keywords.Any(k => text.Contains(k, StringComparison.Ordinal));
 }
 
 public enum HostIntentKind
