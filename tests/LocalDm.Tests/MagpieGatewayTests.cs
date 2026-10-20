@@ -156,6 +156,73 @@ public sealed class MagpieGatewayTests
         Assert.Equal("/v1/chat/completions", handler.LastPath);
     }
 
+    [Fact]
+    public async Task Usage_is_parsed_from_the_completion_payload()
+    {
+        var gateway = new MagpieGateway(Stub("""
+            {"choices":[{"message":{"content":"好"}}],"usage":{"prompt_tokens":1234,"completion_tokens":56,"prompt_cache_hit_tokens":1000}}
+            """))
+        {
+            BaseUri = new Uri("http://127.0.0.1:3425/"),
+        };
+
+        var completion = await gateway.CompleteWithUsageAsync(
+            new MagpieCompletionRequest
+            {
+                ModelId = "group/auto-deepseek-v4-1-flash",
+                Messages = [new MagpieMessage { Role = "user", Content = "合成输入" }],
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("好", completion.Content);
+        Assert.NotNull(completion.Usage);
+        Assert.Equal(1234, completion.Usage!.PromptTokens);
+        Assert.Equal(56, completion.Usage.CompletionTokens);
+        Assert.Equal(1000, completion.Usage.CacheHitTokens);
+    }
+
+    [Fact]
+    public async Task Missing_usage_is_not_an_error()
+    {
+        // 服务端没给 usage 时不能报错：这一轮退回按估算计量。
+        var gateway = new MagpieGateway(Stub("""{"choices":[{"message":{"content":"好"}}]}"""))
+        {
+            BaseUri = new Uri("http://127.0.0.1:3425/"),
+        };
+
+        var completion = await gateway.CompleteWithUsageAsync(
+            new MagpieCompletionRequest
+            {
+                ModelId = "group/auto-deepseek-v4-1-flash",
+                Messages = [new MagpieMessage { Role = "user", Content = "合成输入" }],
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("好", completion.Content);
+        Assert.Null(completion.Usage);
+    }
+
+    [Fact]
+    public async Task Complete_async_keeps_returning_only_the_text()
+    {
+        var gateway = new MagpieGateway(Stub("""
+            {"choices":[{"message":{"content":"连接成功"}}],"usage":{"prompt_tokens":10,"completion_tokens":2}}
+            """))
+        {
+            BaseUri = new Uri("http://127.0.0.1:3425/"),
+        };
+
+        var text = await gateway.CompleteAsync(
+            new MagpieCompletionRequest
+            {
+                ModelId = "group/auto-deepseek-v4-1-flash",
+                Messages = [new MagpieMessage { Role = "user", Content = "合成输入" }],
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("连接成功", text);
+    }
+
     private static HttpClient Stub(string? body, HttpStatusCode status = HttpStatusCode.OK) =>
         new(new FixedHandler(body, status));
 

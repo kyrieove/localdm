@@ -59,7 +59,16 @@ public sealed class MagpieGateway : IMagpieGateway, IDisposable
         return ids;
     }
 
-    public async Task<string> CompleteAsync(MagpieCompletionRequest request, CancellationToken cancellationToken)
+    public async Task<string> CompleteAsync(MagpieCompletionRequest request, CancellationToken cancellationToken) =>
+        (await CompleteWithUsageAsync(request, cancellationToken)).Content;
+
+    /// <summary>
+    /// 非流式生成，并解析响应里的 token 用量。
+    /// 没有 usage（或缺 prompt_tokens）时用量为 null：不是错误，只是这一轮只能按估算计量。
+    /// </summary>
+    public async Task<MagpieCompletion> CompleteWithUsageAsync(
+        MagpieCompletionRequest request,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.ModelId))
         {
@@ -105,7 +114,26 @@ public sealed class MagpieGateway : IMagpieGateway, IDisposable
             throw new DomainRuleException(DomainErrorCode.MODEL_FAILED, "模型返回了空内容。");
         }
 
-        return content.Trim();
+        return new MagpieCompletion(content.Trim(), ParseUsage(payload));
+    }
+
+    /// <summary>
+    /// 解析 OpenAI 兼容的 usage（prompt_tokens / completion_tokens），
+    /// 以及 DeepSeek 可选的 prompt_cache_hit_tokens。
+    /// 缺 prompt_tokens 就当作没有用量：宁可退回估算，也不要用 0 冒充真实占用。
+    /// </summary>
+    private static MagpieUsage? ParseUsage(CompletionResponse? payload)
+    {
+        var usage = payload?.Usage;
+        if (usage?.PromptTokens is not { } promptTokens)
+        {
+            return null;
+        }
+
+        return new MagpieUsage(
+            promptTokens,
+            usage.CompletionTokens ?? 0,
+            usage.PromptCacheHitTokens);
     }
 
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -190,6 +218,22 @@ public sealed class MagpieGateway : IMagpieGateway, IDisposable
     {
         [JsonPropertyName("choices")]
         public List<ChoiceDto>? Choices { get; set; }
+
+        [JsonPropertyName("usage")]
+        public UsageDto? Usage { get; set; }
+    }
+
+    private sealed class UsageDto
+    {
+        [JsonPropertyName("prompt_tokens")]
+        public int? PromptTokens { get; set; }
+
+        [JsonPropertyName("completion_tokens")]
+        public int? CompletionTokens { get; set; }
+
+        /// <summary>DeepSeek 的可选字段：命中前缀缓存的 prompt token 数。</summary>
+        [JsonPropertyName("prompt_cache_hit_tokens")]
+        public int? PromptCacheHitTokens { get; set; }
     }
 
     private sealed class ChoiceDto

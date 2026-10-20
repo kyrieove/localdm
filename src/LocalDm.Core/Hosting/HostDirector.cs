@@ -38,6 +38,12 @@ public sealed class HostDirector
     /// <summary>最近一次成功诵读的公开文字；重播只使用它。</summary>
     public SpeechItem? LastItem { get; private set; }
 
+    /// <summary>
+    /// 最近一次成功生成的 token 用量。失败或取消时保持上一次的值。
+    /// 主持台据此判断上下文占用，不再靠猜字数。
+    /// </summary>
+    public MagpieUsage? LastUsage { get; private set; }
+
     /// <summary>一次请求的完整结果。Late 表示被取消后晚到、必须丢弃。</summary>
     public sealed record HostTurnResult(SpeechItem? Item, SpeechState State, string? PublicReason, bool Late);
 
@@ -63,7 +69,7 @@ public sealed class HostDirector
 
         try
         {
-            var text = await _gateway.CompleteAsync(
+            var completion = await _gateway.CompleteWithUsageAsync(
                 new MagpieCompletionRequest { ModelId = modelId, Messages = messages },
                 linked.Token);
 
@@ -72,7 +78,9 @@ public sealed class HostDirector
                 return (null, "已取消，晚到的回复不会显示。", true);
             }
 
-            return (text, null, false);
+            // 用量只在真的拿到文字时更新：失败或取消不改动上一次的读数。
+            LastUsage = completion.Usage;
+            return (completion.Content, null, false);
         }
         catch (DomainRuleException ex)
         {

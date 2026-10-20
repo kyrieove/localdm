@@ -16,7 +16,27 @@ public interface IMagpieGateway
     /// 非流式生成：返回 choices[0].message.content 的非空文字；空内容或无效 JSON 一律视为失败。
     /// </summary>
     Task<string> CompleteAsync(MagpieCompletionRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// 非流式生成并带回 token 用量。
+    ///
+    /// 默认实现退回到 <see cref="CompleteAsync"/>：拿不到用量不是错误，
+    /// 只是这一轮只能按估算计量上下文占用。
+    /// </summary>
+    async Task<MagpieCompletion> CompleteWithUsageAsync(
+        MagpieCompletionRequest request,
+        CancellationToken cancellationToken) =>
+        new(await CompleteAsync(request, cancellationToken), null);
 }
+
+/// <summary>
+/// 一次模型调用的 token 用量。
+/// CacheHitTokens 是 DeepSeek 的可选字段：命中前缀缓存的那部分 prompt token。
+/// </summary>
+public sealed record MagpieUsage(int PromptTokens, int CompletionTokens, int? CacheHitTokens);
+
+/// <summary>模型返回的文字与用量。用量为 null 表示这次响应没有带来可用的 usage。</summary>
+public sealed record MagpieCompletion(string Content, MagpieUsage? Usage);
 
 public sealed record MagpieCompletionRequest
 {
