@@ -1,0 +1,346 @@
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using LocalDm.App;
+using LocalDm.App.ViewModels;
+using LocalDm.App.Views;
+using LocalDm.Core.Domain;
+using LocalDm.Core.Import;
+using LocalDm.Core.Ports;
+using LocalDm.Infrastructure.Import;
+
+namespace LocalDm.UiTests;
+
+/// <summary>
+/// 导入向导的界面验收：② 页不出现图片与识别文字；④ 页把可能剧透的条目藏起来并挡住下一步；
+/// 导入完成后剧本库里多出这一本。
+///
+/// 识别与模型都是假的：这些用例验的是界面，不是 OCR。
+/// 剧本文件夹全部在临时目录里现造，不读 stories/、.appdata/、.local/。
+/// </summary>
+public sealed class ImportWizardTests
+{
+    /// <summary>假识别在每个页里放的标记：界面上一旦出现它，就是泄露了识别文字。</summary>
+    private const string ExtractionMarker = "识别得到的正文标记";
+
+    [Fact]
+    public async Task Group_page_has_no_images_and_shows_no_recognised_text()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            var wizard = NewWizard(root.Path);
+            var window = Show(WizardView(wizard));
+            try
+            {
+                wizard.SetFolder(NewStory(root.Path));
+                await wizard.ScanAsync();
+                Assert.True(wizard.IsGroupsStep);
+
+                // 先跑一次识别，确认识别文字不会漏到 ② 页上。
+                await wizard.ExtractAndDraftAsync();
+                await wizard.BackAsync();
+                Assert.True(wizard.IsGroupsStep);
+                await WaitForRenderAsync();
+
+                var texts = CollectTexts(window);
+                Assert.Contains(texts, text => text.Contains("组织", StringComparison.Ordinal));
+                Assert.DoesNotContain(texts, text => text.Contains(ExtractionMarker, StringComparison.Ordinal));
+
+                // ② 页不能有任何图片控件：缩略图也会剧透。
+                Assert.Empty(CollectVisuals<Image>(window));
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public async Task Flow_page_hides_flagged_hints_and_blocks_next_until_rewritten()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            var wizard = NewWizard(root.Path);
+            var window = Show(WizardView(wizard));
+            try
+            {
+                wizard.SetFolder(NewStory(root.Path));
+                await wizard.ScanAsync();
+                await wizard.ExtractAndDraftAsync();
+                Assert.True(wizard.IsFlowStep);
+
+                // 起草结果里有一条照抄了真相页：必须被藏起来，且挡住下一步。
+                var flagged = wizard.FlowSteps.First(row => row.IsHidden);
+                Assert.Equal("这条提示可能含剧情，已隐藏，请重写", flagged.DisplayHint);
+                Assert.False(wizard.CanBuild);
+                Assert.False(wizard.NextCommand.CanExecute(null));
+
+                // 界面上的文字里不能出现那条被藏起来的原文。
+                await WaitForRenderAsync();
+                var texts = CollectTexts(window);
+                Assert.DoesNotContain(texts, text => text.Contains(TruthSentence, StringComparison.Ordinal));
+                Assert.Contains(texts, text => text.Contains("已隐藏", StringComparison.Ordinal));
+
+                // 重写之后才能继续。
+                flagged.Hint = "翻开线索卡，逐张读完。";
+                Assert.False(flagged.IsHidden);
+                Assert.True(wizard.CanBuild);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public async Task Library_lists_the_new_package_after_a_finished_import()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            var wizard = NewWizard(root.Path);
+            var window = Show(WizardView(wizard));
+            try
+            {
+                wizard.SetFolder(NewStory(root.Path));
+                wizard.Title = "合成导入剧本";
+                wizard.PlayerCount = 4;
+                await wizard.ScanAsync();
+                await wizard.ExtractAndDraftAsync();
+
+                // 起草出来的环节里若有一条被藏起来，先重写成干净的提示再建包。
+                foreach (var row in wizard.FlowSteps)
+                {
+                    row.Hint = "按流程做下一步。";
+                }
+
+                await wizard.BuildAsync();
+                Assert.True(wizard.IsDoneStep, wizard.Status);
+                Assert.Contains("可以开局", wizard.ReadinessText, StringComparison.Ordinal);
+
+                var library = new LibraryViewModel(Path.Combine(root.Path, "data", "packages"));
+                await library.LoadAsync(TestContext.Current.CancellationToken);
+
+                var row2 = Assert.Single(library.Packages, p => p.Title == "合成导入剧本");
+                Assert.True(row2.CanStart);
+                Assert.True(library.HasPackages);
+
+                // 导入中的那行字：列表里看得见「正在导入：第 N/M 页」。
+                library.SetImporting("正在导入：第 1/4 页");
+                Assert.True(library.IsImporting);
+                library.SetImporting(null);
+                Assert.False(library.IsImporting);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    // ===== 辅助 =====
+
+    /// <summary>合成真相页里的一句话：起草结果照抄它就是剧透。</summary>
+    private const string TruthSentence =
+        "凶手在子夜换掉了走廊尽头那盏灯然后从侧门离开海砂馆";
+
+    private static ImportWizardViewModel NewWizard(string root)
+    {
+        var dataRoot = Path.Combine(root, "data");
+        Directory.CreateDirectory(dataRoot);
+        var packagesDir = Path.Combine(dataRoot, "packages");
+        Directory.CreateDirectory(packagesDir);
+
+        return new ImportWizardViewModel(
+            dataRoot,
+            packagesDir,
+            () => new ScriptImportService(new ScriptImportOptions
+            {
+                DataRoot = dataRoot,
+                Extractor = new FakeExtractor(),
+            }),
+            new FlowDrafter(new FakeGateway()),
+            () => "ui-test-model");
+    }
+
+    /// <summary>造一个剧本文件夹：组织者手册 2 页、一个角色本、一组线索卡。</summary>
+    private static string NewStory(string root)
+    {
+        var story = Path.Combine(root, "剧本-" + Guid.NewGuid().ToString("N")[..6]);
+        foreach (var (relative, index) in new[]
+                 {
+                     ("组织/1.jpg", 1), ("组织/2.jpg", 2), ("角色本/张三/1.jpg", 3), ("线索卡牌/书房/1.jpg", 4),
+                 })
+        {
+            var path = Path.Combine(story, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllBytes(path, [.. OnePixelPng, .. BitConverter.GetBytes(index)]);
+        }
+
+        return story;
+    }
+
+    private static ImportWizardView WizardView(ImportWizardViewModel wizard) => new() { DataContext = wizard };
+
+    private static Window Show(FrameworkElement content)
+    {
+        var window = new Window
+        {
+            Content = content,
+            ShowActivated = false,
+            Width = 1200,
+            Height = 900,
+        };
+        window.Show();
+        return window;
+    }
+
+    private static async Task WaitForRenderAsync()
+    {
+        await Task.Delay(120);
+        await System.Windows.Threading.Dispatcher.CurrentDispatcher.InvokeAsync(
+            () => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+        await Task.Delay(60);
+    }
+
+    private static List<string> CollectTexts(DependencyObject root)
+    {
+        var texts = new List<string>();
+        if (root is TextBlock block)
+        {
+            texts.Add(block.Text ?? string.Empty);
+        }
+        else if (root is TextBox box)
+        {
+            texts.Add(box.Text ?? string.Empty);
+        }
+
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            texts.AddRange(CollectTexts(VisualTreeHelper.GetChild(root, i)));
+        }
+
+        return texts;
+    }
+
+    private static List<T> CollectVisuals<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        var found = new List<T>();
+        if (root is T match)
+        {
+            found.Add(match);
+        }
+
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            found.AddRange(CollectVisuals<T>(VisualTreeHelper.GetChild(root, i)));
+        }
+
+        return found;
+    }
+
+    /// <summary>假识别：每页回一段带标记的文字；组织者手册第 2 页里放一句「真相」。</summary>
+    private sealed class FakeExtractor : IPageExtractor
+    {
+        public Task<ToolIdentity> GetIdentityAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(new ToolIdentity { Tool = "fake-mineru", Version = "1.0", AppOwnedHome = "fake-home" });
+
+        public Task<ImportFileResult> ExtractAsync(
+            string fileId,
+            string absolutePath,
+            DataConsent consent,
+            CancellationToken cancellationToken)
+        {
+            var source = SourceIndex.BuildSourceFile(
+                fileId,
+                absolutePath,
+                DocumentKind.Image,
+                pdfPageCount: null,
+                SourceOrder.ManifestOrder,
+                "fake-mineru 1.0");
+            var isTruthPage = fileId.Contains("组织-2", StringComparison.Ordinal);
+            var text = isTruthPage
+                ? $"{ExtractionMarker}。{TruthSentence}。"
+                : $"{ExtractionMarker}：{fileId}。";
+            var span = new SourceSpan
+            {
+                SpanId = fileId + "-b0",
+                FileId = fileId,
+                PageNumber = 1,
+                BlockNumber = 0,
+                ToolLocator = $"doc:{fileId}/tier:flash/page:1/block:0",
+                TextHash = SourceIndex.ComputeTextHash(text),
+                OriginalText = text,
+            };
+            return Task.FromResult(new ImportFileResult(
+                fileId,
+                ImportFileState.Complete,
+                ToolComplete: true,
+                source,
+                [span],
+                [],
+                ErrorCode: null,
+                PublicReason: null));
+        }
+    }
+
+    /// <summary>假模型：给一份结构合法、但有一条提示照抄了真相的流程。</summary>
+    private sealed class FakeGateway : IMagpieGateway
+    {
+        public Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<string>>(["ui-test-model"]);
+
+        public Task<string> CompleteAsync(MagpieCompletionRequest request, CancellationToken cancellationToken) =>
+            Task.FromResult(
+                $$"""
+                {
+                  "layering": { "truthPages": [2], "ignoredPages": [1] },
+                  "steps": [
+                    { "stepId": "read", "title": "阅本", "kind": "Read",
+                      "hint": "拿到角色本，读到写着先不要翻页的地方为止。",
+                      "conditions": ["全员读完"], "sourceRef": "组织者手册第 1 页", "offersOpeningSpeech": true },
+                    { "stepId": "search", "title": "搜证", "kind": "Search",
+                      "hint": "{{TruthSentence}}", "conditions": [], "sourceRef": "组织者手册第 2 页" },
+                    { "stepId": "reveal", "title": "揭秘", "kind": "Reveal",
+                      "hint": "公开真相。", "conditions": [], "sourceRef": "组织者手册第 2 页" }
+                  ]
+                }
+                """);
+    }
+
+    private static readonly byte[] OnePixelPng = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+
+    private sealed class TempRoot : IDisposable
+    {
+        public TempRoot()
+        {
+            Path = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(),
+                "localdm-wizard-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path);
+        }
+
+        public string Path { get; }
+
+        public void Dispose()
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            try
+            {
+                Directory.Delete(Path, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+}

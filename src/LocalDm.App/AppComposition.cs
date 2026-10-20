@@ -5,7 +5,9 @@ using LocalDm.App.Input;
 using LocalDm.App.ViewModels;
 using LocalDm.Core.Domain;
 using LocalDm.Core.Hosting;
+using LocalDm.Core.Import;
 using LocalDm.Core.Ports;
+using LocalDm.Infrastructure.Import;
 using LocalDm.Infrastructure.Magpie;
 using LocalDm.Infrastructure.Storage;
 using LocalDm.Infrastructure.Voice;
@@ -124,6 +126,24 @@ public sealed class AppComposition : IDisposable
         var library = new LibraryViewModel(Path.Combine(_context.DataRoot, "packages"));
         _host = host;
 
+        // 导入向导：识别与建包走同一份服务，起草流程用同一个模型。
+        // 服务每次现造：设置页刚改的 MinerU / OCR 路径立刻生效。
+        var wizard = new ImportWizardViewModel(
+            _context.DataRoot,
+            Path.Combine(_context.DataRoot, "packages"),
+            () =>
+            {
+                var current = Settings.Load();
+                return new ScriptImportService(new ScriptImportOptions
+                {
+                    DataRoot = _context.DataRoot,
+                    MineruExecutable = current.MineruExecutable,
+                    OcrPythonPath = current.OcrPythonPath,
+                });
+            },
+            new FlowDrafter(Magpie),
+            () => Settings.Load().ModelId);
+
         // 保存设置后把新地址与 caller key 同步到网关，不必重启；
         // 音色也要同步到主持台，否则主持台还在用启动时的旧音色朗读。
         setup.SettingsSaved += (_, saved) =>
@@ -138,7 +158,23 @@ public sealed class AppComposition : IDisposable
         ApplyUiSettings?.Invoke(settings);
 
         // 先建立壳，再让首页的开局动作装入剧本（切页由 ShellViewModel 负责）
-        var shell = new ShellViewModel(library, setup, host);
+        var shell = new ShellViewModel(library, setup, host, wizard);
+
+        // 导入建好一本：装进主持台，并把剧本库刷新一遍（新剧本要出现在列表里）。
+        shell.ImportCompleted += async (_, package) =>
+        {
+            try
+            {
+                await host.LoadPackageAsync(package);
+                await library.LoadAsync(CancellationToken.None);
+                shell.ShowHostCommand.Execute(null);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("[App] 导入后装载剧本失败：" + ex);
+                host.ReportProblem("导入完成，但装载失败，请从剧本库重新打开。");
+            }
+        };
         library.PackageOpened += async (_, package) =>
         {
             try

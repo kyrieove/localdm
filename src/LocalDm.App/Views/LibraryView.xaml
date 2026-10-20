@@ -15,6 +15,37 @@
             <TextBlock Text="剧本库" Style="{StaticResource Display}" FontSize="26" />
             <TextBlock Text="选一本准备完成的剧本，或接着上次的进度继续。"
                        Margin="0,8,0,0" FontSize="14" Foreground="{StaticResource InkSoft}" />
+            <Grid Margin="0,16,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button x:Name="ImportButton" Grid.Column="0" Content="导入新剧本"
+                        Command="{Binding ImportCommand}" Style="{StaticResource SealButton}"
+                        Padding="22,10" />
+                <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0"
+                           Style="{StaticResource ChatMeta}" TextWrapping="Wrap"
+                           Text="导入全程不显示剧本正文与卡面，只显示文件夹、页数与流程。" />
+            </Grid>
+
+            <!-- 正在导入：点一下回到向导 -->
+            <Border Margin="0,16,0,0" Padding="16,12" CornerRadius="6"
+                    Background="{StaticResource PaperDim}" BorderBrush="{StaticResource Seal}"
+                    BorderThickness="1"
+                    Visibility="{Binding IsImporting, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="ImportingLabel" Grid.Column="0" Text="{Binding ImportingText}"
+                               Style="{StaticResource ChatMeta}" VerticalAlignment="Center" />
+                    <Button x:Name="BackToImportButton" Grid.Column="1" Content="回到导入"
+                            Command="{Binding ImportCommand}" Style="{StaticResource QuietButton}"
+                            Padding="16,8" Margin="16,0,0,0" />
+                </Grid>
+            </Border>
+
             <Border Height="1" Background="{StaticResource Rule}" Margin="0,22,0,0" />
 
             <!-- 上一局还没走完：重启后直接接着玩 -->
@@ -71,8 +102,13 @@
                                 <TextBlock Text="{Binding Summary}" Style="{StaticResource ChatMeta}"
                                            Margin="0,5,0,0" FontSize="12" />
                             </StackPanel>
-                            <TextBlock Grid.Column="2" Text="{Binding Readiness}" Style="{StaticResource ChatMeta}"
-                                       VerticalAlignment="Center" Margin="16,0,4,0" />
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Readiness}" Style="{StaticResource ChatMeta}"
+                                           VerticalAlignment="Center" Margin="16,0,8,0" />
+                                <Button Content="重新整理流程" Style="{StaticResource TopBarButton}"
+                                        Padding="8,3" Click="OnRefineFlow"
+                                        ToolTip="改流程不用重新识别，确认后生成新版本的包" />
+                            </StackPanel>
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>

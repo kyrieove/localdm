@@ -26,6 +26,48 @@ public sealed class LibraryViewModel : ObservableObject
         OpenCommand = new RelayCommand(OpenSelectedAsync, () => _selected?.CanStart == true);
         ContinueCommand = new RelayCommand(ContinueAsync, () => _hasResumableSession);
         LoadDemoCommand = new RelayCommand(LoadDemoAsync);
+        ImportCommand = new RelayCommand(
+            () => { ImportRequested?.Invoke(this, EventArgs.Empty); return Task.CompletedTask; },
+            () => !IsImporting);
+    }
+
+    /// <summary>打开导入向导。导入进行中再点也是回到向导，不会开第二个。</summary>
+    public event EventHandler? ImportRequested;
+
+    /// <summary>「重新整理流程」：带着这一行回到向导弹 ④，不重新识别。</summary>
+    public event EventHandler<LibraryPackageRow>? FlowRefineRequested;
+
+    /// <summary>正在导入时列表里那行字：第 N/M 页。空表示没有导入在跑。</summary>
+    public string ImportingText
+    {
+        get => _importingText;
+        private set
+        {
+            if (SetProperty(ref _importingText, value))
+            {
+                OnPropertyChanged(nameof(IsImporting));
+                OpenCommand.RaiseCanExecuteChanged();
+                ImportCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    private string _importingText = string.Empty;
+
+    public bool IsImporting => !string.IsNullOrEmpty(ImportingText);
+
+    /// <summary>向导报进度时调用；传空表示这次导入结束。</summary>
+    public void SetImporting(string? text) => ImportingText = text ?? string.Empty;
+
+    public RelayCommand ImportCommand { get; }
+
+    /// <summary>「重新整理流程」：带着这一行回到向导第 ④ 步，不重新识别。</summary>
+    public void RequestFlowRefine(LibraryPackageRow row)
+    {
+        if (row is not null && !string.IsNullOrEmpty(row.FilePath))
+        {
+            FlowRefineRequested?.Invoke(this, row);
+        }
     }
 
     /// <summary>用户选定一个剧本包后触发；参数是包本身。</summary>
@@ -184,6 +226,12 @@ public sealed class LibraryViewModel : ObservableObject
 
         foreach (var file in Directory.GetFiles(_packagesDir, "*.json").OrderBy(f => f, StringComparer.Ordinal))
         {
+            // 流程声明与包放在同一个目录，但它不是剧本包：跳过，别把它当成坏包。
+            if (file.EndsWith(".flow.json", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             ScriptPackage? package;
             try
             {

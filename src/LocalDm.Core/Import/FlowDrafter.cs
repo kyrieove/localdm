@@ -151,9 +151,10 @@ public sealed class FlowDrafter
         {
             dto = JsonSerializer.Deserialize<DraftDto>(StripCodeFence(reply), JsonOptions);
         }
-        catch (JsonException ex)
+        catch (JsonException)
         {
-            failure = "JSON 解析失败：" + ex.Message;
+            // 不带异常原文：JsonException 的消息会把输入片段抄进来，而输入里是手册内容。
+            failure = "JSON 解析失败";
             return null;
         }
 

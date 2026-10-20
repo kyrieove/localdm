@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
+using LocalDm.Core.Domain;
 
 namespace LocalDm.App.ViewModels;
 
@@ -65,20 +66,45 @@ public sealed class ShellViewModel : ObservableObject
     private readonly LibraryViewModel _library;
     private readonly SetupViewModel _setup;
     private readonly HostViewModel _host;
+    private readonly ImportWizardViewModel? _wizard;
     private object? _current;
 
-    public ShellViewModel(LibraryViewModel library, SetupViewModel setup, HostViewModel host)
+    public ShellViewModel(
+        LibraryViewModel library,
+        SetupViewModel setup,
+        HostViewModel host,
+        ImportWizardViewModel? wizard = null)
     {
         _library = library;
         _setup = setup;
         _host = host;
+        _wizard = wizard;
         _current = library;
         ShowLibraryCommand = new RelayCommand(() => { Current = _library; return Task.CompletedTask; });
         ShowSetupCommand = new RelayCommand(() => { Current = _setup; return Task.CompletedTask; });
         ShowHostCommand = new RelayCommand(() => { Current = _host; return Task.CompletedTask; });
+        ShowImportCommand = new RelayCommand(ShowImportAsync, () => _wizard is not null);
 
         // 首页选定剧本后自动切到主持台，用户不必自己再找入口
         _library.PackageOpened += (_, _) => Current = _host;
+
+        // 剧本库的「导入新剧本」：向导是剧本库里的一个切换视图，不另开窗口。
+        if (_wizard is not null)
+        {
+            _library.ImportRequested += (_, _) => _ = ShowImportAsync();
+            _wizard.CloseRequested += (_, _) => Current = _library;
+            _library.FlowRefineRequested += (_, row) => _ = RefineFlowAsync(row);
+            _wizard.PackageBuilt += (_, package) => ImportCompleted?.Invoke(this, package);
+
+            // 导入进度同步到剧本库列表：回到列表也能看见「正在导入：第 N/M 页」。
+            _wizard.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(ImportWizardViewModel.ImportingText))
+                {
+                    _library.SetImporting(_wizard.ImportingText);
+                }
+            };
+        }
 
         // 会话状态变了：左侧轨道可能刚出现「回到本局」入口
         _host.Session.PropertyChanged += (_, e) =>
@@ -147,6 +173,41 @@ public sealed class ShellViewModel : ObservableObject
     public RelayCommand ShowSetupCommand { get; }
 
     public RelayCommand ShowHostCommand { get; }
+
+    /// <summary>打开导入向导。</summary>
+    public RelayCommand ShowImportCommand { get; }
+
+    /// <summary>导入建好一本新剧本；宿主据此把它装进主持台并刷新剧本库。</summary>
+    public event EventHandler<ScriptPackage>? ImportCompleted;
+
+    /// <summary>进向导并回到第一步。</summary>
+    private Task ShowImportAsync()
+    {
+        if (_wizard is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        _wizard.Start();
+        Current = _wizard;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>「重新整理流程」：带着这本已有的流程直接到 ④，不重新识别。</summary>
+    private async Task RefineFlowAsync(LibraryPackageRow row)
+    {
+        if (_wizard is null)
+        {
+            return;
+        }
+
+        var flow = ImportWizardViewModel.LoadSavedFlow(row.FilePath);
+        await _wizard.OpenExistingFlowAsync(row.Package, flow);
+        Current = _wizard;
+    }
+
+    /// <summary>导入向导本身（测试与宿主用）。</summary>
+    public ImportWizardViewModel? Import => _wizard;
 
     public SetupViewModel Setup => _setup;
 
