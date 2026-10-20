@@ -112,7 +112,14 @@ public static class BuildPackageProbe
 
         sw.Stop();
 
-        var built = RealScriptPackageBuilder.Build(title, playerCount, pages, sources, flow: flow);
+        // 分层按流程声明来：目录名与页号都写在声明里，换一份剧本照样能用。
+        var built = RealScriptPackageBuilder.Build(
+            title,
+            playerCount,
+            pages,
+            sources,
+            ScriptLayeringRule.FromFlow(flow),
+            flow);
 
         // 注册到本地存档并写包文件，供应用直接读取
         using var store = new SessionStore(Path.Combine(dataRoot, "sessions.db"));

@@ -20,6 +20,21 @@
   // - 环节 ID 必须非空且唯一：重复 ID 会让「推进」永远停在同一个环节。
   // - 同一份流程重复准备得到同一个内容指纹；改了流程就会得到新的包标识，
   //   旧存档仍然绑定原包，不会被新流程顶掉。
+  //
+  // - layering 声明组织者手册怎么分层，三份剧本各写各的，不写死目录名与页号：
+  //   organizerGroup 是组织者手册在导入时的目录名；
+  //   publicPages 是可以上公共屏幕的页（开场信等）；
+  //   truthPages 是真相页，揭秘后才上公共屏幕；
+  //   ignoredPages 是完全不进剧本包的页（封底、「后面是真相」警告页等）。
+  //   手册里没提到的页都是主持人专用页：DM 读得到，玩家看不到。
+  //   organizerGroup 在导入的分组里不存在时，整包停在 NeedsReview 并点名那个目录，
+  //   不会静默退回默认分层。
+  "layering": {
+    "organizerGroup": "组织",
+    "publicPages": [1, 2],
+    "truthPages": [8, 9, 10, 11],
+    "ignoredPages": [7, 12]
+  },
   "steps": [
     {
       "stepId": "read",

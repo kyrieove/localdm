@@ -36,6 +36,32 @@ public sealed record ScriptLayeringRule
         IgnoredPages = [12],
     };
 
+    /// <summary>
+    /// 按流程声明里的分层生成规则；没有声明就退回 <see cref="Default"/>。
+    ///
+    /// 声明了分层就用声明的：目录名与页号都写在剧本包里，换一份剧本照样能用。
+    /// </summary>
+    public static ScriptLayeringRule FromFlow(ScriptFlow? flow)
+    {
+        var layering = flow?.Layering;
+        if (layering is null || string.IsNullOrWhiteSpace(layering.OrganizerGroup))
+        {
+            return Default;
+        }
+
+        return new ScriptLayeringRule
+        {
+            OrganizerGroupName = layering.OrganizerGroup!,
+            PublicOrganizerPages = layering.PublicPages,
+            // 手册里剩下的页都是主持人专用页：它们不属于任何角色，规则按页判断即可。
+            HostOnlyOrganizerPages = [],
+            // 分界页的效果本来就不进包：和忽略页一起处理。
+            MarkerPages = [],
+            TruthPages = layering.TruthPages,
+            IgnoredPages = layering.IgnoredPages,
+        };
+    }
+
     /// <summary>判断某一页属于哪一层；角色本永远为 Private。</summary>
     public SegmentVisibility VisibilityFor(string groupName, int pageNumber)
     {

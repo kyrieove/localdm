@@ -232,6 +232,15 @@ public static class RealScriptPackageBuilder
             readiness = Blocked(readiness, issue);
         }
 
+        // 声明了组织者手册的目录名，而导入的分组里没有这个目录：必须挡住。
+        // 静默退回默认分层会把这一份剧本的真相页当成普通页，剧透就防不住了。
+        if (flow?.Layering is { } layering
+            && !string.IsNullOrWhiteSpace(layering.OrganizerGroup)
+            && !pages.Any(page => string.Equals(page.Group, layering.OrganizerGroup, StringComparison.Ordinal)))
+        {
+            readiness = Blocked(readiness, $"LAYERING_ORGANIZER_GROUP_MISSING:{layering.OrganizerGroup}");
+        }
+
         var package = new ScriptPackage
         {
             SchemaVersion = ScriptPackage.CurrentSchemaVersion,

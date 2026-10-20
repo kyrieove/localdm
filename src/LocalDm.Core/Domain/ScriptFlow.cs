@@ -12,6 +12,13 @@ public sealed record ScriptFlow
     public IReadOnlyList<ScriptFlowStep> Steps { get; init; } = [];
 
     /// <summary>
+    /// 组织者手册的分层声明：哪一页可以公开、哪一页是真相、哪一页完全不进剧本包。
+    /// 不写死目录名与页号，换一份剧本照样能用。
+    /// 为空时按 <c>ScriptLayeringRule.Default</c> 处理。
+    /// </summary>
+    public ScriptLayering? Layering { get; init; }
+
+    /// <summary>
     /// 流程声明自身的问题：空环节、重复/空步骤 ID、自相矛盾的声明。
     ///
     /// 这些问题必须让整包待复核：重复 ID 会让「推进」永远停在同一个环节（引擎按 ID 找下一环），
@@ -68,8 +75,7 @@ public sealed record ScriptFlow
 }
 
 /// <summary>环节在玩法上的类别，决定规则核心允许哪些动作，而不是靠中文标题判断。</summary>
-public enum ScriptStepKind
-{
+public enum ScriptStepKind{
     /// <summary>阅本：开局，读自己的角色内容。</summary>
     Read = 0,
 
@@ -138,4 +144,26 @@ public sealed record ScriptFlowStep
     public string? SourceRef { get; init; }
 
     public bool NeedsReview => string.IsNullOrWhiteSpace(SourceRef);
+}
+
+/// <summary>
+/// 组织者手册的分层声明。
+///
+/// 手册里的页分成三类：可以上公共屏幕的、只有揭秘后才能公开的真相页、
+/// 以及完全不进剧本包的页。手册里剩下的页都是主持人专用页（Private）——
+/// 它们不属于任何角色，所以照样进入 DM 的主持资料。
+/// </summary>
+public sealed record ScriptLayering
+{
+    /// <summary>组织者手册所在的导入目录名，例如「组织」。</summary>
+    public string? OrganizerGroup { get; init; }
+
+    /// <summary>可以上公共屏幕的页（开场信等）。</summary>
+    public IReadOnlyList<int> PublicPages { get; init; } = [];
+
+    /// <summary>真相页：揭秘后才上公共屏幕。</summary>
+    public IReadOnlyList<int> TruthPages { get; init; } = [];
+
+    /// <summary>完全不进剧本包的页（封底、「后面是真相」警告页等）。</summary>
+    public IReadOnlyList<int> IgnoredPages { get; init; } = [];
 }
