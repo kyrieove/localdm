@@ -979,6 +979,15 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             return true;
         }
 
+        // 人工验收发现模型会把还没读到的卡面细节写进备忘：备忘里只要有一句照着卡面原文写了
+        // 桌上没人念过的一段，就当作这次整理没成功，整份不采用，这一轮照常发送。
+        var unsupported = DmMemoCheck.UnsupportedTerms(memo, _conversation, package);
+        if (unsupported.Count > 0)
+        {
+            AppendEvent($"整理较早的对话失败：整理结果里有 {unsupported.Count} 处对话中没出现过的内容，这份备忘没有采用，这一轮照常发送。");
+            return true;
+        }
+
         _conversation.ApplyCompaction(memo, keepFromIndex);
         var kept = (_conversation.Turns.Count + 1) / 2;
         AppendEvent($"已整理较早的对话（第 {_conversation.CompactionCount} 次），保留了最近 {kept} 轮原话。");

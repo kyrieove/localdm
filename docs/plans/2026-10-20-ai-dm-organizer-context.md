@@ -284,6 +284,14 @@ public sealed class DmConversation
   - 纯文本，不超过 1500 字。只输出备忘本身。
   ```
 
+> **2026-10-20 实施后修订**：人工验收第 11 条发现上面这段措辞管不住模型，备忘里写进了尚未发放的卡面细节。
+> 现在（`HostNarration.BuildCompactionMessages`）另加两条要求：自己说过、但玩家还没读到的卡面细节不许写；
+> 每句里的名称、物件、数字都必须是对话里出现过的原文。并且在 `HostViewModel.CompactAsync` 里加了一道
+> 判据 `DmMemoCheck.UnsupportedTerms`（`src/LocalDm.Core/Hosting/DmMemoCheck.cs`）：
+> 备忘里有一句话照着线索卡原文写了六个字以上、而桌上没人念过这段，就整份不采用，
+> 聊天区明说「这份备忘没有采用，这一轮照常发送」。判据只看线索卡，不看组织者手册——
+> 主持人本来就该带出手册里的流程与规则。
+
 - 压缩成功：`conversation.ApplyCompaction(memo, keepFromIndex)`，聊天区追加一条事件
   "已整理较早的对话（第 N 次），保留了最近 K 轮原话。"，然后存档（3.3.6）。
 - 压缩失败（模型报错、超时、空内容）：**不修改** `DmConversation`；聊天区追加事件"整理较早的对话失败，这一轮照常发送。"。

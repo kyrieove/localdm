@@ -21,11 +21,15 @@ namespace LocalDm.Infrastructure.Probe;
 /// </summary>
 public static class DmAcceptanceProbe
 {
-    /// <summary>第 9 条用的窗口：临时调小，好让自动压缩在桌边对话里真的触发。</summary>
-    private const int SmallWindowTokens = 32_768;
+    /// <summary>
+    /// 第 9 条用的窗口：不另调小，就按用户设置里的真实值跑。
+    /// 2026-10-20 第一次验收把窗口调到 32768，压缩只压掉 1 轮，看不出备忘有没有起效；
+    /// 这回按真实值跑，触发一次压缩就会压下前面一大段。
+    /// </summary>
+    private static readonly int? SmallWindowTokens = null;
 
     /// <summary>第 9 条最多聊多少句，防止无限循环。</summary>
-    private const int MaxChatTurns = 80;
+    private const int MaxChatTurns = 40;
 
     public static async Task<int> RunAsync(string[] args)
     {
@@ -82,6 +86,7 @@ public static class DmAcceptanceProbe
             return phase switch
             {
                 "story" => await RunStoryPhaseAsync(package, settingsPath, dataRoot, workDb, writer, modelOverride),
+                "chat" => await RunChatPhaseAsync(package, settingsPath, dataRoot, writer, modelOverride),
                 _ => 2,
             };
         }
@@ -124,6 +129,7 @@ public static class DmAcceptanceProbe
 
         await AskAsync(host, writer, "1", "你好，你是什么模型？");
         await AskAsync(host, writer, "2", "我们刚开始，要先干什么？");
+        await AskAsync(host, writer, "2b", "接下来呢？");
         await AskAsync(host, writer, "3", "不要再重复规则了，直接说现在该做什么");
         await AskAsync(host, writer, "4", "我们去调查书房");
         await AskAsync(host, writer, "5", "地下室一号房能直接进吗？");
@@ -177,9 +183,29 @@ public static class DmAcceptanceProbe
 
         var triggeredAt = 0;
         var usageBefore = host.ContextUsageText;
+        var chatStartedAt = host.Messages.Count;
+
+        // 手动整理按钮要在第 9 条那段桌边对话之前问：那之后记忆里已经压成备忘，按钮随时可点。
+        var manualOpenBeforeChat = host.CompactCommand.CanExecute(null);
+
+        // 第 10 条的前置：先让玩家亲口说一句「别再重复规则了」，
+        // 压缩之后再问「我之前让你别做什么」，问的是这句话还在不在。
+        const string NoRepeatRequest = "别再重复规则了";
+        var repeatBefore = host.Messages.Count;
+        host.InputText = NoRepeatRequest;
+        await host.SendAsync();
+        await WaitIdleAsync(host);
+        writer.AddChat(
+            0,
+            NoRepeatRequest,
+            host.Messages.Skip(repeatBefore).FirstOrDefault(m => m.IsModelReply)?.Text ?? "（没有回复）",
+            host.ContextUsageText,
+            host.ContextUsageText,
+            null);
+
         for (var i = 0; i < MaxChatTurns; i++)
         {
-            var line = DeskLine(i);
+            var line = DeskLine(i, DeskLineReach());
             var before = host.Messages.Count;
             var usageAtStart = host.ContextUsageText;
             host.InputText = line;
@@ -207,20 +233,49 @@ public static class DmAcceptanceProbe
                 ? $"聊了 {MaxChatTurns} 句都没有触发自动压缩；当前占用 {host.ContextUsageText}。"
                 : $"第 {triggeredAt} 句之后出现「已整理较早的对话」；触发前 {usageBefore}，之后 {host.ContextUsageText}。");
 
-        // 第 10 条：压缩之后追问记忆。
+        writer.Note("9-按钮", $"第 9 条开始前手动整理按钮可执行={manualOpenBeforeChat}。");
+
+        // 第 10 条：压缩之后追问记忆。把第 9 条触发压缩到第 10 条之间的对话原样留在这里，
+        // 评审要核对「备忘起效」还是「原话还在」，得看得见这段时间里问过什么。
+        foreach (var message in host.Messages.Skip(chatStartedAt))
+        {
+            writer.AddChatLine(message.IsModelReply ? "主持" : message.IsEvent ? "事件" : "玩家", message.Text);
+        }
+
         await AskAsync(host, writer, "10a", "我们查过哪些地方了？");
         await AskAsync(host, writer, "10b", "我之前让你别做什么？");
 
-        // 第 11 条：手动压缩一次，再看备忘。
+        // 第 11 条：手动压缩一次，只看界面上的次数与备忘长度（备忘正文不上屏，也不进评审记录）。
+        // 按钮能不能点要在点之前问：RunTurnAsync 中途才放开忙碌状态，点完再问永远是 false。
+        var manualOpen = host.CompactCommand.CanExecute(null);
+        var compactionsBefore = host.Conversation.CompactionCount;
         host.CompactCommand.Execute(null);
         await WaitIdleAsync(host);
         await Task.Delay(500);
-        writer.Note("11", $"CompactCommand 可执行={host.CompactCommand.CanExecute(null)}；备忘：{host.Memo ?? "（空）"}");
+        writer.Note(
+            "11",
+            $"点击前 CompactCommand 可执行={manualOpen}；"
+            + $"整理次数 {compactionsBefore} → {host.Conversation.CompactionCount}；"
+            + $"界面显示「{host.CompactionCountText}」；"
+            + $"备忘长度={(host.Memo is null ? 0 : host.Memo.Length)} 字；"
+            + $"备忘里没依据的短句={UnsupportedMemoCount(host)} 条；"
+            + $"最近事件：{string.Join(" / ", host.Messages.Where(m => m.IsEvent).Select(m => m.Text).TakeLast(3))}");
 
         // 第 12 条：释放这个主持台，用同一份存档新建一个，装载同一个包并恢复。
         writer.Note("12", "用同一份存档新建主持台并恢复：");
         var resumed = await ResumeInNewHostAsync(package, settingsPath, dataRoot, freshDb, modelOverride, writer);
         return resumed;
+    }
+
+    /// <summary>检查备忘有没有写进没依据的内容：沿用软件里那道护栏，只回报条数，不打印备忘。</summary>
+    private static int UnsupportedMemoCount(HostViewModel host)
+    {
+        if (string.IsNullOrEmpty(host.Memo) || host.Session.Package is not { } package)
+        {
+            return 0;
+        }
+
+        return DmMemoCheck.UnsupportedTerms(host.Memo, host.Conversation, package).Count;
     }
 
     /// <summary>第 12 条：新建一个主持台，恢复同一局，检查屏幕没有重播，再接着问。</summary>
@@ -251,7 +306,9 @@ public static class DmAcceptanceProbe
     }
 
     /// <summary>第 9 条用的桌边对话：问规则、讨论线索、互相怀疑、去调查不同地方，一句都不一样。</summary>
-    private static string DeskLine(int index)
+    /// <param name="index">第几句。</param>
+    /// <param name="reach">这一句把同一件事说几遍，见 <see cref="DeskLineReach"/>。</param>
+    private static string DeskLine(int index, int reach)
     {
         string[] lines =
         [
@@ -292,8 +349,17 @@ public static class DmAcceptanceProbe
             "有没有人愿意主动说说自己那段时间在做什么？",
         ];
 
-        return lines[index % lines.Length];
+        return string.Join('，', Enumerable.Repeat(lines[index % lines.Length], reach)) + "。";
     }
+
+    /// <summary>
+    /// 这一句说几遍。
+    ///
+    /// 实测校准：真实窗口 65536、主持资料固定占 31%，一句 40 遍（约 1400 字）聊满 40 句只到 71%，
+    /// 到不了自动整理的门槛；改成 120 遍（约 4200 字，一段长发言的量）后第 18 句触发，
+    /// 占用从 79% 回落到 52%，第 10 条也才能证明备忘接住了被压掉的话。
+    /// </summary>
+    private static int DeskLineReach() => 120;
 
     /// <summary>推进到真相环节并确认揭秘，每一步都走阶段面板的同一条命令路径。</summary>
     private static async Task<string> AdvanceToRevealAsync(HostViewModel host)
@@ -555,12 +621,12 @@ public static class DmAcceptanceProbe
             _text.AppendLine();
         }
 
-        public void WriteChatHeader(string phaseTitle, string usage, int window)
+        public void WriteChatHeader(string phaseTitle, string usage, int? window)
         {
             _text.AppendLine();
             _text.AppendLine("## 第二局：未揭秘状态（第 9–12 条）");
             _text.AppendLine();
-            _text.AppendLine($"开局环节：{phaseTitle}；占用：{usage}；上下文长度：{window}");
+            _text.AppendLine($"开局环节：{phaseTitle}；占用：{usage}；上下文长度：{(window is { } value ? value.ToString() : "用户设置值")}");
             _text.AppendLine();
         }
 
@@ -600,6 +666,12 @@ public static class DmAcceptanceProbe
             _text.AppendLine();
         }
 
+        public void AddChatLine(string speaker, string text)
+        {
+            _text.AppendLine($"**{speaker}：** {text}");
+            _text.AppendLine();
+        }
+
         public void Note(string step, string note)
         {
             _text.AppendLine($"### 第 {step} 条的程序检查");
@@ -611,3 +683,11 @@ public static class DmAcceptanceProbe
         public void Flush() => File.WriteAllText(_path, _text.ToString(), new UTF8Encoding(false));
     }
 }
+
+
+
+
+
+
+
+
