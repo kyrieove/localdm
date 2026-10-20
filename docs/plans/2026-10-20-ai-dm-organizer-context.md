@@ -24,7 +24,7 @@
 | 组织者手册（含真相、主持人专用页） | 给 | 开局就全部给，和真人 DM 一样提前读完 |
 | 线索卡（正面和卡背都给） | 给 | 开局就给 |
 | 角色本 | **不给** | 任何时候都不给，揭秘后也不给 |
-| 本局对话历史 | 给 | 每轮带上，有长度上限 |
+| 本局对话历史 | 给 | 每轮带上；快满时自动整理成备忘，操作者也可手动压缩 |
 
 ### 1.3 AI 的行为准则
 
@@ -50,7 +50,7 @@
 | G1 | `BuildInternalContext` 输出 `package.Segments` 里的**所有**段，包括角色本 | 违反"角色本不给" | 第 3.1 节 |
 | G2 | 同一函数的「未被规范文段完整覆盖的来源原文」会补出任何未覆盖的 span | 可能从这里漏出角色本原文 | 第 3.1 节 |
 | G3 | `【当前局面】`、"（当前）"标记和 model ID 都写在 system 消息里 | 每换一个环节，system 内容就变，模型端前缀缓存失效；每轮约 2 万字要重新计费 | 第 3.2 节 |
-| G4 | `HostViewModel.ConversationHistory()` 把整局历史全部带上 | 4–5 小时一局会超出上下文长度 | 第 3.3 节 |
+| G4 | `HostViewModel.ConversationHistory()` 把整局历史全部带上，不计量、不压缩、不存档 | 4–5 小时一局会超出上下文窗口；重启后 AI 忘掉整局 | 第 3.3 节 |
 | G5 | `HostIntentRouter` 用 `Contains` 匹配"下一步""推进"等词 | 问"下一步我该做什么？"会被拦成"推进环节"提案，模型收不到这个问题 | 第 3.4 节 |
 | G6 | `ScriptLayeringRule.Default` 写死了"组织"目录和第 1–12 页的分层 | 只对《孽岛疑云》成立，不通用 | 第 3.5 节 |
 | G7 | 系统提示词没有"翻卡不念卡""全桌都听得到""回忆由玩家自己留意"等约定 | 行为和现场形态不符 | 第 3.2 节 |
@@ -176,27 +176,181 @@ public static bool IsRoleBookSegment(ScriptPackage package, CanonicalSegment seg
 
 `IntentLine` 的现有措辞可以保留。`ReleaseMaterials` 那条改成"告诉大家现在可以翻开哪些卡，卡面内容由玩家自己读。"
 
-### 3.3 对话历史裁剪（G4）
+### 3.3 DM 上下文管理：按窗口计量，自动与手动压缩（G4）
 
-**文件**：`src/LocalDm.Core/Hosting/HostNarration.cs`（纯函数，便于测试）
+目标：像 agent 一样管理上下文。**不设固定字数上限**；按模型的上下文窗口计量占用，
+快满时把较早的对话整理成"本局备忘"，保留最近几轮原话，主持不中断；操作者也可以随时手动压缩。
+屏幕上的聊天记录**不受压缩影响**，压缩只改变发给模型的内容。
+
+#### 3.3.1 读取真实 token 用量
+
+**文件**：`src/LocalDm.Core/Ports/ExternalPorts.cs`、`src/LocalDm.Infrastructure/Magpie/MagpieGateway.cs`、
+`src/LocalDm.Core/Hosting/HostDirector.cs`
+
+- 新增：
+
+  ```csharp
+  public sealed record MagpieUsage(int PromptTokens, int CompletionTokens, int? CacheHitTokens);
+  public sealed record MagpieCompletion(string Content, MagpieUsage? Usage);
+  ```
+
+- `IMagpieGateway` 新增方法，用默认接口实现兜底，**现有的测试替身不用改**：
+
+  ```csharp
+  async Task<MagpieCompletion> CompleteWithUsageAsync(MagpieCompletionRequest request, CancellationToken ct)
+      => new(await CompleteAsync(request, ct), null);
+  ```
+
+- `MagpieGateway` 实现 `CompleteWithUsageAsync`：在 `CompletionResponse` 里解析 OpenAI 兼容的
+  `usage.prompt_tokens`、`usage.completion_tokens`，以及 DeepSeek 的可选字段 `usage.prompt_cache_hit_tokens`。
+  没有 `usage` 时 `Usage = null`，不报错。`CompleteAsync` 改为调用它再取 `Content`，保持原有行为。
+- `HostDirector.GenerateOnlyAsync` 改为调用 `CompleteWithUsageAsync`，返回值不变，
+  新增只读属性 `LastUsage`（`MagpieUsage?`），在成功返回文字时更新，失败或取消时不改。
+
+#### 3.3.2 上下文窗口设置
+
+**文件**：`src/LocalDm.Core/Domain/ToolSettings.cs`、`src/LocalDm.Infrastructure/Storage/SettingsStore.cs`、
+`src/LocalDm.App/ViewModels/SetupViewModel.cs`、`src/LocalDm.App/Views/SetupView.xaml`
+
+- `ToolSettings` 新增 `int ContextWindowTokens`，默认 `65_536`；`Validate()` 要求在 `8_192`–`2_000_000` 之间。
+- 设置页在 model ID 下方加一个数字输入框"模型上下文长度（tokens）"，旁边一行灰字说明：
+  "按所用模型的官方上下文长度填写；不确定就保留默认值。"
+- `SettingsStore` 按现有字段的写法读写这个值；旧设置文件没有这个字段时用默认值。
+
+#### 3.3.3 本局对话记忆 `DmConversation`
+
+**新文件**：`src/LocalDm.Core/Hosting/DmConversation.cs`（纯逻辑，不依赖 UI，便于测试）
 
 ```csharp
-public const int MaxHistoryCharacters = 24_000;
+/// <summary>
+/// 一局的 DM 对话记忆：较早对话整理成的备忘 + 之后的原话轮次 + 最近一次真实 token 用量。
+/// 屏幕上的聊天记录不归这里管；这里只决定发给模型什么。
+/// </summary>
+public sealed class DmConversation
+{
+    public string? Memo { get; }                         // 本局备忘，没压缩过为 null
+    public IReadOnlyList<MagpieMessage> Turns { get; }   // 备忘之后的原话，只有 user / assistant
+    public MagpieUsage? LastUsage { get; }
+    public int CompactionCount { get; }
 
-/// <summary>从最新往回保留，总字数不超过上限；只保留 user/assistant，保持原顺序。</summary>
-public static IReadOnlyList<MagpieMessage> TrimHistory(
-    IReadOnlyList<MagpieMessage> history, int maxCharacters = MaxHistoryCharacters)
+    public void AppendUser(string text);
+    public void AppendAssistant(string text, MagpieUsage? usage);
+    public void ApplyCompaction(string memo, int keepFromIndex);   // 用新备忘替换 Turns[0..keepFromIndex)
+    public DmConversationSnapshot ToSnapshot();                    // 存档用
+    public static DmConversation FromSnapshot(DmConversationSnapshot? snapshot);
+}
 ```
 
-规则：
+**估算规则**（`ContextBudget` 静态类，同一文件或单独文件均可）：
 
-- 过滤掉 role 不是 `user` / `assistant` 的消息（现有逻辑搬过来）。
-- 从最后一条往前累加 `Content.Length`，超过上限就停，丢掉更早的。
-- 保持原顺序；如果最早保留的一条是 `assistant`，也丢掉它，让历史从 `user` 开始。
-- `BuildConversation` 内部调用 `TrimHistory`，调用方不需要改。
-- 字数估算：主持资料约 2 万字，加 2.4 万字历史和当轮内容，总量在 DeepSeek 64K token 上下文以内，还有余量。
+- `EstimateTokens(string text)`：中日韩字符每个按 0.75，其余字符每个按 0.3，向上取整。只在没有真实用量时使用。
+- `EstimateNextPromptTokens(DmConversation c, string systemPrompt, string nextUserMessage)`：
+  - 有 `LastUsage` 时：`LastUsage.PromptTokens + LastUsage.CompletionTokens + EstimateTokens(nextUserMessage)`。
+  - 没有时：`EstimateTokens(system + 备忘 + 所有 Turns + nextUserMessage)`。
+  - 压缩之后 `LastUsage` 清空，下一轮重新估算，直到拿到新的真实用量。
+- `ReplyReserveTokens = 4_096`：给模型回复预留的空间。
+- `UsableTokens = ContextWindowTokens − ReplyReserveTokens`。
+- `UsageRatio = EstimateNextPromptTokens / UsableTokens`，用于界面显示。
 
-不做的事：不做摘要，不落盘。历史只在内存里，和现在一样；重启后从空历史开始，靠`【当前局面】`接上。
+**何时自动压缩**：发送每一轮之前，若 `UsageRatio ≥ 0.80`，先压缩，再发这一轮。
+
+**保留多少原话**：从最新往前保留，直到这些原话的估算 token 达到 `UsableTokens × 0.15`；
+但至少保留最近 2 轮（2 条 user + 对应的 assistant）。保留部分的第一条必须是 `user`。
+更早的部分全部交给压缩。
+
+> 为什么一次压掉一大块而不是每轮丢一条：压缩后几十轮内历史的开头都不变，
+> 模型端的前缀缓存可以持续命中；每轮丢一条会让历史部分每轮都缓存失效。
+
+#### 3.3.4 压缩怎么做
+
+**文件**：`src/LocalDm.Core/Hosting/HostNarration.cs` 新增 `BuildCompactionMessages(package, conversation, keepFromIndex)`
+
+- `messages[0]` 用和正常主持**完全相同**的 system 内容（3.2），这样压缩请求本身也能命中缓存。
+- 第二条是 user 消息：
+
+  ```
+  【整理本局记忆】
+  下面是这局较早的对话{如有旧备忘：，以及之前整理过的备忘}。请把它们整理成一份新的本局备忘，供你之后继续主持时参考。
+
+  {如有旧备忘：【之前的备忘】…}
+  【要整理的对话】
+  玩家：…
+  DM：…
+  …
+
+  要求：
+  - 只记录桌上公开发生过的事和大家公开说过的话，不写真相，不写你的推断，不写角色本里的内容。
+  - 按这几项整理，没有的项省略：已经进行到哪个环节；调查过哪些地方、翻过哪些卡；大家公开说出的发现和拿到的东西；每位玩家公开表达过的怀疑、指认和理由；玩家对主持方式提过的要求（例如"不要重复规则"）；还没解决的问题和你答应过的事。
+  - 纯文本，不超过 1500 字。只输出备忘本身。
+  ```
+
+- 压缩成功：`conversation.ApplyCompaction(memo, keepFromIndex)`，聊天区追加一条事件
+  "已整理较早的对话（第 N 次），保留了最近 K 轮原话。"，然后存档（3.3.6）。
+- 压缩失败（模型报错、超时、空内容）：**不修改** `DmConversation`；聊天区追加事件"整理较早的对话失败，这一轮照常发送。"。
+  - 如果不压缩就发不出去（`UsageRatio ≥ 1.0`），退而求其次：从最早开始丢弃原话轮次，直到 `UsageRatio < 0.9`，
+    事件改为"整理失败，已丢弃最早的 M 轮对话以继续主持。"。这是唯一会丢内容的路径，必须在界面上说出来。
+- 操作者按"停止"：取消压缩请求，`DmConversation` 不变。
+
+**备忘放在哪里**：放进每轮最后一条 user 消息，位于`【当前局面】`之前：
+
+```
+【本局备忘（较早的对话已整理）】
+{Memo}
+
+【当前局面】…
+```
+
+不放进 system（会破坏 system 的缓存），也不伪造成一条 assistant 消息。
+
+#### 3.3.5 手动压缩与占用显示
+
+**文件**：`src/LocalDm.App/ViewModels/HostViewModel.cs`、`src/LocalDm.App/Views/HostView.xaml`、`src/LocalDm.Core/Hosting/HostIntentRouter.cs`
+
+- 主持台状态区显示上下文占用：`上下文 42% · 约 27k / 64k`。每轮结束和每次压缩后更新。
+  `UsageRatio ≥ 0.80` 时文字变成提醒色（用 `Themes/Shared.xaml` 里已有的颜色资源，不新加颜色）。
+- 新增按钮"压缩上下文"，`HostViewModel.CompactCommand`：
+  - 忙碌时（生成或朗读中）不可用；`Turns` 少于 3 轮时不可用。
+  - 手动压缩时保留最近 2 轮原话，其余全部整理（不按 15% 计算）。
+- 操作者在输入框里**整句**输入 `/compact` 或 `压缩上下文` 时，等同于点按钮：
+  `HostIntentRouter` 新增 `HostIntentKind.Compact`，规则和 3.4 的整句匹配一致。这条输入不进入对话记忆。
+- 新增"查看本局备忘"展开区，只读显示当前 `Memo`；没压缩过时隐藏。
+  备忘只含桌上公开发生过的事（3.3.4 的要求），可以出现在公共屏幕上。
+
+#### 3.3.6 存档：对话记忆跟着这一局走
+
+**文件**：`src/LocalDm.Core/Ports/ExternalPorts.cs`（`ISessionStore`）、`src/LocalDm.Infrastructure/Storage/SqliteSchemaSql.cs`、
+`src/LocalDm.Infrastructure/Storage/SessionStore.cs`、`HostViewModel.cs` 里的 `UnwiredSessionStore`，以及测试里所有 `ISessionStore` 的替身
+
+- 新表，按 `SqliteSchemaSql` 现有的 `CREATE TABLE IF NOT EXISTS` 写法追加：
+
+  ```sql
+  CREATE TABLE IF NOT EXISTS dm_conversations (
+      session_id TEXT PRIMARY KEY,
+      snapshot_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+  );
+  ```
+
+  如果现有代码有 schema 版本号，按现有方式加一版；没有就不加。
+- `ISessionStore` 新增：
+  `Task SaveDmConversationAsync(string sessionId, DmConversationSnapshot snapshot, CancellationToken ct)`、
+  `Task<DmConversationSnapshot?> LoadDmConversationAsync(string sessionId, CancellationToken ct)`。
+- 保存时机：每轮模型回复上屏后、每次压缩成功后。保存失败只在状态栏提示，不影响主持。
+- 读取时机：`LoadPackageAsync`、`LoadDemoAsync`、`ResumeAsync` 装载一局时。
+  读到的记忆只影响发给模型的内容，**不回放到屏幕上**，也不朗读（宪章原则 III：恢复不自动重播）。
+- 这张表存的是桌上公开说过的话和备忘，不含角色本或真相原文。
+
+#### 3.3.7 发给模型前的整理
+
+`BuildConversation` 组装消息时：
+
+- 历史改为来自 `DmConversation.Turns`，不再从屏幕上的 `ChatMessage` 列表现拼（删掉 `HostViewModel.ConversationHistory()`）。
+- **合并相邻的同角色消息**：例如某次请求失败，玩家的话留在记忆里但没有回复，下一轮就会出现两条 user 挨着；
+  合并成一条，用空行分隔。部分模型服务遇到连续同角色消息会直接报错。
+- 当前这一轮玩家的话，在请求**成功之后**才 `AppendUser` + `AppendAssistant` 写进记忆；
+  请求失败时这句话不进记忆，屏幕上照常保留，玩家可以重发。
+- 主持意图（开场、宣布环节等按钮）产生的回复，以 `user = "【主持台操作】{IntentLine}"`、`assistant = 回复` 的形式写进记忆，
+  让模型知道自己说过什么。
 
 ### 3.4 输入分流放宽（G5）
 
@@ -281,11 +435,33 @@ UI 测试（`tests/LocalDm.UiTests`）需要在 Windows 上跑，也要跑一遍
 | 同一局在 `phase-read` 和 `phase-vote` 各建一次消息 | 两次的 `messages[0].Content` 逐字相同 |
 | model ID 分别为 `"deepseek-chat"` 和 `null` | system 不含 model ID；最后一条 user 消息含 `deepseek-chat` 或"未配置" |
 | 未揭秘 / 已揭秘 | 最后一条 user 消息分别含"未揭秘"/"已揭秘" |
-| `TrimHistory`：30 条每条 1000 字 | 保留最新的若干条，总字数不超过 24000，顺序不变，第一条是 user |
-| `TrimHistory`：混入 system 角色 | 被过滤 |
 | 线索卡段标签 | 含 `类别=线索卡` 和分组名 `M1` |
 
-### 4.3 输入分流测试
+### 4.3 上下文管理测试
+
+新建 `DmConversationTests.cs`，用可控的假 gateway：
+
+| 用例 | 断言 |
+|---|---|
+| `EstimateTokens`：100 个汉字、100 个英文字母 | 分别为 75、30 |
+| 有 `LastUsage` 时 | `EstimateNextPromptTokens` 用真实用量计算 |
+| 窗口 10000，占用到 79% / 80% | 79% 不压缩，80% 先压缩再发送 |
+| 自动压缩 | 保留部分不少于最近 2 轮，第一条是 user；更早的轮次被备忘取代；`CompactionCount` 加 1 |
+| 第二次压缩 | 压缩请求里含旧备忘；新备忘替换旧备忘 |
+| 压缩请求 | `messages[0]` 与正常主持的 system 逐字相同 |
+| 压缩失败，占用 85% | `DmConversation` 不变，这一轮照常发送，聊天区有失败事件 |
+| 压缩失败，占用 105% | 丢弃最早轮次直到 < 90%，聊天区事件说明丢了几轮 |
+| 手动压缩 | 只保留最近 2 轮；少于 3 轮时命令不可用 |
+| 请求失败 | 这一轮玩家的话不进 `Turns` |
+| 两条 user 相邻 | 发出的消息里合并成一条 |
+| 备忘位置 | 在最后一条 user 消息里、`【当前局面】`之前；system 不含备忘 |
+| 快照往返 | `FromSnapshot(ToSnapshot())` 后 `Memo`、`Turns`、`CompactionCount` 相同 |
+
+`MagpieGatewayTests.cs`：响应带 `usage`（含 `prompt_cache_hit_tokens`）时正确解析；不带 `usage` 时 `Usage == null` 且不报错。
+
+`SessionStoreTests.cs`：`dm_conversations` 存取往返；同一 `session_id` 第二次保存覆盖第一次；没有记录时返回 `null`。
+
+### 4.4 输入分流测试
 
 `HostUncertaintyTests.cs` 或新建 `HostIntentRouterTests.cs`：
 
@@ -297,8 +473,10 @@ UI 测试（`tests/LocalDm.UiTests`）需要在 Windows 上跑，也要跑一遍
 | `我们什么时候推进到投票？` | `PublicQuestion` |
 | `揭秘之前还要做什么` | `PublicQuestion` |
 | `谁是凶手？` | `PublicQuestion` |
+| `/compact`、`压缩上下文` | `Compact` |
+| `帮我压缩上下文吧` | `PublicQuestion` |
 
-### 4.4 分层规则测试
+### 4.5 分层规则测试
 
 - `ScriptLayeringRule.FromFlow(null)` 等于 `Default`。
 - 声明了 `layering` 的流程，按声明的页号分层。
@@ -319,7 +497,11 @@ UI 测试（`tests/LocalDm.UiTests`）需要在 Windows 上跑，也要跑一遍
 6. "谁是凶手？""阿杰和阿海是不是同一个人？" → 婉拒或引导，不暗示答案。
 7. "下一步我该做什么？" → 收到 AI 的回答，没有弹出推进提案。
 8. 点按钮揭秘后："讲一下真相" → 完整讲出真相，并能回答追问。
-9. 连续聊 40 轮以上 → 不报上下文超长的错误。
+9. 把设置里的上下文长度临时改成 `32768`，连续聊到自动压缩触发 → 聊天区出现"已整理较早的对话"，占用百分比回落。
+10. 压缩之后问"我们查过哪些地方了？""我之前让你别做什么？" → 能答对压缩前的内容（检验备忘有效）。
+11. 点"压缩上下文"按钮，再展开"查看本局备忘" → 备忘只有桌上公开发生过的事，没有真相。
+12. 关掉软件，重新打开并继续这一局 → 屏幕不重播旧对话；问"我们刚才聊到哪了？"能接上。
+13. 验收结束后把上下文长度改回模型的真实值。
 
 第 6 项不合格就调整 3.2.2 的第 5 条措辞再试，不要用关键词过滤模型输出（`HostViewModel` 里已有的产品决定：不审查模型输出）。
 
@@ -330,9 +512,8 @@ UI 测试（`tests/LocalDm.UiTests`）需要在 Windows 上跑，也要跑一遍
 - 不做调查次数、钥匙、计时等剧本专属状态（1.4）。
 - 不做关键词检测和回忆触发提醒（1.1）。
 - 不做私聊（1.1）。
-- 不做对话摘要，历史不落盘（3.3）。
 - 不改 `HostDirector.SpeakPublicAsync` 里的硬编码提示词：它只被测试调用，不在主持链路上。
-- 不改 TTS、界面布局、存档结构。
+- 不改 TTS；界面只加 3.3.5 列出的占用显示、压缩按钮和备忘展开区；存档只加 `dm_conversations` 一张表。
 
 ---
 
@@ -343,7 +524,11 @@ UI 测试（`tests/LocalDm.UiTests`）需要在 Windows 上跑，也要跑一遍
 1. 测试夹具（4.1），确认原有测试仍通过。
 2. 资料筛选（3.1）及对应测试。
 3. 提示词与消息结构（3.2）及对应测试。
-4. 历史裁剪（3.3）及对应测试。
+4. 上下文管理，分四次提交：
+   1. token 用量（3.3.1）+ 网关测试；
+   2. 上下文窗口设置（3.3.2）；
+   3. `DmConversation`、估算、压缩、消息整理（3.3.3、3.3.4、3.3.7）+ `DmConversationTests`；
+   4. 存档（3.3.6）、主持台显示与手动压缩（3.3.5）+ 存档测试。
 5. 输入分流（3.4）及对应测试。
 6. 分层规则通用化（3.5）及对应测试。
 7. 文档（3.6）。
