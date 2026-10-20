@@ -81,28 +81,101 @@ public static class HostNarration
         ScriptPackage package,
         Session session,
         HostNarrationIntent intent,
-        IReadOnlyList<MagpieMessage>? history = null,
+        DmConversation? conversation = null,
         string? modelId = null)
     {
         var phase = package.Phases.FirstOrDefault(p => p.PhaseId == session.CurrentPhaseId);
         var task = $"【本轮任务】{IntentLine(intent, phase?.Title ?? "开场")}";
 
-        return BuildConversation(package, session, task, history, modelId);
+        return BuildConversation(package, session, task, conversation, modelId);
     }
 
     /// <summary>
-    /// 玩家与 DM 的一轮对话。历史只接受 user/assistant 角色，不能注入额外 system 指令。
+    /// 玩家与 DM 的一轮对话。历史只来自本局记忆（user/assistant），不能注入额外 system 指令。
     /// </summary>
     public static IReadOnlyList<MagpieMessage> BuildAskMessages(
         ScriptPackage package,
         Session session,
         string userText,
-        IReadOnlyList<MagpieMessage>? history = null,
+        DmConversation? conversation = null,
         string? modelId = null)
     {
         var task = $"【玩家刚才说】\n{userText}";
 
-        return BuildConversation(package, session, task, history, modelId);
+        return BuildConversation(package, session, task, conversation, modelId);
+    }
+
+    /// <summary>
+    /// 本轮最后一条 user 消息：备忘 + 当前局面 + 本轮任务。
+    ///
+    /// 公开出来是为了让调用方先按它估算上下文占用，再决定要不要先整理。
+    /// </summary>
+    public static string BuildIntentUserMessage(
+        ScriptPackage package,
+        Session session,
+        HostNarrationIntent intent,
+        string? memo,
+        string? modelId = null)
+    {
+        var phase = package.Phases.FirstOrDefault(p => p.PhaseId == session.CurrentPhaseId);
+        var task = $"【本轮任务】{IntentLine(intent, phase?.Title ?? "开场")}";
+        return BuildFinalUserMessage(package, session, task, memo, modelId);
+    }
+
+    /// <summary>本轮最后一条 user 消息（玩家提问）：备忘 + 当前局面 + 玩家原话。</summary>
+    public static string BuildAskUserMessage(
+        ScriptPackage package,
+        Session session,
+        string userText,
+        string? memo,
+        string? modelId = null)
+    {
+        var task = $"【玩家刚才说】\n{userText}";
+        return BuildFinalUserMessage(package, session, task, memo, modelId);
+    }
+
+    /// <summary>
+    /// 整理较早对话的请求。
+    ///
+    /// system 与正常主持完全相同：压缩请求本身也要能命中前缀缓存。
+    /// 第二条 user 消息说明要整理什么、只准记什么。
+    /// </summary>
+    public static IReadOnlyList<MagpieMessage> BuildCompactionMessages(
+        ScriptPackage package,
+        DmConversation conversation,
+        int keepFromIndex)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("【整理本局记忆】");
+        builder.AppendLine(conversation.Memo is null
+            ? "下面是这局较早的对话。请把它们整理成一份新的本局备忘，供你之后继续主持时参考。"
+            : "下面是这局较早的对话，以及之前整理过的备忘。请把它们整理成一份新的本局备忘，供你之后继续主持时参考。");
+        builder.AppendLine();
+
+        if (!string.IsNullOrWhiteSpace(conversation.Memo))
+        {
+            builder.AppendLine("【之前的备忘】");
+            builder.AppendLine(conversation.Memo);
+            builder.AppendLine();
+        }
+
+        builder.AppendLine("【要整理的对话】");
+        foreach (var turn in conversation.Turns.Take(Math.Clamp(keepFromIndex, 0, conversation.Turns.Count)))
+        {
+            builder.AppendLine(turn.Role == "user" ? $"玩家：{turn.Content}" : $"DM：{turn.Content}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("要求：");
+        builder.AppendLine("- 只记录桌上公开发生过的事和大家公开说过的话，不写真相，不写你的推断，不写角色本里的内容。");
+        builder.AppendLine("- 按这几项整理，没有的项省略：已经进行到哪个环节；调查过哪些地方、翻过哪些卡；大家公开说出的发现和拿到的东西；每位玩家公开表达过的怀疑、指认和理由；玩家对主持方式提过的要求（例如\"不要重复规则\"）；还没解决的问题和你答应过的事。");
+        builder.AppendLine("- 纯文本，不超过 1500 字。只输出备忘本身。");
+
+        return
+        [
+            new MagpieMessage { Role = "system", Content = BuildSystemPrompt(package) },
+            new MagpieMessage { Role = "user", Content = builder.ToString() },
+        ];
     }
 
     /// <summary>
@@ -196,7 +269,7 @@ public static class HostNarration
         ScriptPackage package,
         Session session,
         string task,
-        IReadOnlyList<MagpieMessage>? history,
+        DmConversation? conversation,
         string? modelId)
     {
         var messages = new List<MagpieMessage>
@@ -204,9 +277,11 @@ public static class HostNarration
             new() { Role = "system", Content = BuildSystemPrompt(package) },
         };
 
-        if (history is not null)
+        // 历史来自本局记忆，不再从屏幕上的聊天记录现拼：
+        // 记忆里只有 user/assistant，伪造的 system 指令进不来。
+        if (conversation is not null)
         {
-            foreach (var message in history)
+            foreach (var message in conversation.Turns)
             {
                 if (message.Role is "user" or "assistant")
                 {
@@ -218,9 +293,62 @@ public static class HostNarration
         messages.Add(new MagpieMessage
         {
             Role = "user",
-            Content = $"{BuildCurrentSituation(package, session, modelId)}\n\n{task}",
+            Content = BuildFinalUserMessage(package, session, task, conversation?.Memo, modelId),
         });
-        return messages;
+
+        return MergeAdjacent(messages);
+    }
+
+    /// <summary>
+    /// 合并相邻的同角色消息。
+    ///
+    /// 某次请求失败时玩家的话会留在记忆里而没有回复，下一轮就出现两条 user 挨着；
+    /// 部分模型服务遇到连续同角色消息会直接报错。合并时用空行分隔。
+    /// </summary>
+    private static IReadOnlyList<MagpieMessage> MergeAdjacent(IReadOnlyList<MagpieMessage> messages)
+    {
+        var merged = new List<MagpieMessage>(messages.Count);
+        foreach (var message in messages)
+        {
+            if (merged.Count > 0 && merged[^1].Role == message.Role)
+            {
+                merged[^1] = new MagpieMessage
+                {
+                    Role = merged[^1].Role,
+                    Content = merged[^1].Content + "\n\n" + message.Content,
+                };
+                continue;
+            }
+
+            merged.Add(new MagpieMessage { Role = message.Role, Content = message.Content });
+        }
+
+        return merged;
+    }
+
+    /// <summary>
+    /// 最后一条 user 消息：备忘 + 当前局面 + 本轮任务。
+    /// 备忘放在这里而不是 system：放进 system 会破坏前缀缓存。
+    /// </summary>
+    private static string BuildFinalUserMessage(
+        ScriptPackage package,
+        Session session,
+        string task,
+        string? memo,
+        string? modelId)
+    {
+        var builder = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(memo))
+        {
+            builder.AppendLine("【本局备忘（较早的对话已整理）】");
+            builder.AppendLine(memo);
+            builder.AppendLine();
+        }
+
+        builder.Append(BuildCurrentSituation(package, session, modelId));
+        builder.AppendLine();
+        builder.Append(task);
+        return builder.ToString();
     }
 
     /// <summary>

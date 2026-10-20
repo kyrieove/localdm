@@ -207,3 +207,22 @@ public sealed record StoredSessionRef(
     SessionState State,
     string? CurrentPhaseId,
     int Revision);
+
+/// <summary>
+/// 一局 DM 对话记忆的快照：桌上公开说过的话、备忘与整理次数。
+/// 不含角色本，也不含真相原文。
+/// </summary>
+public sealed record DmConversationSnapshot
+{
+    /// <summary>本局备忘；没整理过为 null。</summary>
+    public string? Memo { get; init; }
+
+    /// <summary>备忘之后的原话轮次，只有 user / assistant。</summary>
+    public IReadOnlyList<MagpieMessage> Turns { get; init; } = [];
+
+    /// <summary>已经整理过几次。</summary>
+    public int CompactionCount { get; init; }
+
+    /// <summary>最近一次真实 token 用量；没有就按估算。</summary>
+    public MagpieUsage? LastUsage { get; init; }
+}

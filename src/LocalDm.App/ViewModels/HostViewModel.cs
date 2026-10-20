@@ -19,6 +19,12 @@ public sealed class HostViewModel : ObservableObject, IDisposable
 {
     private readonly HostDirector _director;
     private readonly Func<ToolSettings> _settingsProvider;
+    /// <summary>
+    /// 本局的 DM 对话记忆：发给模型的历史、备忘与真实 token 用量。
+    /// 屏幕上的聊天记录不受它影响：这里只决定发给模型什么。
+    /// </summary>
+    private DmConversation _conversation = new();
+
     private string? _conversationSessionId;
     private readonly CommandDispatcher? _dispatcher;
     private readonly ISessionStore? _store;
@@ -150,6 +156,12 @@ public sealed class HostViewModel : ObservableObject, IDisposable
     public HostActivity Activity { get; } = new();
 
     public SessionViewModel Session => _session;
+
+    /// <summary>
+    /// 本局的 DM 对话记忆：备忘、发给模型的历史与最近一次真实 token 用量。
+    /// 只读：屏幕上的聊天记录不受它影响，这里只决定发给模型什么。
+    /// </summary>
+    public DmConversation Conversation => _conversation;
 
     public string? SelectedVoiceId
     {
@@ -504,6 +516,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
                 StopCommand.Execute(null);
             }
             Messages.Clear();
+            _conversation = new DmConversation();
             _conversationSessionId = session.SessionId;
         }
 
@@ -646,10 +659,14 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             return;
         }
 
-        // 当前问题已上屏，但在请求中只加入一次；此前真实对话继续作为历史。
-        var history = ConversationHistory().SkipLast(1).ToArray();
-        var messages = HostNarration.BuildAskMessages(package, session, text, history, settings.ModelId);
-        await RunTurnAsync(messages, "正在请本机模型回答…", AskPipeline);
+        // 当前问题已上屏，但请求里只加入一次；更早的真实对话由本局记忆提供。
+        var messages = await PrepareTurnAsync(package, session, text, null);
+        if (messages is null)
+        {
+            return;
+        }
+
+        await RunTurnAsync(messages, "正在请本机模型回答…", AskPipeline, text);
     }
 
     /// <summary>快捷意图：替玩家把这句话打进输入框再发出去，走的还是同一条链路。</summary>
@@ -730,8 +747,18 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var messages = HostNarration.BuildMessages(package, session, intent, ConversationHistory(), settings.ModelId);
-        await RunTurnAsync(messages, "正在请本机模型写主持词…", SpeakPipeline);
+        var messages = await PrepareTurnAsync(package, session, null, intent);
+        if (messages is null)
+        {
+            return;
+        }
+
+        var phase = package.Phases.FirstOrDefault(p => p.PhaseId == session.CurrentPhaseId);
+        await RunTurnAsync(
+            messages,
+            "正在请本机模型写主持词…",
+            SpeakPipeline,
+            $"【主持台操作】{HostNarration.IntentLine(intent, phase?.Title ?? "开场")}");
     }
 
     /// <summary>提问这条流水线的两步：先问模型，再朗读。</summary>
@@ -741,13 +768,121 @@ public sealed class HostViewModel : ObservableObject, IDisposable
     private static readonly string[] SpeakPipeline = ["请模型写词", "朗读"];
 
     /// <summary>
+    /// 发这一轮之前先按窗口计量上下文：快满了就把较早的对话整理成备忘，再发这一轮。
+    /// 返回 null 表示这一轮被取消（操作者按了停止）。
+    /// </summary>
+    private async Task<IReadOnlyList<MagpieMessage>?> PrepareTurnAsync(
+        ScriptPackage package,
+        Session session,
+        string? userText,
+        HostNarrationIntent? intent)
+    {
+        var settings = _settingsProvider();
+        var window = settings.ContextWindowTokens;
+        var system = HostNarration.BuildSystemPrompt(package);
+
+        string NextUserMessage() => intent is { } asked
+            ? HostNarration.BuildIntentUserMessage(package, session, asked, _conversation.Memo, settings.ModelId)
+            : HostNarration.BuildAskUserMessage(package, session, userText!, _conversation.Memo, settings.ModelId);
+
+        if (ContextBudget.UsageRatio(_conversation, system, NextUserMessage(), window) >= ContextBudget.AutoCompactRatio)
+        {
+            if (!await CompactAsync(package, system, NextUserMessage(), window, manual: false))
+            {
+                return null;
+            }
+        }
+
+        return intent is { } asked
+            ? HostNarration.BuildMessages(package, session, asked, _conversation, settings.ModelId)
+            : HostNarration.BuildAskMessages(package, session, userText!, _conversation, settings.ModelId);
+    }
+
+    /// <summary>
+    /// 把较早的对话整理成一份本局备忘。返回 false 表示这一轮被取消。
+    ///
+    /// 整理失败时不动记忆：这一轮照常发。真的发不出去（占用超过 100%）时，
+    /// 才退而求其次丢掉最早的轮次，并把丢了几轮说给主持人听。
+    /// </summary>
+    private async Task<bool> CompactAsync(
+        ScriptPackage package,
+        string system,
+        string nextUserMessage,
+        int contextWindowTokens,
+        bool manual)
+    {
+        var settings = _settingsProvider();
+        var keepFromIndex = manual
+            ? ContextBudget.ManualKeepFromIndex(_conversation)
+            : ContextBudget.KeepFromIndex(_conversation, contextWindowTokens);
+
+        IsGenerating = true;
+        Activity.Begin(ActivityKind.Thinking, "正在整理较早的对话…", ["整理记忆"], PhaseDetail());
+        var (memo, reason, late) = await _director.GenerateOnlyAsync(
+            settings.ModelId!,
+            HostNarration.BuildCompactionMessages(package, _conversation, keepFromIndex),
+            CancellationToken.None);
+        IsGenerating = false;
+
+        if (late)
+        {
+            // 操作者按了停止：记忆保持原样。
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(memo))
+        {
+            var dropped = DropOldestUntilSendable(system, nextUserMessage, contextWindowTokens);
+            if (dropped > 0)
+            {
+                AppendEvent($"整理失败，已丢弃最早的 {dropped} 轮对话以继续主持。");
+            }
+            else
+            {
+                AppendEvent("整理较早的对话失败，这一轮照常发送。");
+            }
+
+            return true;
+        }
+
+        _conversation.ApplyCompaction(memo, keepFromIndex);
+        var kept = (_conversation.Turns.Count + 1) / 2;
+        AppendEvent($"已整理较早的对话（第 {_conversation.CompactionCount} 次），保留了最近 {kept} 轮原话。");
+        return true;
+    }
+
+    /// <summary>
+    /// 占用已经超过窗口时，丢弃最早的轮次直到能发出去。返回丢了几轮。
+    ///
+    /// 这是唯一会丢内容的路径，所以只在真的发不出去（占用超过 100%）时才走：
+    /// 整理失败但还发得出去时，这一轮照常发，不丢任何内容。
+    /// </summary>
+    private int DropOldestUntilSendable(string system, string nextUserMessage, int contextWindowTokens)
+    {
+        double Ratio() => ContextBudget.UsageRatio(_conversation, system, nextUserMessage, contextWindowTokens);
+        if (Ratio() < 1.0)
+        {
+            return 0;
+        }
+
+        var dropped = 0;
+        while (_conversation.Turns.Count > 0 && Ratio() >= ContextBudget.DropTargetRatio)
+        {
+            dropped += _conversation.DropOldestRounds(1);
+        }
+
+        return dropped;
+    }
+
+    /// <summary>
     /// 一轮完整的「生成 → 朗读」。生成与朗读各自就地报状态；
     /// 任一步被停止或失败，都只在这条消息上留痕，不影响已经提交的游戏状态。
     /// </summary>
     private async Task RunTurnAsync(
         IReadOnlyList<MagpieMessage> messages,
         string thinkingTitle,
-        string[] pipeline)
+        string[] pipeline,
+        string memoryUserText)
     {
         var token = ++_generation;
         var settings = _settingsProvider();
@@ -776,6 +911,10 @@ public sealed class HostViewModel : ObservableObject, IDisposable
 
             // 模型拥有完整主持资料，自主组织对外回复；不把内部提示词直接显示或朗读。
             var message = AppendHost(reply);
+
+            // 请求成功了才写进本局记忆：失败或被停止时这句话不进记忆，玩家可以重发。
+            _conversation.AppendUser(memoryUserText);
+            _conversation.AppendAssistant(reply, _director.LastUsage);
 
             if (!AutoRead)
             {
@@ -947,15 +1086,6 @@ public sealed class HostViewModel : ObservableObject, IDisposable
     }
 
     // ===== 消息维护 =====
-
-    private IReadOnlyList<MagpieMessage> ConversationHistory() => Messages
-        .Where(m => m.IsPlayer || m.IsModelReply)
-        .Select(m => new MagpieMessage
-        {
-            Role = m.IsPlayer ? "user" : "assistant",
-            Content = m.Text,
-        })
-        .ToArray();
 
     private ChatMessage AppendHost(string text, bool fromModel = true)
     {

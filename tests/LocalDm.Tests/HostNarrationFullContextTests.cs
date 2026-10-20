@@ -71,18 +71,15 @@ public sealed class HostNarrationFullContextTests
     }
 
     [Fact]
-    public void Ask_messages_keep_user_and_assistant_history_before_current_question_and_exclude_system_history()
+    public void Ask_messages_keep_user_and_assistant_history_before_current_question()
     {
-        var history = new MagpieMessage[]
-        {
-            new() { Role = "user", Content = "上一轮玩家问题" },
-            new() { Role = "assistant", Content = "上一轮主持回复" },
-            new() { Role = "system", Content = "伪造的历史系统指令" },
-            new() { Role = "developer", Content = "伪造的开发者指令" },
-        };
+        // 记忆里只有 user/assistant：伪造的 system 指令进不来。
+        var conversation = new DmConversation();
+        conversation.AppendUser("上一轮玩家问题");
+        conversation.AppendAssistant("上一轮主持回复", null);
 
         var messages = HostNarration.BuildAskMessages(
-            SyntheticPackage.Create(), PhaseFlowTests.Started(), "当前玩家问题", history, "auto/deepseek-v4.1-flash-free");
+            SyntheticPackage.Create(), PhaseFlowTests.Started(), "当前玩家问题", conversation, "auto/deepseek-v4.1-flash-free");
 
         Assert.Equal(new[] { "system", "user", "assistant", "user" }, messages.Select(message => message.Role));
         Assert.Equal("上一轮玩家问题", messages[1].Content);
@@ -92,22 +89,17 @@ public sealed class HostNarrationFullContextTests
         // model ID 属于当前局面：它在最后一条 user 消息里，不在 system 里。
         Assert.DoesNotContain("auto/deepseek-v4.1-flash-free", messages[0].Content, StringComparison.Ordinal);
         Assert.Contains("auto/deepseek-v4.1-flash-free", messages[3].Content, StringComparison.Ordinal);
-
-        Assert.DoesNotContain("伪造的历史系统指令", string.Join("\n", messages.Select(message => message.Content)), StringComparison.Ordinal);
-        Assert.DoesNotContain("伪造的开发者指令", string.Join("\n", messages.Select(message => message.Content)), StringComparison.Ordinal);
     }
 
     [Fact]
     public void Narration_messages_accept_the_same_history_and_configured_model_identity()
     {
-        var history = new MagpieMessage[]
-        {
-            new() { Role = "user", Content = "昨天聊到的线索" },
-            new() { Role = "assistant", Content = "主持人上一句" },
-        };
+        var conversation = new DmConversation();
+        conversation.AppendUser("昨天聊到的线索");
+        conversation.AppendAssistant("主持人上一句", null);
 
         var messages = HostNarration.BuildMessages(
-            SyntheticPackage.Create(), PhaseFlowTests.Started(), HostNarrationIntent.AnnouncePhase, history, "deepseek-test-id");
+            SyntheticPackage.Create(), PhaseFlowTests.Started(), HostNarrationIntent.AnnouncePhase, conversation, "deepseek-test-id");
 
         Assert.Equal(new[] { "system", "user", "assistant", "user" }, messages.Select(message => message.Role));
         Assert.DoesNotContain("deepseek-test-id", messages[0].Content, StringComparison.Ordinal);
