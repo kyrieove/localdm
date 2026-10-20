@@ -140,6 +140,49 @@
                          Width="260" Height="32" VerticalContentAlignment="Center" />
             </Grid>
 
+            <!-- 界面缩放：与 Ctrl+加号 / Ctrl+减号 / Ctrl+滚轮是同一个值 -->
+            <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                    <TextBlock Text="界面缩放" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
+                    <TextBlock Text="{Binding UiScaleHint}" Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
+                </StackPanel>
+                <Slider x:Name="UiScaleSlider" Grid.Column="1" Width="260" Height="32"
+                        VerticalAlignment="Center"
+                        Minimum="0.8" Maximum="2.0" TickFrequency="0.1" IsSnapToTickEnabled="True"
+                        Value="{Binding UiScale, UpdateSourceTrigger=PropertyChanged}" />
+            </Grid>
+
+            <!-- 对话宽度：标准 / 宽 / 满宽 -->
+            <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                    <TextBlock Text="对话宽度" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
+                    <TextBlock Text="满宽只留两端边距；换档立即生效。"
+                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <RadioButton x:Name="ChatWidthStandard" Content="标准" GroupName="ChatWidth" Margin="0,0,14,0"
+                                 VerticalContentAlignment="Center" FontSize="13"
+                                 Foreground="{StaticResource Ink}"
+                                 IsChecked="{Binding IsChatWidthStandard, Mode=TwoWay}" />
+                    <RadioButton x:Name="ChatWidthWide" Content="宽" GroupName="ChatWidth" Margin="0,0,14,0"
+                                 VerticalContentAlignment="Center" FontSize="13"
+                                 Foreground="{StaticResource Ink}"
+                                 IsChecked="{Binding IsChatWidthWide, Mode=TwoWay}" />
+                    <RadioButton x:Name="ChatWidthFull" Content="满宽" GroupName="ChatWidth"
+                                 VerticalContentAlignment="Center" FontSize="13"
+                                 Foreground="{StaticResource Ink}"
+                                 IsChecked="{Binding IsChatWidthFull, Mode=TwoWay}" />
+                </StackPanel>
+            </Grid>
+
             <!-- 高级：连接与鉴权 -->
             <Expander Margin="0,20,0,0" Foreground="{StaticResource InkSoft}">
                 <Expander.Header>

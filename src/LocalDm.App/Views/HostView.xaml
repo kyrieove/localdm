@@ -53,7 +53,7 @@
         <ScrollViewer x:Name="ChatScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled" Padding="0,26,0,10"
                       Visibility="{Binding ShowConversation, Converter={StaticResource BoolToVisibility}}">
-            <StackPanel MaxWidth="980" HorizontalAlignment="Stretch" Margin="34,0">
+            <StackPanel MaxWidth="{Binding ChatMaxWidth}" HorizontalAlignment="Stretch" Margin="34,0">
                 <TextBlock Text="本局对话，从这里继续" Style="{StaticResource ChatMeta}" FontSize="11"
                            HorizontalAlignment="Center" Margin="0,0,0,26" />
 
@@ -91,7 +91,7 @@
                                 <StackPanel HorizontalAlignment="Right"
                                             Visibility="{Binding IsPlayer, Converter={StaticResource BoolToVisibility}}">
                                     <Border Background="{StaticResource Bubble}" CornerRadius="13,13,3,13"
-                                            Padding="16,11" MaxWidth="620" HorizontalAlignment="Right">
+                                            Padding="16,11" MaxWidth="{Binding BubbleMaxWidth}" HorizontalAlignment="Right">
                                         <TextBlock Text="{Binding Text}" FontSize="15" TextWrapping="Wrap"
                                                    LineHeight="26" LineStackingStrategy="BlockLineHeight"
                                                    Foreground="{StaticResource Ink}" />
@@ -348,7 +348,7 @@
         <!-- ===== 底边固定输入区 ===== -->
         <Border Grid.Row="3" Padding="0,10,0,18" Background="{DynamicResource Paper}"
                 Visibility="{Binding ShowConversation, Converter={StaticResource BoolToVisibility}}">
-            <Grid MaxWidth="980" HorizontalAlignment="Stretch" Margin="34,0,34,0">
+            <Grid MaxWidth="{Binding ChatMaxWidth}" HorizontalAlignment="Stretch" Margin="34,0,34,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
@@ -376,16 +376,25 @@
                                      VerticalScrollBarVisibility="Auto"
                                      BorderThickness="0" Background="Transparent" Padding="0"
                                      PreviewKeyDown="OnInputPreviewKeyDown" />
-                            <!-- 输入框为空时的提示：WPF 的 TextBox 没有占位文本 -->
-                            <TextBlock Text="对主持人说点什么，或先用左侧的动作推进这一步。"
+                            <!--
+                                输入框为空时的提示：WPF 的 TextBox 没有占位文本。
+                                用输入法打拼音时，拼音还在候选窗口里、没进 Text，只看 InputText 会和拼音叠在一起；
+                                所以有键盘焦点时一律让位，只有失去焦点且确实为空时才显示。
+                            -->
+                            <TextBlock x:Name="ComposerPlaceholder"
+                                       Text="对主持人说点什么，或先用左侧的动作推进这一步。"
                                        IsHitTestVisible="False" VerticalAlignment="Center" Margin="2,0,0,0">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource ChatMeta}">
                                         <Setter Property="Visibility" Value="Collapsed" />
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding InputText}" Value="">
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding InputText}" Value="" />
+                                                    <Condition Binding="{Binding IsKeyboardFocusWithin, ElementName=InputBox}" Value="False" />
+                                                </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible" />
-                                            </DataTrigger>
+                                            </MultiDataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </TextBlock.Style>

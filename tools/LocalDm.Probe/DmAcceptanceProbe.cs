@@ -44,9 +44,12 @@ public static class DmAcceptanceProbe
         var outDir = ArgumentValue(args, "--out")
                      ?? Path.Combine(repoRoot, ".local", "dm-acceptance");
         var phase = ArgumentValue(args, "--phase") ?? "story";
-        var transcriptPath = Path.Combine(outDir, "transcript.md");
 
-        Directory.CreateDirectory(outDir);
+        // 每一次验收单独一个目录：上一次的记录要留得住，验收才比得出前后差别。
+        var runDir = NewRunDirectory(outDir);
+        var transcriptPath = Path.Combine(runDir, "transcript.md");
+
+        Console.WriteLine($"本次记录目录：{runDir}");
 
         var packagePath = LatestPackage(dataRoot);
         if (packagePath is null)
@@ -79,7 +82,7 @@ public static class DmAcceptanceProbe
         }
 
         // 存档复制一份出来用，原文件不动。
-        var workDb = CopyDatabase(dataRoot, outDir);
+        var workDb = CopyDatabase(dataRoot, runDir);
         Console.WriteLine($"存档副本：{workDb}");
 
         var effectiveModelId = modelOverride ?? userSettings.ModelId;
@@ -688,6 +691,24 @@ public static class DmAcceptanceProbe
     private static ScriptPackage LoadPackage(string path) =>
         JsonSerializer.Deserialize<ScriptPackage>(File.ReadAllText(path))
         ?? throw new InvalidOperationException("剧本包无法解析。");
+
+    /// <summary>
+    /// 本次验收的输出目录：<c>yyyyMMdd-HHmmss</c>，已存在就补一个序号。
+    /// 每次运行都新开一个，旧记录不会被覆盖。
+    /// </summary>
+    private static string NewRunDirectory(string root)
+    {
+        Directory.CreateDirectory(root);
+        var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+        var candidate = Path.Combine(root, stamp);
+        for (var attempt = 2; Directory.Exists(candidate); attempt++)
+        {
+            candidate = Path.Combine(root, $"{stamp}-{attempt}");
+        }
+
+        Directory.CreateDirectory(candidate);
+        return candidate;
+    }
 
     private static string CopyDatabase(string dataRoot, string outDir)
     {

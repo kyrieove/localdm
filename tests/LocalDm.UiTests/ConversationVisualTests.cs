@@ -312,10 +312,89 @@ public sealed class ConversationVisualTests
         });
     }
 
+    /// <summary>
+    /// 占位提示只在「失去焦点且为空」时出现。
+    ///
+    /// 用输入法打拼音时，拼音还在候选窗口里、没进 Text；占位提示若只看 InputText，
+    /// 就会和拼音叠在同一个位置。
+    /// </summary>
+    [Fact]
+    public async Task Composer_placeholder_hides_while_the_input_box_has_focus()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            using var testShell = await TestShell.OpenAsync(root.Path);
+            var shell = testShell.Shell;
+            var window = NewWindow(shell, 1280, 800);
+            window.Show();
+            window.Activate();
+            try
+            {
+                shell.ShowHostCommand.Execute(null);
+                await shell.Host.LoadDemoAsync();
+                await WaitForRenderAsync();
+
+                var input = FindByName<TextBox>(window, "InputBox");
+                var placeholder = FindByName<TextBlock>(window, "ComposerPlaceholder");
+                Assert.NotNull(input);
+                Assert.NotNull(placeholder);
+                Assert.Equal("", shell.Host.InputText);
+
+                // 拿到焦点：即使还没输入任何字，提示也要让位
+                Assert.True(input!.Focus(), "输入框应当能拿到键盘焦点。");
+                Assert.True(input.IsKeyboardFocusWithin);
+                await WaitForRenderAsync();
+                Assert.Equal(Visibility.Collapsed, placeholder!.Visibility);
+
+                // 打拼音：文字还没提交时输入框是空的，提示同样不能出现
+                Assert.Equal("", input.Text);
+                Assert.Equal(Visibility.Collapsed, placeholder.Visibility);
+
+                // 失去焦点并且为空：提示回来
+                System.Windows.Input.Keyboard.ClearFocus();
+                await WaitForRenderAsync();
+                Assert.False(input.IsKeyboardFocusWithin);
+                Assert.Equal(Visibility.Visible, placeholder.Visibility);
+
+                // 有内容时不管有没有焦点都不显示提示
+                shell.Host.InputText = "我们去调查书房";
+                await WaitForRenderAsync();
+                Assert.Equal(Visibility.Collapsed, placeholder.Visibility);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
     // ===== 辅助 =====
 
     private static MainWindow NewWindow(ShellViewModel shell, int width, int height) =>
         new() { DataContext = shell, ShowActivated = false, Width = width, Height = height };
+
+    /// <summary>按 x:Name 在真实可视树里找一个元素。模板里的元素不在逻辑树的字段上，只能这样找。</summary>
+    private static T? FindByName<T>(DependencyObject root, string name)
+        where T : FrameworkElement
+    {
+        if (root is T match && match.Name == name)
+        {
+            return match;
+        }
+
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var found = FindByName<T>(VisualTreeHelper.GetChild(root, i), name);
+            if (found is not null)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>在真实可视树里找到对话的滚动区（模板里叫 ChatScroll）。</summary>
     private static ScrollViewer? FindChatScroll(DependencyObject root)

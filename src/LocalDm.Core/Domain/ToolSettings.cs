@@ -37,11 +37,28 @@ public sealed record ToolSettings
     /// </summary>
     public int ContextWindowTokens { get; init; } = DefaultContextWindowTokens;
 
+    /// <summary>
+    /// 界面缩放倍数（LayoutTransform）：整个窗口内容按它放大缩小，Ctrl+加号、Ctrl+减号、Ctrl+滚轮都能改。
+    /// </summary>
+    public double UiScale { get; init; } = DefaultUiScale;
+
+    /// <summary>对话与输入区的宽度档位。</summary>
+    public ChatWidthMode ChatWidthMode { get; init; } = ChatWidthMode.Standard;
+
     public const int DefaultContextWindowTokens = 65_536;
 
     public const int MinContextWindowTokens = 8_192;
 
     public const int MaxContextWindowTokens = 2_000_000;
+
+    public const double DefaultUiScale = 1.0;
+
+    public const double MinUiScale = 0.8;
+
+    public const double MaxUiScale = 2.0;
+
+    /// <summary>加减一次的步长。</summary>
+    public const double UiScaleStep = 0.1;
 
     public const string DefaultInputHint = "聚焦本框后使用 OpenLess 转写，回车发送，Shift+Enter 换行。";
 
@@ -80,10 +97,52 @@ public sealed record ToolSettings
                 DomainErrorCode.INVALID_INPUT,
                 $"模型上下文长度必须在 {MinContextWindowTokens} 到 {MaxContextWindowTokens} tokens 之间。");
         }
+
+        if (double.IsNaN(UiScale) || UiScale is < MinUiScale or > MaxUiScale)
+        {
+            throw new DomainRuleException(
+                DomainErrorCode.INVALID_INPUT,
+                $"界面缩放必须在 {MinUiScale} 到 {MaxUiScale} 之间。");
+        }
+
+        if (!Enum.IsDefined(ChatWidthMode))
+        {
+            throw new DomainRuleException(DomainErrorCode.INVALID_INPUT, "对话宽度只有标准、宽、满宽三档。");
+        }
     }
+
+    /// <summary>这一档对话与输入区的最大宽度；满宽返回 null，表示不限宽。</summary>
+    public static double? ChatMaxWidth(ChatWidthMode mode) => mode switch
+    {
+        ChatWidthMode.Wide => 1320,
+        ChatWidthMode.Full => null,
+        _ => 980,
+    };
+
+    /// <summary>
+    /// 玩家消息气泡的最大宽度：按同一比例放宽（标准档 620 / 980）。
+    /// 气泡比整行窄，是为了让玩家的原话在一屏里一眼能和主持人的长文分开。
+    /// </summary>
+    public static double? ChatBubbleMaxWidth(ChatWidthMode mode) =>
+        ChatMaxWidth(mode) is { } width ? width * 620 / 980 : null;
 
     public static bool IsLoopback(Uri uri) =>
         uri.IsLoopback || string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// 对话与输入区的宽度档位。三档都是 DIP，两端各留 34 的边距。
+/// </summary>
+public enum ChatWidthMode
+{
+    /// <summary>标准：980。</summary>
+    Standard = 0,
+
+    /// <summary>宽：1320。</summary>
+    Wide = 1,
+
+    /// <summary>满宽：不限宽，只剩两端边距。</summary>
+    Full = 2,
 }
 
 /// <summary>
