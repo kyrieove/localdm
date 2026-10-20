@@ -162,7 +162,9 @@ public sealed class HostConversationTests : IDisposable
         Assert.Contains(messages, m => m.Role == "user" && m.Content == "请介绍故事背景，不要复述时长。");
         Assert.Contains(messages, m => m.Role == "assistant" && m.Content == CountingGateway.Reply);
         Assert.Single(messages, m => m.Role == "user" && m.Content.Contains("接着刚才的背景展开讲。", StringComparison.Ordinal));
-        Assert.Contains(messages, m => m.Role == "system" && m.Content.Contains("test-model", StringComparison.Ordinal));
+        // model ID 属于当前局面：它在最后一条 user 消息里，不在 system 里。
+        Assert.Contains(messages, m => m.Role == "user" && m.Content.Contains("test-model", StringComparison.Ordinal));
+        Assert.DoesNotContain(messages, m => m.Role == "system" && m.Content.Contains("test-model", StringComparison.Ordinal));
     }
 
     [Fact]
