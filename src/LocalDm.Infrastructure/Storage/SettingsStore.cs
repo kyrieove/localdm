@@ -140,6 +140,8 @@ public sealed class SettingsStore
             InputHint = dto.InputHint ?? ToolSettings.Default.InputHint,
             // 旧设置文件没有这一项：默认自动朗读，与旧行为一致。
             AutoRead = dto.AutoRead ?? true,
+            // 旧设置文件同样没有上下文长度：按默认值处理，不让旧存档开不了局。
+            ContextWindowTokens = dto.ContextWindowTokens ?? ToolSettings.DefaultContextWindowTokens,
         };
     }
 
@@ -188,6 +190,7 @@ public sealed class SettingsStore
         VoiceId = settings.VoiceId,
         InputHint = settings.InputHint,
         AutoRead = settings.AutoRead,
+        ContextWindowTokens = settings.ContextWindowTokens,
     };
 
     private static string Serialize(ToolSettings settings)
@@ -312,6 +315,9 @@ public sealed class SettingsStore
 
         /// <summary>可空：旧设置文件没有这一项时按默认「自动朗读」处理。</summary>
         public bool? AutoRead { get; set; }
+
+        /// <summary>可空：旧设置文件没有这一项时按默认上下文长度处理。</summary>
+        public int? ContextWindowTokens { get; set; }
     }
 }
 

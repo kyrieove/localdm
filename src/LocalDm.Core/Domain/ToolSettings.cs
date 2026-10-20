@@ -30,6 +30,19 @@ public sealed record ToolSettings
     /// </summary>
     public bool AutoRead { get; init; } = true;
 
+    /// <summary>
+    /// 所用模型的上下文窗口长度（tokens）。
+    ///
+    /// 上下文占用按这个窗口计量：快满时把较早的对话整理成备忘，而不是按固定字数截断。
+    /// </summary>
+    public int ContextWindowTokens { get; init; } = DefaultContextWindowTokens;
+
+    public const int DefaultContextWindowTokens = 65_536;
+
+    public const int MinContextWindowTokens = 8_192;
+
+    public const int MaxContextWindowTokens = 2_000_000;
+
     public const string DefaultInputHint = "聚焦本框后使用 OpenLess 转写，回车发送，Shift+Enter 换行。";
 
     public static readonly Uri DefaultMagpieUri = new("http://127.0.0.1:3425/");
@@ -59,6 +72,13 @@ public sealed record ToolSettings
         if (MagpieBaseUri.Scheme is not ("http" or "https"))
         {
             throw new DomainRuleException(DomainErrorCode.INVALID_INPUT, "模型地址只支持 http 或 https。");
+        }
+
+        if (ContextWindowTokens is < MinContextWindowTokens or > MaxContextWindowTokens)
+        {
+            throw new DomainRuleException(
+                DomainErrorCode.INVALID_INPUT,
+                $"模型上下文长度必须在 {MinContextWindowTokens} 到 {MaxContextWindowTokens} tokens 之间。");
         }
     }
 

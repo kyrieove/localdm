@@ -28,6 +28,7 @@ public sealed class SetupViewModel : ObservableObject
     private string _callerKeyState = "未配置 caller key（本机 Magpie 通常不需要）。";
     private string _mineruExecutable = string.Empty;
     private bool _autoRead = true;
+    private int _contextWindowTokens = ToolSettings.DefaultContextWindowTokens;
     private bool _busy;
 
     public SetupViewModel(
@@ -84,6 +85,16 @@ public sealed class SetupViewModel : ObservableObject
         set => SetProperty(ref _autoRead, value);
     }
 
+    /// <summary>
+    /// 所用模型的上下文窗口长度（tokens）。主持台按它判断上下文占用，
+    /// 快满时自动把较早的对话整理成备忘。
+    /// </summary>
+    public int ContextWindowTokens
+    {
+        get => _contextWindowTokens;
+        set => SetProperty(ref _contextWindowTokens, value);
+    }
+
     public string CallerKeyState
     {
         get => _callerKeyState;
@@ -129,6 +140,7 @@ public sealed class SetupViewModel : ObservableObject
         ModelId = _settings.ModelId ?? string.Empty;
         VoiceId = _settings.VoiceId ?? string.Empty;
         AutoRead = _settings.AutoRead;
+        ContextWindowTokens = _settings.ContextWindowTokens;
         _loadedVoiceId = VoiceId;
         MineruExecutable = _settings.MineruExecutable ?? string.Empty;
         CallerKeyState = string.IsNullOrWhiteSpace(_settings.CallerKeyRef)
@@ -176,6 +188,7 @@ public sealed class SetupViewModel : ObservableObject
                 VoiceId = ResolveVoiceId(),
                 AutoRead = AutoRead,
                 InputHint = _settings.InputHint,
+                ContextWindowTokens = ContextWindowTokens,
             };
             await _settingsStore.SaveAsync(_settings, CancellationToken.None);
             SettingsSaved?.Invoke(this, _settings);
@@ -281,6 +294,7 @@ public sealed class SetupViewModel : ObservableObject
                 VoiceId = voiceId,
                 AutoRead = AutoRead,
                 InputHint = _settings.InputHint,
+                ContextWindowTokens = ContextWindowTokens,
             };
             _settings.Validate();
             await _settingsStore.SaveAsync(_settings, CancellationToken.None);
