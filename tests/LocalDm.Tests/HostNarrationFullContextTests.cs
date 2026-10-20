@@ -92,6 +92,18 @@ public sealed class HostNarrationFullContextTests
     }
 
     [Fact]
+    public void Fixed_prompt_keeps_the_conduct_rules_that_came_out_of_acceptance()
+    {
+        // 这几句是人工作验收捡出来的问题对应的约束，措辞被改掉就会悄悄失效。
+        var system = HostNarration.BuildSystemPrompt(SyntheticPackage.Create());
+
+        Assert.Contains("先回答玩家问的那件事，问什么答什么", system, StringComparison.Ordinal);
+        Assert.Contains("调查发生在桌上，软件不记录大家查过哪里", system, StringComparison.Ordinal);
+        Assert.Contains("不确认、不否认，也不要指向任何能帮助判断的线索、数字或矛盾之处", system, StringComparison.Ordinal);
+        Assert.Contains("对话和备忘里没有的事，直接说不记得，不要编造玩家说过的话", system, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Narration_messages_accept_the_same_history_and_configured_model_identity()
     {
         var conversation = new DmConversation();
@@ -140,7 +152,7 @@ public sealed class HostNarrationFullContextTests
         // （固定提示词里提到「【当前局面】」只是引用那一段的名字，不是局面本身。）
         Assert.DoesNotContain("当前环节：", system, StringComparison.Ordinal);
         Assert.DoesNotContain("（当前）", system, StringComparison.Ordinal);
-        Assert.DoesNotContain("已发放材料：", system, StringComparison.Ordinal);
+        Assert.DoesNotContain("软件里标记发放的材料：", system, StringComparison.Ordinal);
         Assert.DoesNotContain("当前投票汇总：", system, StringComparison.Ordinal);
         Assert.DoesNotContain("真相状态：", system, StringComparison.Ordinal);
         Assert.DoesNotContain("软件配置的模型：", system, StringComparison.Ordinal);
@@ -148,7 +160,7 @@ public sealed class HostNarrationFullContextTests
 
         Assert.Contains("【当前局面】", last, StringComparison.Ordinal);
         Assert.Contains("当前环节：", last, StringComparison.Ordinal);
-        Assert.Contains("已发放材料：M1", last, StringComparison.Ordinal);
+        Assert.Contains("软件里标记发放的材料：M1", last, StringComparison.Ordinal);
         Assert.Contains("当前投票汇总：A 3 票", last, StringComparison.Ordinal);
         Assert.Contains("deepseek-chat", last, StringComparison.Ordinal);
         Assert.Contains("【玩家刚才说】", last, StringComparison.Ordinal);
