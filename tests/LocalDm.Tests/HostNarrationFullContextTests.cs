@@ -101,6 +101,24 @@ public sealed class HostNarrationFullContextTests
         Assert.Contains("调查发生在桌上，软件不记录大家查过哪里", system, StringComparison.Ordinal);
         Assert.Contains("不确认、不否认，也不要指向任何能帮助判断的线索、数字或矛盾之处", system, StringComparison.Ordinal);
         Assert.Contains("对话和备忘里没有的事，直接说不记得，不要编造玩家说过的话", system, StringComparison.Ordinal);
+
+        // 2026-10-20 人工验收第二轮加的约束。
+        Assert.Contains("只答眼前这一步，并且只讲这一步用得上的规则", system, StringComparison.Ordinal);
+        Assert.Contains("不要点出资料、卡面或卡背之间的任何矛盾、巧合或数量关系", system, StringComparison.Ordinal);
+        Assert.Contains("不管聊了多久，都不要在对话里说出任何卡面上的物件、文字或细节", system, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Fixed_prompt_carries_no_rule_names_from_any_particular_script()
+    {
+        // 提示词是通用主持词：某本剧本的规则名词（时间标记、上下半场、抉择卡……）一旦写进来，
+        // 换一本剧本就变成错的规定。
+        var system = HostNarration.BuildSystemPrompt(SyntheticPackage.Create());
+
+        foreach (var scriptSpecific in new[] { "时间标记", "表决方式", "上下半场", "抉择卡", "房间数", "角色数" })
+        {
+            Assert.DoesNotContain(scriptSpecific, system, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -179,3 +197,4 @@ public sealed class HostNarrationFullContextTests
         Assert.Contains("已揭秘", revealed[^1].Content, StringComparison.Ordinal);
     }
 }
+

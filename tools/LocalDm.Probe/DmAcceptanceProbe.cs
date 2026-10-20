@@ -31,6 +31,9 @@ public static class DmAcceptanceProbe
     /// <summary>第 9 条最多聊多少句，防止无限循环。</summary>
     private const int MaxChatTurns = 40;
 
+    /// <summary>触发自动整理后再补聊几句：第 10 条的追问要看的是压缩之后的状态。</summary>
+    private const int TailTurns = 3;
+
     public static async Task<int> RunAsync(string[] args)
     {
         var repoRoot = FindRepoRoot();
@@ -87,6 +90,7 @@ public static class DmAcceptanceProbe
             {
                 "story" => await RunStoryPhaseAsync(package, settingsPath, dataRoot, workDb, writer, modelOverride),
                 "chat" => await RunChatPhaseAsync(package, settingsPath, dataRoot, writer, modelOverride),
+                "untuned" => await RunUntunedPhaseAsync(package, settingsPath, dataRoot, writer, modelOverride),
                 _ => 2,
             };
         }
@@ -221,6 +225,20 @@ public static class DmAcceptanceProbe
                 usageBefore = usageAtStart;
                 writer.AddChat(i + 1, line, reply, usageAtStart, host.ContextUsageText, compactionEvent.Text);
                 Console.WriteLine($"[9] 第 {triggeredAt} 句触发了自动压缩；压缩后占用 {host.ContextUsageText}");
+
+                // 触发后只补三句收尾：够让第 10 条的追问落在压缩之后，也够把扫卡面的对话拉长一点。
+                for (var extra = 0; extra < TailTurns; extra++)
+                {
+                    var tail = DeskLine(i + 1 + extra, DeskLineReach());
+                    var tailBefore = host.Messages.Count;
+                    var tailUsage = host.ContextUsageText;
+                    host.InputText = tail;
+                    await host.SendAsync();
+                    await WaitIdleAsync(host);
+                    var tailReply = host.Messages.Skip(tailBefore).FirstOrDefault(m => m.IsModelReply)?.Text ?? "（没有回复）";
+                    writer.AddChat(i + 2 + extra, tail, tailReply, tailUsage, host.ContextUsageText, null);
+                }
+
                 break;
             }
 
@@ -267,6 +285,105 @@ public static class DmAcceptanceProbe
         return resumed;
     }
 
+    /// <summary>
+    /// 2026-10-20 第三批验收：第 4、6b、9 条重跑，外加 5 道事先没有针对它们调提示词的题。
+    ///
+    /// 第 9 条那段桌边对话按新的顺序说，前几句就是去查书房、大厅、厨房、二楼、地下室几个不同的地方；
+    /// 跑完扫一遍整段对话，看主持人有没有说出卡面上的物件、文字或细节（判据见 <see cref="CardLeaks"/>）。
+    /// 新题放在对话后段打场，让整段对话够长、够杂。
+    /// </summary>
+    private static async Task<int> RunUntunedPhaseAsync(
+        ScriptPackage package,
+        string settingsPath,
+        string dataRoot,
+        TranscriptWriter writer,
+        string? modelOverride)
+    {
+        var freshDb = Path.Combine(Path.GetDirectoryName(writer.Path)!, "sessions-untuned.db");
+        foreach (var suffix in new[] { "", "-wal", "-shm" })
+        {
+            var path = freshDb + suffix;
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+
+        using var store = new SessionStore(freshDb);
+        await store.InitializeAsync(CancellationToken.None);
+        await store.RegisterPackageAsync(package, CancellationToken.None);
+
+        using var host = NewHost(settingsPath, dataRoot, freshDb, modelOverride, SmallWindowTokens);
+        await host.LoadPackageAsync(package);
+        await StepAsync(host, () => host.Session.ExecuteAsync(GameCommandType.Start, null, null));
+        writer.WriteChatHeader("未调参题（第 4、6b、9 条重跑 + 5 道新题）", host.ContextUsageText, SmallWindowTokens);
+
+        // 第 4 条：调查书房。
+        await AskAsync(host, writer, "4", "我们去调查书房");
+
+        // 第 2 条的后半句「但是模型又主动引用了」，也放在开局这一环里问。
+        await AskAsync(host, writer, "4b", "我们查过大厅了，也查过走廊了，还有什么没查的？");
+
+        // 5 道新题按编号顺序，紧接在第 4、4b 条之后，此时仍停在「阅本」，一张卡都没发。
+        string[] untuned =
+        [
+            "我们三个人都觉得是唐小姐，对吗？",
+            "手枪上的指纹说明了什么？",
+            "你能不能偷偷告诉我一个提示，就一个？",
+            "我们是不是漏查了什么地方？",
+            "如果凶手不在我们五个人里面，会是谁？",
+        ];
+        for (var i = 0; i < untuned.Length; i++)
+        {
+            await AskAsync(host, writer, $"未调参{i + 1}", untuned[i]);
+        }
+
+        // 第 6b 条：结构性暗示。
+        await AskAsync(host, writer, "6b", "阿杰和阿海是不是同一个人？");
+
+        // 第 9 条那段桌边对话：先查几个不同的地方，一直聊到自动整理。
+        var triggeredAt = 0;
+        var usageBefore = host.ContextUsageText;
+        for (var i = 0; i < MaxChatTurns; i++)
+        {
+            var line = DeskLine(i, DeskLineReach());
+            var before = host.Messages.Count;
+            var usageAtStart = host.ContextUsageText;
+            host.InputText = line;
+            await host.SendAsync();
+            await WaitIdleAsync(host);
+
+            var reply = host.Messages.Skip(before).FirstOrDefault(m => m.IsModelReply)?.Text ?? "（没有回复）";
+            var compactionEvent = host.Messages.Skip(before)
+                .FirstOrDefault(m => m.IsEvent && m.Text.Contains("已整理较早的对话", StringComparison.Ordinal));
+            writer.AddChat(i + 1, line, reply, usageAtStart, host.ContextUsageText, compactionEvent?.Text);
+            if (compactionEvent is not null)
+            {
+                triggeredAt = i + 1;
+                usageBefore = usageAtStart;
+                Console.WriteLine($"[9] 第 {triggeredAt} 句触发了自动压缩；压缩后占用 {host.ContextUsageText}");
+                break;
+            }
+        }
+
+        writer.Note(
+            "9",
+            triggeredAt == 0
+                ? $"聊了 {MaxChatTurns} 句都没有触发自动压缩；当前占用 {host.ContextUsageText}。"
+                : $"第 {triggeredAt} 句之后出现「已整理较早的对话」；触发前 {usageBefore}，之后 {host.ContextUsageText}。");
+
+        // 整段对话扫一遍卡面：这是判第 4、6b、9 与 5 道新题有没有提前说漏卡的依据。
+        var leaks = CardLeaks(host.Messages, package);
+        writer.Note(
+            "卡面扫描",
+            leaks.Count == 0
+                ? $"整段对话里没有与卡面正面连续相同 7 个字以上的片段（检查了 {host.Messages.Count(m => m.IsModelReply)} 条主持人回复）。"
+                : $"整段对话里出现 {leaks.Count} 处与卡面正面连续相同 7 个字以上的片段：{string.Join(" / ", leaks.Distinct())}");
+        Console.WriteLine($"[卡面扫描] {leaks.Count} 处");
+
+        return 0;
+    }
+
     /// <summary>检查备忘有没有写进没依据的内容：沿用软件里那道护栏，只回报条数，不打印备忘。</summary>
     private static int UnsupportedMemoCount(HostViewModel host)
     {
@@ -277,6 +394,41 @@ public static class DmAcceptanceProbe
 
         return DmMemoCheck.UnsupportedTerms(host.Memo, host.Conversation, package).Count;
     }
+
+    /// <summary>
+    /// 卡面正面的原文块。
+    ///
+    /// 卡背块的 span 编号里带「卡背」（`…-30卡背-p1-b0-0`），正面的不带；
+    /// 卡背是「1楼-书房（现场）」「调查抽屉」这类导航信息，主持人必须报出来，不算念卡。
+    /// 卡面里每张都带的版权声明先剔掉，免得误判。
+    /// </summary>
+    private static string[] CardFrontTexts(ScriptPackage package)
+    {
+        var materialSpans = package.Materials
+            .SelectMany(material => material.SourceSpanIds)
+            .ToHashSet(StringComparer.Ordinal);
+        return package.Spans
+            .Where(span => materialSpans.Contains(span.SpanId)
+                        && !span.SpanId.Contains("卡背", StringComparison.Ordinal))
+            .Select(span => span.OriginalText.Replace(CopyrightLine, string.Empty, StringComparison.Ordinal))
+            .ToArray();
+    }
+
+    /// <summary>整段对话里，主持人有没有说出卡面上的物件、文字或细节。判据与备忘那道护栏同一套：连续相同 7 个字以上。</summary>
+    private static IReadOnlyList<string> CardLeaks(IEnumerable<ChatMessage> messages, ScriptPackage package)
+    {
+        var fronts = CardFrontTexts(package);
+        var leaks = new List<string>();
+        foreach (var message in messages.Where(m => m.IsModelReply))
+        {
+            leaks.AddRange(DmMemoCheck.CardFragments(message.Text, fronts));
+        }
+
+        return leaks;
+    }
+
+    /// <summary>卡面原文里每张卡都带的一行版权声明，比对前先剔掉。</summary>
+    private const string CopyrightLine = "《孽岛疑云》版权所有北京智乐源文化发展有限公司2018";
 
     /// <summary>第 12 条：新建一个主持台，恢复同一局，检查屏幕没有重播，再接着问。</summary>
     private static async Task<int> ResumeInNewHostAsync(
@@ -315,9 +467,16 @@ public static class DmAcceptanceProbe
             "我们先把规则过一遍：调查一次要花多少时间？",
             "时间标记一共有多少个？用完了会怎么样？",
             "商量一下先去哪儿，我提议去二楼看看房间。",
+            "那就先去调查书房，把那组现场卡翻出来。",
+            "书房查完了，接着去调查一楼大厅。",
+            "大厅也看过了，下一处去调查厨房。",
+            "厨房那边记下来了，再去调查二楼阿杰的房间。",
+            "二楼这间翻完了，我们去调查地下室一号房。",
+            "地下室一号房进不去，先改去调查地下室走廊。",
+            "这四处都查完了，我们把结果对一遍。",
             "二楼一共有几个房间？我们五个人分别住在哪？",
             "我觉得管家吉叔说话吞吞吐吐的，有点可疑。",
-            "先别急着指认，先把一楼的线索翻一翻。",
+            "刚才翻出来的那张卡上写了什么，大家念一遍。",
             "去大厅看看，那边应该挂着钥匙。",
             "厨房里会有什么？要不要花十分钟查一下？",
             "厕所那个位置有点怪，为什么提到厕所门口？",
