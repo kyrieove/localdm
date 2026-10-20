@@ -210,22 +210,53 @@ public static class ContextBudget
     /// <summary>
     /// 保留部分的起点：更早的对话交给整理。
     ///
-    /// 从最新往前保留，直到保留部分的估算 token 达到可用窗口的一成半；
-    /// 但至少保留最近 2 轮，且保留部分的第一条必须是 user。
+    /// 从最新往前累加，累加到可用窗口的一成半就停；
+    /// 但至少保留最近 2 轮（2 条 user 及其后的消息）。
+    /// 起点落在 assistant 上时，向前移到最近的一条 user。
     /// </summary>
-    public static int KeepFromIndex(DmConversation conversation, int contextWindowTokens)
+    public static int KeepFromIndex(DmConversation conversation, int contextWindowTokens) =>
+        SelectKeepStart(conversation.Turns, contextWindowTokens, MinKeptRounds);
+
+    /// <summary>
+    /// 手动整理的保留起点：只留最近 2 轮，其余全部整理。
+    /// 起点落在 assistant 上时向前移到最近的一条 user。
+    /// </summary>
+    public static int ManualKeepFromIndex(DmConversation conversation) =>
+        SelectKeepStart(conversation.Turns, contextWindowTokens: null, MinKeptRounds);
+
+    /// <summary>
+    /// 选出保留部分的起点，规则只写这一处：
+    ///
+    /// 先按「至少保留最近 minRounds 轮」定出最晚起点，
+    /// 给了窗口就再往前累加到可用窗口的一成半；
+    /// 最后把起点挪到最近的 user 上。
+    ///
+    /// 两条保证因此不会互相打架：预算吃得下就多留，
+    /// 一条超长的回复把预算一口气用完时，也仍然留下最近 2 轮。
+    /// </summary>
+    private static int SelectKeepStart(
+        IReadOnlyList<MagpieMessage> turns,
+        int? contextWindowTokens,
+        int minRounds)
     {
-        var turns = conversation.Turns;
         if (turns.Count == 0)
         {
             return 0;
         }
 
-        var budget = (int)(UsableTokens(contextWindowTokens) * KeepRatio);
-        var minIndex = Math.Max(0, turns.Count - MinKeptRounds * 2);
+        // 至少保留最近 minRounds 轮：起点就是最近那条 user 往前数第 minRounds 条 user。
+        var roundStart = RoundStart(turns, Math.Max(1, minRounds));
+        if (contextWindowTokens is not { } window)
+        {
+            return AlignToUser(turns, roundStart);
+        }
+
+        var budget = (int)(UsableTokens(window) * KeepRatio);
         var tokens = 0;
-        var index = turns.Count;
-        for (var i = turns.Count - 1; i >= minIndex; i--)
+        var index = roundStart;
+
+        // 预算吃得下就再往前留；一条超长的回复把预算一次用完时，也不会少留这 2 轮。
+        for (var i = roundStart - 1; i >= 0; i--)
         {
             tokens += EstimateTokens(turns[i].Content);
             index = i;
@@ -235,18 +266,49 @@ public static class ContextBudget
             }
         }
 
-        // 保留部分的第一条必须是 user：模型看到的第一句话应当是玩家说的。
-        while (index < turns.Count && turns[index].Role != "user")
-        {
-            index++;
-        }
-
-        return index;
+        return AlignToUser(turns, index);
     }
 
-    /// <summary>手动整理的保留起点：只留最近 2 轮，其余全部整理。</summary>
-    public static int ManualKeepFromIndex(DmConversation conversation) =>
-        Math.Max(0, conversation.Turns.Count - MinKeptRounds * 2);
+    /// <summary>
+    /// 最近 minRounds 轮的起点：从末尾往前数第 minRounds 条 user 的下标。
+    /// 轮数不够时返回 0。
+    /// </summary>
+    private static int RoundStart(IReadOnlyList<MagpieMessage> turns, int minRounds)
+    {
+        var remaining = minRounds;
+        for (var i = turns.Count - 1; i >= 0; i--)
+        {
+            if (turns[i].Role != "user")
+            {
+                continue;
+            }
+
+            remaining--;
+            if (remaining == 0)
+            {
+                return i;
+            }
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// 把起点挪到最近的 user 上。
+    ///
+    /// 保留部分的第一条必须是 user：模型看到的第一句话应当是玩家说的。
+    /// 只能往前挪（保留更多），往后挪会让「至少保留 2 轮」落空，甚至一条都不剩。
+    /// </summary>
+    private static int AlignToUser(IReadOnlyList<MagpieMessage> turns, int index)
+    {
+        var aligned = Math.Clamp(index, 0, turns.Count);
+        while (aligned > 0 && turns[aligned].Role != "user")
+        {
+            aligned--;
+        }
+
+        return aligned;
+    }
 
     /// <summary>中日韩字符与全角标点：按 0.75 个 token 记。</summary>
     private static bool IsWide(char ch) =>

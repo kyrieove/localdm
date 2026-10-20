@@ -58,6 +58,77 @@ public sealed class DmConversationTests : IDisposable
         Assert.Equal(1000 + 200 + ContextBudget.EstimateTokens("下一条"), estimate);
     }
 
+    // ===== 保留原话的起点 =====
+
+    [Fact]
+    public void Large_window_keeps_more_than_the_minimum_two_rounds()
+    {
+        // 窗口很大、轮次不长：15% 的预算能装下好几轮，就该多留几轮原话。
+        // 10 轮 × 每轮 150 token，预算 989：落在第 7 轮附近，比最少 2 轮多得多。
+        var conversation = ShortRounds(10);
+        var usable = ContextBudget.UsableTokens(Window);
+        var budget = (int)(usable * ContextBudget.KeepRatio);
+
+        var index = ContextBudget.KeepFromIndex(conversation, Window);
+        var kept = conversation.Turns.Skip(index).ToArray();
+        var keptTokens = kept.Sum(turn => ContextBudget.EstimateTokens(turn.Content));
+
+        Assert.True(kept.Length > ContextBudget.MinKeptRounds * 2, "预算够时不该只保留 2 轮。");
+        Assert.True(keptTokens >= budget, "保留部分应当累加到 15% 预算。");
+        Assert.Equal("user", kept[0].Role);
+    }
+
+    [Fact]
+    public void A_long_last_reply_still_keeps_the_last_two_rounds_starting_with_a_player_turn()
+    {
+        // 最后一条 assistant 一句话就超过 15% 预算：预算在它身上就用完了。
+        // 这时仍然要留下最近 2 轮，而且第一条是 user，不能因为「后移找 user」一条都不留。
+        var conversation = ShortRounds(10);
+        conversation.AppendAssistant(new string('长', 10_000), null);
+        var usable = ContextBudget.UsableTokens(Window);
+        var budget = (int)(usable * ContextBudget.KeepRatio);
+        Assert.True(ContextBudget.EstimateTokens(conversation.Turns[^1].Content) > budget, "最后一条要真的超过预算。");
+
+        var index = ContextBudget.KeepFromIndex(conversation, Window);
+        var kept = conversation.Turns.Skip(index).ToArray();
+
+        Assert.True(kept.Length >= ContextBudget.MinKeptRounds * 2 - 1, "至少保留最近 2 轮。");
+        Assert.Equal("user", kept[0].Role);
+        // 最后一条超长回复本身必须被留下
+        Assert.Equal(conversation.Turns[^1].Content, kept[^1].Content);
+    }
+
+    [Fact]
+    public void Manual_keep_start_lands_on_a_player_turn()
+    {
+        // 条数是单数时，「最近 2 轮」的起点会落在 assistant 上：要向前移到 user。
+        var conversation = new DmConversation();
+        conversation.AppendAssistant("开场白", null);
+        conversation.AppendUser("第一问");
+        conversation.AppendAssistant("第一答", null);
+        conversation.AppendUser("第二问");
+        conversation.AppendAssistant("第二答", null);
+
+        var index = ContextBudget.ManualKeepFromIndex(conversation);
+
+        Assert.Equal("user", conversation.Turns[index].Role);
+        // 起点向前移到「第一问」，最近的 2 轮连同开场白一起留下
+        Assert.Equal(1, index);
+    }
+
+    /// <summary>若干轮对话，每轮 2 条、约 150 token（200 个汉字加一句回复）。</summary>
+    private static DmConversation ShortRounds(int rounds)
+    {
+        var conversation = new DmConversation();
+        for (var i = 0; i < rounds; i++)
+        {
+            conversation.AppendUser($"{i}：" + new string('问', 200));
+            conversation.AppendAssistant("答", null);
+        }
+
+        return conversation;
+    }
+
     // ===== 自动整理 =====
 
     [Fact]
@@ -128,7 +199,7 @@ public sealed class DmConversationTests : IDisposable
         // 先聊几轮，让历史足够长
         for (var i = 0; i < 4; i++)
         {
-            host.InputText = $"第 {i} 轮问题";
+            host.InputText = $"第 {i} 轮问题：" + new string('问', 120);
             await host.SendAsync();
         }
 
@@ -141,14 +212,16 @@ public sealed class DmConversationTests : IDisposable
         host.InputText = "再问一句";
         await host.SendAsync();
 
-        // 更早的轮次被备忘取代
+        // 更早的轮次被备忘取代；15% 预算（989 token）只够留下最近几轮
         Assert.Equal(1, host.Conversation.CompactionCount);
         Assert.Equal("本局备忘：已经查过书房。", host.Conversation.Memo);
         Assert.True(host.Conversation.Turns.Count >= 4, "至少要保留最近 2 轮。");
         Assert.Equal("user", host.Conversation.Turns[0].Role);
+
+        // 第 0 轮是 4 轮之前的事，必须已经被整理进备忘
         Assert.DoesNotContain(
             host.Conversation.Turns,
-            turn => turn.Content.Contains("第 0 轮问题", StringComparison.Ordinal));
+            turn => turn.Role == "user" && turn.Content.StartsWith("0 轮问题", StringComparison.Ordinal));
     }
 
     [Fact]
