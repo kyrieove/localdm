@@ -27,7 +27,8 @@ public sealed class ScriptImportScanTests : IDisposable
         }
     }
 
-    private ScriptImportService NewService() => new();
+    private ScriptImportService NewService() =>
+        new(new ScriptImportOptions { DataRoot = _root });
 
     [Fact]
     public void Folders_with_images_become_groups_and_get_guessed_by_name_and_path()

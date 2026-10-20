@@ -213,6 +213,12 @@
                              Text="{Binding MineruExecutable, UpdateSourceTrigger=PropertyChanged}" />
                     <TextBlock Text="只在准备剧本时使用。正式游玩读取冻结好的剧本包，不要求这个工具运行。"
                                Style="{StaticResource ChatMeta}" Margin="0,8,0,0" />
+
+                    <TextBlock Text="备用 OCR 的 Python 解释器" Style="{StaticResource RailLabel}" Margin="0,14,0,6" />
+                    <TextBox x:Name="OcrPythonBox"
+                             Text="{Binding OcrPythonPath, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Text="留空时依次使用环境变量 LOCALDM_OCR_PYTHON 与 python。只在导入剧本时用到。"
+                               Style="{StaticResource ChatMeta}" Margin="0,8,0,0" />
                 </StackPanel>
             </Expander>
 

@@ -18,6 +18,12 @@ public sealed record ToolSettings
     /// <summary>MinerU CLI 绝对路径。</summary>
     public string? MineruExecutable { get; init; }
 
+    /// <summary>
+    /// 备用 OCR 的 Python 解释器。为空时依次退回 <c>LOCALDM_OCR_PYTHON</c> 环境变量与 <c>python</c>。
+    /// 只在导入剧本时用到，不影响游玩。
+    /// </summary>
+    public string? OcrPythonPath { get; init; }
+
     /// <summary>System.Speech 声音名称；为空表示跟随系统默认中文音色。</summary>
     public string? VoiceId { get; init; }
 

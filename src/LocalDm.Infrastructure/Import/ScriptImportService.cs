@@ -9,6 +9,22 @@ namespace LocalDm.Infrastructure.Import;
 /// </summary>
 public sealed partial class ScriptImportService
 {
+    private readonly ScriptImportOptions _options;
+    private readonly IPageExtractor _extractor;
+
+    public ScriptImportService(ScriptImportOptions options)
+    {
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        if (string.IsNullOrWhiteSpace(options.DataRoot))
+        {
+            throw new ArgumentException("导入服务必须有运行数据根。", nameof(options));
+        }
+
+        _extractor = options.Extractor ?? new MineruPageExtractor(
+            options.MineruExecutable,
+            options.MineruHome ?? Path.Combine(options.DataRoot, "mineru-home"),
+            options.OcrPythonPath);
+    }
     /// <summary>图片页的扩展名（小写，含点）。</summary>
     private static readonly string[] ImageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
 

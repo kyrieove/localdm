@@ -3,136 +3,108 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using LocalDm.Core.Domain;
 using LocalDm.Core.Import;
-using LocalDm.Core.Ports;
-using LocalDm.Infrastructure.Documents;
 using LocalDm.Infrastructure.Import;
-using LocalDm.Infrastructure.Storage;
 
 namespace LocalDm.Infrastructure.Probe;
 
 /// <summary>
-/// 把真实剧本的两批提取结果装配成可开局的 ScriptPackage，并写出就绪报告。
-/// 分层依据组织者手册的作者原话（第 7 页「后面是案件的全部真相」），不由模型判断。
+/// 命令行导入：把剧本文件夹扫成材料分组、识别、建包、写就绪报告。
+///
+/// 装配逻辑全在 <see cref="ScriptImportService"/> 里，界面走的是同一份实现。
+/// 这里只负责解析参数、按参数确认分类、把结果打成一份能看的报告。
 /// </summary>
 public static class BuildPackageProbe
 {
-    public static async Task<int> RunAsync(string[] args)
+    public static async Task<int> RunAsync(string[] args) => await RunAsync(args, extractor: null);
+
+    /// <summary>测试用重载：传入假的识别实现，其余流程与命令行完全相同。</summary>
+    public static async Task<int> RunAsync(string[] args, IPageExtractor? extractor)
     {
         var storyRoot = ArgumentValue(args, "--story")
             ?? throw new ArgumentException("需要 --story <剧本根目录>");
         var outDir = ArgumentValue(args, "--out") ?? "docs/evidence/us3";
-        var title = ArgumentValue(args, "--title") ?? "孽岛疑云";
-        var playerCount = int.Parse(ArgumentValue(args, "--players") ?? "5");
-        var home = ArgumentValue(args, "--home") ?? Path.Combine(FindRepoRoot(), ".appdata", "mineru-home");
         var dataRoot = ArgumentValue(args, "--data") ?? Path.Combine(FindRepoRoot(), ".appdata", "localdm-data");
         var flow = LoadFlow(ArgumentValue(args, "--flow"));
 
         Directory.CreateDirectory(outDir);
         Directory.CreateDirectory(dataRoot);
 
-        var roleDir = Directory.GetDirectories(storyRoot).FirstOrDefault(d => d.EndsWith("装订", StringComparison.Ordinal))
-                      ?? throw new DirectoryNotFoundException("没找到角色本目录");
-        var clueDir = Path.Combine(storyRoot, "线索卡牌");
-
-        using var runner = new MineruRunner(DefaultMineru(), home);
-        var fallback = new RapidOcrFallback(DefaultPython(), RapidOcrFallback.DefaultScriptPath());
-        var pipeline = new ImportPipeline(runner, new MineruPrivacyPreflight(home), fallback);
-
-        var identity = await runner.GetIdentityAsync(CancellationToken.None);
-        var (reportedHome, telemetry) = MineruPrivacyPreflight.ReadStatusJson(
-            await runner.RunStatusAsync("server", CancellationToken.None),
-            await runner.RunStatusAsync("telemetry", CancellationToken.None));
-        var preflight = new MineruPrivacyPreflight(home).Evaluate(identity, reportedHome, telemetry);
-        if (!preflight.Allowed)
+        var service = new ScriptImportService(new ScriptImportOptions
         {
-            Console.WriteLine($"preflight blocked: {preflight.ErrorCode}");
+            DataRoot = dataRoot,
+            MineruExecutable = ArgumentValue(args, "--mineru"),
+            MineruHome = ArgumentValue(args, "--home"),
+            OcrPythonPath = ArgumentValue(args, "--ocr-python"),
+            Extractor = extractor,
+        });
+
+        var scan = service.Scan(storyRoot);
+
+        // 标题不再写死某本剧本的名字：命令行没给就用文件夹名。
+        var title = ArgumentValue(args, "--title") ?? Path.GetFileName(Path.GetFullPath(storyRoot).TrimEnd(Path.DirectorySeparatorChar));
+        var playerCount = int.Parse(ArgumentValue(args, "--players") ?? "5");
+
+        Console.WriteLine($"剧本文件夹：{storyRoot}");
+        Console.WriteLine($"标题：{title}；玩家人数：{playerCount}");
+        foreach (var group in scan.Groups)
+        {
+            Console.WriteLine($"  [{group.Kind}] {group.Name}（{group.PageCount} 页，{group.FileTypeLabel}）— {group.GuessReason}");
+        }
+
+        if (scan.NeedsOrganizerChoice)
+        {
+            Console.WriteLine("! 没有分组像是组织者手册：请用 --organizer <分组名> 指定，或把手册放在名为「组织」「主持」「手册」的文件夹里。");
             return 2;
         }
 
-        var groups = CollectGroups(roleDir, RealScriptPackageBuilder.ExtractedGroupKind.Role)
-            .Concat(CollectGroups(clueDir, RealScriptPackageBuilder.ExtractedGroupKind.Material))
-            .ToArray();
-        var allFiles = groups.SelectMany(g => g.Files).ToArray();
-        var manifestHash = ManifestHashFor(allFiles);
-        var consent = new DataConsent
+        if (scan.HasMultipleOrganizerCandidates)
         {
-            ToolIdentity = identity.Tool,
-            Destination = "local",
-            DataKind = DataKind.RealScript,
-            SourceManifestHash = manifestHash,
-            Scope = ConsentScope.LocalProcessingOnly,
-        };
-
-        var pages = new List<RealScriptPackageBuilder.ExtractedPage>();
-        var sources = new List<SourceFile>();
-        var sw = Stopwatch.StartNew();
-
-        foreach (var group in groups)
-        {
-            foreach (var file in group.Files)
-            {
-                var label = Path.GetFileNameWithoutExtension(file);
-                var pageNumber = int.TryParse(label, out var parsed) ? parsed : 0;
-                var fileId = $"{group.Name}-{label}";
-                var imported = await pipeline.ImportFileAsync(
-                    fileId,
-                    Path.GetFullPath(file),
-                    DocumentKind.Image,
-                    pdfPageCount: null,
-                    consent: consent,
-                    CancellationToken.None,
-                    manifestHash: manifestHash,
-                    tier: ParseTier.Flash);
-
-                if (imported.Source is not null)
-                {
-                    sources.Add(imported.Source);
-                }
-
-                if (imported.Spans.Count == 0)
-                {
-                    Console.WriteLine($"  ! {fileId}: 无来源（{imported.ErrorCode ?? imported.State.ToString()}）");
-                    continue;
-                }
-
-                pages.Add(new RealScriptPackageBuilder.ExtractedPage
-                {
-                    Group = group.Name,
-                    GroupKind = group.Kind,
-                    PageNumber = pageNumber,
-                    PageLabel = label,
-                    Text = string.Join("\n", imported.Spans.Select(s => s.OriginalText)),
-                    FileId = imported.Source?.FileId ?? fileId,
-                    SpanId = imported.Spans[0].SpanId,
-                });
-
-                Console.WriteLine($"  {fileId}: {imported.Spans.Count} span(s), {imported.Spans.Sum(s => s.OriginalText.Length)} chars");
-            }
+            Console.WriteLine("! 有多个分组像是组织者手册：请用 --organizer <分组名> 指定一个。");
+            return 2;
         }
 
-        sw.Stop();
+        var organizer = ArgumentValue(args, "--organizer") ?? scan.OrganizerGroupName!;
+        var groups = scan.Groups
+            .Select(group => string.Equals(group.Name, organizer, StringComparison.Ordinal)
+                ? group with { Kind = ScriptGroupKind.Organizer }
+                : group)
+            .ToArray();
+        if (groups.All(group => group.Kind != ScriptGroupKind.Organizer))
+        {
+            Console.WriteLine($"! 指定的组织者手册分组不存在：{organizer}");
+            return 2;
+        }
 
-        // 分层按流程声明来：目录名与页号都写在声明里，换一份剧本照样能用。
-        var built = RealScriptPackageBuilder.Build(
-            title,
-            playerCount,
-            pages,
-            sources,
-            ScriptLayeringRule.FromFlow(flow),
-            flow);
+        var pagesDone = 0;
+        var lastReport = Stopwatch.StartNew();
+        var total = Stopwatch.StartNew();
+        var progress = new Progress<ImportProgress>(p =>
+        {
+            pagesDone = p.Completed;
+            if (p.Completed == p.Total || lastReport.ElapsedMilliseconds > 2000)
+            {
+                lastReport.Restart();
+                Console.WriteLine($"  识别 {p.Completed}/{p.Total} 页，失败 {p.FailedCount} 页");
+            }
+        });
 
-        // 注册到本地存档并写包文件，供应用直接读取
-        using var store = new SessionStore(Path.Combine(dataRoot, "sessions.db"));
-        await store.InitializeAsync(CancellationToken.None);
-        await store.RegisterPackageAsync(built.Package, CancellationToken.None);
+        var extraction = await service.ExtractAsync(storyRoot, groups, progress, CancellationToken.None);
+        if (extraction.IsBlocked)
+        {
+            Console.WriteLine($"preflight blocked: {extraction.BlockedCode}");
+            Console.WriteLine($"  {extraction.BlockedReason}");
+            return 2;
+        }
 
-        var packagesDir = Path.Combine(dataRoot, "packages");
-        Directory.CreateDirectory(packagesDir);
-        var packagePath = Path.Combine(packagesDir, $"{built.Package.PackageId}-{built.Package.Version}.json");
-        await File.WriteAllTextAsync(
-            packagePath,
-            JsonSerializer.Serialize(built.Package, new JsonSerializerOptions { WriteIndented = true }),
-            CancellationToken.None);
+        // 没有流程声明就不建包：宁可停在待复核，也不替剧本编一个默认流程。
+        if (flow is null)
+        {
+            Console.WriteLine("! 没有流程声明（--flow）：这份包只会生成一个「流程待确认」阶段，不能开局。");
+        }
+
+        var flowToUse = flow ?? new ScriptFlow();
+        var result = await service.BuildAsync(extraction, title, playerCount, flowToUse, CancellationToken.None);
+        var built = result.Build;
 
         var report = new
         {
@@ -145,9 +117,9 @@ public static class BuildPackageProbe
             canStart = built.Readiness.CanStart,
             status = built.Readiness.Status.ToString(),
             issueCategories = built.Readiness.IssueCategories,
-            pagesExtracted = pages.Count,
-            totalPages = allFiles.Length,
-            coverage = allFiles.Length == 0 ? 0 : Math.Round(100.0 * pages.Count / allFiles.Length, 1),
+            pagesExtracted = extraction.Pages.Count,
+            totalPages = groups.Where(g => g.Kind != ScriptGroupKind.Ignore).Sum(g => g.PageCount),
+            failedPages = extraction.FailedPages.Count,
             segmentCounts = built.SegmentCounts.ToDictionary(k => k.Key.ToString(), v => v.Value),
             truthCharacters = built.TruthCharacters,
             roleGroupCount = built.RoleGroupCount,
@@ -157,8 +129,9 @@ public static class BuildPackageProbe
             stepsNeedingReview = built.StepsNeedingReview,
             referenceIssues = built.ReferenceIssues,
             contentHash = built.Package.ContentHash,
-            packagePath = Path.GetRelativePath(FindRepoRoot(), packagePath),
-            elapsedMs = sw.ElapsedMilliseconds,
+            packagePath = Path.GetRelativePath(FindRepoRoot(), result.PackagePath),
+            flowPath = Path.GetRelativePath(FindRepoRoot(), result.FlowPath),
+            elapsedMs = total.ElapsedMilliseconds,
         };
 
         var reportPath = Path.Combine(outDir, "real-package.json");
@@ -173,31 +146,14 @@ public static class BuildPackageProbe
 
         Console.WriteLine();
         Console.WriteLine($"package={built.Package.PackageId} canStart={built.Readiness.CanStart} " +
-                          $"pages={pages.Count}/{allFiles.Length} elapsed={sw.ElapsedMilliseconds}ms");
+                          $"pages={extraction.Pages.Count}");
         Console.WriteLine($"  角色本分组={built.RoleGroupCount} 线索卡牌分组={built.MaterialGroupCount}");
-
-        // 流程不再由软件推断：没有声明文件就没有可开局的阶段顺序。
-        if (!built.FlowDeclared)
-        {
-            Console.WriteLine("  ! 没有流程声明（--flow）：这份包只会生成一个「流程待确认」阶段，不能开局。");
-        }
-        else if (built.StepsNeedingReview.Count > 0)
-        {
-            Console.WriteLine("  ! 以下环节缺来源依据，整包停在 NeedsReview："
-                              + string.Join("、", built.StepsNeedingReview));
-        }
-
-        // 声明里指向不存在的材料/段落/分组：点名报出来，不静默丢弃。
-        foreach (var issue in built.Package.Validation == PackageValidationState.Ready
-                     ? []
-                     : built.Readiness.IssueCategories.Where(i =>
-                         i.StartsWith("UNKNOWN_", StringComparison.Ordinal)
-                         || i.StartsWith("FLOW_", StringComparison.Ordinal)))
-        {
-            Console.WriteLine("  ! " + issue);
-        }
-
         Console.WriteLine($"  内容指纹={built.Package.ContentHash}（换了流程就会变，旧存档不会接受新包）");
+
+        if (extraction.FailedPages.Count > 0)
+        {
+            Console.WriteLine($"  ! {extraction.FailedPages.Count} 页没有识别出文字：{string.Join("、", extraction.FailedPages)}");
+        }
 
         if (built.MaterialGroupCount == 0)
         {
@@ -208,69 +164,10 @@ public static class BuildPackageProbe
         {
             Console.WriteLine($"  ! 识别到 {built.RoleGroupCount} 个角色本分组，但本子是 {playerCount} 人：请人工核对是否有角色本被误判成线索卡。");
         }
-        foreach (var kv in built.SegmentCounts)
-        {
-            Console.WriteLine($"  {kv.Key}: {kv.Value} segments");
-        }
 
         Console.WriteLine("wrote " + reportPath);
         return built.Readiness.CanStart ? 0 : 1;
     }
-
-    private static IEnumerable<(string Name, string[] Files, RealScriptPackageBuilder.ExtractedGroupKind Kind)> CollectGroups(
-        string root,
-        RealScriptPackageBuilder.ExtractedGroupKind kind)
-    {
-        foreach (var dir in Directory.GetDirectories(root).OrderBy(d => d, StringComparer.Ordinal))
-        {
-            // 图片页序只能由 manifest 明确指定，不能按文件名字典序猜剧情。
-            // 这里按「先数字页，再同页的卡背」排：数字升序，卡背紧跟其正面。
-            var files = Directory.GetFiles(dir, "*.jpg")
-                .OrderBy(f => PageOrderKey(Path.GetFileNameWithoutExtension(f)))
-                .ThenBy(f => f, StringComparer.Ordinal)
-                .ToArray();
-            if (files.Length == 0)
-            {
-                continue;
-            }
-
-            yield return (Path.GetFileName(dir), files, kind);
-        }
-    }
-
-    /// <summary>页键：正面页取数字本身，卡背取「同号 + 0.5」，保证卡背排在正面之后。</summary>
-    private static double PageOrderKey(string name)
-    {
-        var digits = name.TrimEnd('卡', '背');
-        if (int.TryParse(digits, out var page))
-        {
-            return name.Length == digits.Length ? page : page + 0.5;
-        }
-
-        // 无法归类的图排到最后，但仍保留（不静默丢弃）
-        return double.MaxValue;
-    }
-
-    private static string ManifestHashFor(IEnumerable<string> files)
-    {
-        var builder = new System.Text.StringBuilder();
-        foreach (var file in files)
-        {
-            builder.Append(Path.GetFileName(file)).Append('|')
-                .Append(ManifestFingerprint.ComputeSha256(file))
-                .Append('\n');
-        }
-
-        return ManifestFingerprint.ComputeSha256Text(builder.ToString());
-    }
-
-    private static string DefaultMineru() =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin", "mineru.exe");
-
-    private static string DefaultPython() =>
-        Environment.GetEnvironmentVariable("LOCALDM_OCR_PYTHON") is { Length: > 0 } configured && File.Exists(configured)
-            ? configured
-            : "python";
 
     private static string? ArgumentValue(string[] args, string name)
     {

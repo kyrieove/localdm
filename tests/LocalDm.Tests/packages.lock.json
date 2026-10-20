@@ -218,6 +218,14 @@
           "System.Speech": "[10.0.13, )"
         }
       },
+      "localdm.probe": {
+        "type": "Project",
+        "dependencies": {
+          "LocalDm": "[1.0.0, )",
+          "LocalDm.Core": "[1.0.0, )",
+          "LocalDm.Infrastructure": "[1.0.0, )"
+        }
+      },
       "Microsoft.Data.Sqlite": {
         "type": "CentralTransitive",
         "requested": "[10.0.13, )",

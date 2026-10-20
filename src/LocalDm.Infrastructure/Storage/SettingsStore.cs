@@ -136,6 +136,7 @@ public sealed class SettingsStore
             ModelId = dto.ModelId,
             CallerKeyRef = dto.CallerKeyRef,
             MineruExecutable = dto.MineruExecutable,
+            OcrPythonPath = dto.OcrPythonPath,
             VoiceId = dto.VoiceId,
             InputHint = dto.InputHint ?? ToolSettings.Default.InputHint,
             // 旧设置文件没有这一项：默认自动朗读，与旧行为一致。
@@ -190,6 +191,7 @@ public sealed class SettingsStore
         ModelId = settings.ModelId,
         CallerKeyRef = settings.CallerKeyRef,
         MineruExecutable = settings.MineruExecutable,
+        OcrPythonPath = settings.OcrPythonPath,
         VoiceId = settings.VoiceId,
         InputHint = settings.InputHint,
         AutoRead = settings.AutoRead,
@@ -313,6 +315,9 @@ public sealed class SettingsStore
         public string? CallerKeyRef { get; set; }
 
         public string? MineruExecutable { get; set; }
+
+        /// <summary>可空：旧设置文件没有这一项时退回环境变量与 python。</summary>
+        public string? OcrPythonPath { get; set; }
 
         public string? VoiceId { get; set; }
 

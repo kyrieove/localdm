@@ -19,6 +19,8 @@
     <ProjectReference Include="..\..\src\LocalDm.Core\LocalDm.Core.csproj" />
     <ProjectReference Include="..\..\src\LocalDm.Infrastructure\LocalDm.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\LocalDm.App\LocalDm.App.csproj" />
+    <!-- 4.4 要对比「命令行生成的包」与「服务直接生成的包」，命令行入口在这个工程里。 -->
+    <ProjectReference Include="..\..\tools\LocalDm.Probe\LocalDm.Probe.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -27,6 +27,7 @@ public sealed class SetupViewModel : ObservableObject
     private string _voiceId = string.Empty;
     private string _callerKeyState = "未配置 caller key（本机 Magpie 通常不需要）。";
     private string _mineruExecutable = string.Empty;
+    private string _ocrPythonPath = string.Empty;
     private bool _autoRead = true;
     private int _contextWindowTokens = ToolSettings.DefaultContextWindowTokens;
     private double _uiScale = ToolSettings.DefaultUiScale;
@@ -181,6 +182,13 @@ public sealed class SetupViewModel : ObservableObject
         set => SetProperty(ref _mineruExecutable, value);
     }
 
+    /// <summary>备用 OCR 的 Python 解释器；留空则依次退回环境变量与 python。</summary>
+    public string OcrPythonPath
+    {
+        get => _ocrPythonPath;
+        set => SetProperty(ref _ocrPythonPath, value);
+    }
+
     public bool Busy
     {
         get => _busy;
@@ -219,6 +227,7 @@ public sealed class SetupViewModel : ObservableObject
         ChatWidthMode = _settings.ChatWidthMode;
         _loadedVoiceId = VoiceId;
         MineruExecutable = _settings.MineruExecutable ?? string.Empty;
+        OcrPythonPath = _settings.OcrPythonPath ?? string.Empty;
         CallerKeyState = string.IsNullOrWhiteSpace(_settings.CallerKeyRef)
             ? "未配置 caller key（本机 Magpie 通常不需要）。"
             : "已配置 caller key（DPAPI 加密，不显示明文）。";
@@ -261,6 +270,7 @@ public sealed class SetupViewModel : ObservableObject
                 ModelId = ModelId,
                 CallerKeyRef = _settings.CallerKeyRef,
                 MineruExecutable = _settings.MineruExecutable,
+                OcrPythonPath = OcrPythonPath,
                 VoiceId = ResolveVoiceId(),
                 AutoRead = AutoRead,
                 InputHint = _settings.InputHint,
@@ -369,6 +379,7 @@ public sealed class SetupViewModel : ObservableObject
                 ModelId = string.IsNullOrWhiteSpace(ModelId) ? null : ModelId.Trim(),
                 CallerKeyRef = _settings.CallerKeyRef,
                 MineruExecutable = string.IsNullOrWhiteSpace(MineruExecutable) ? null : MineruExecutable.Trim(),
+                OcrPythonPath = string.IsNullOrWhiteSpace(OcrPythonPath) ? null : OcrPythonPath.Trim(),
                 VoiceId = voiceId,
                 AutoRead = AutoRead,
                 InputHint = _settings.InputHint,
