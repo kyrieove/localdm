@@ -185,6 +185,49 @@ public sealed class HostConversationTests : IDisposable
         Assert.DoesNotContain(gateway.Requests[^1].Messages, m => m.Content.Contains("上一局玩家的独有提问。", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// 软件刚打开、还没装载剧本就点「继续一局」：这条路径会退回演示剧本。
+    /// 走的是和正常装载剧本不同的入口，对话记忆必须照样存档，
+    /// 否则重启后接不上，主持人会发现模型把玩家说过的话全忘了。
+    /// </summary>
+    [Fact]
+    public async Task Resume_without_loaded_script_saves_and_restores_the_conversation()
+    {
+        var store = new SessionStore(Path.Combine(_root, "sessions.db"));
+        await store.InitializeAsync(TestContext.Current.CancellationToken);
+
+        // 先有一局演示存档：没装载剧本时「继续一局」恢复的就是它。
+        var setup = NewHost(new CountingGateway(), new CountingTts(), store, autoRead: false);
+        await setup.LoadDemoAsync();
+
+        // 重启后什么都没装载，直接「继续一局」。
+        var gateway = new CountingGateway();
+        var host = NewHost(gateway, new CountingTts(), store, autoRead: false);
+        await host.ResumeAsync();
+
+        host.InputText = "记住这句话：门后是仓库。";
+        await host.SendAsync();
+
+        // 这一轮必须落进存档
+        var snapshot = await store.LoadDmConversationAsync(
+            LocalDm.App.Demo.DemoPackage.SessionId,
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(snapshot);
+        Assert.Contains(snapshot!.Turns, turn => turn.Content == "记住这句话：门后是仓库。");
+
+        // 再重启一次：记忆要接得上，新一轮请求里带着上一轮的原话
+        var reopenedGateway = new CountingGateway();
+        var reopened = NewHost(reopenedGateway, new CountingTts(), store, autoRead: false);
+        await reopened.ResumeAsync();
+
+        reopened.InputText = "我刚才说了什么？";
+        await reopened.SendAsync();
+
+        Assert.Contains(
+            reopenedGateway.Requests[^1].Messages,
+            m => m.Role == "user" && m.Content.Contains("记住这句话：门后是仓库。", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task Replay_holds_the_session_busy_gate_so_the_stage_cannot_move()
     {
@@ -336,6 +379,15 @@ public sealed class HostConversationTests : IDisposable
     {
         var store = new SessionStore(Path.Combine(_root, "sessions.db"));
         await store.InitializeAsync(TestContext.Current.CancellationToken);
+        return NewHost(gateway, tts, store, autoRead);
+    }
+
+    private static HostViewModel NewHost(
+        CountingGateway gateway,
+        CountingTts tts,
+        ISessionStore store,
+        bool autoRead)
+    {
         var settings = ToolSettings.Default with { ModelId = "test-model", AutoRead = autoRead };
         return new HostViewModel(
             new HostDirector(gateway, tts),

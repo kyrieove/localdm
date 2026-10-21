@@ -609,16 +609,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         string loadedStatus,
         string loadedPublic)
     {
-        if (_conversationSessionId != session.SessionId)
-        {
-            if (IsBusy)
-            {
-                StopCommand.Execute(null);
-            }
-            Messages.Clear();
-            _conversation = new DmConversation();
-            _conversationSessionId = session.SessionId;
-        }
+        BindConversationSession(session.SessionId);
 
         if (session.State == SessionState.Prepared)
         {
@@ -643,6 +634,31 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ShowOpeningSpeech));
         OnPropertyChanged(nameof(ShowSuggestions));
         OnPropertyChanged(nameof(HasConversation));
+    }
+
+    /// <summary>
+    /// 把对话记忆绑定到某一局。
+    ///
+    /// 记忆必须跟着「这一局」走：换局就把上一局的记忆和屏幕记录清掉，
+    /// 否则会被写进别的存档，恢复时也会串局。
+    /// 没有绑定任何局时（还没装载剧本、还没恢复任何一局），
+    /// 存档那一步会直接跳过 —— 对话不会被丢进无名的存档里。
+    /// </summary>
+    private void BindConversationSession(string sessionId)
+    {
+        if (_conversationSessionId == sessionId)
+        {
+            return;
+        }
+
+        if (IsBusy)
+        {
+            StopCommand.Execute(null);
+        }
+
+        Messages.Clear();
+        _conversation = new DmConversation();
+        _conversationSessionId = sessionId;
     }
 
     /// <summary>装载演示剧本并建立/恢复一局；不自动开始、不自动播音。</summary>
@@ -722,6 +738,8 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         SpeechState = SpeechState.Idle;
         _session.Attach(package, result.Session);
         OnPropertyChanged(nameof(SessionSummary));
+        // 恢复的这一局就是「这一局」：对话记忆必须绑上去，否则后面聊的天不会存档。
+        BindConversationSession(result.Session.SessionId);
         Status = "已恢复上一次的进度。不会自动重播。";
         AppendEvent($"已恢复至「{result.Session.CurrentPhaseId}」所在环节。");
         await LoadConversationAsync(result.Session.SessionId);
