@@ -16,7 +16,8 @@
 ## 首次设置（设置与诊断页）
 
 1. **模型地址**：默认 `http://127.0.0.1:3425/`。首版只接受本机 loopback 地址，填别的会被拒绝。
-2. 点「读取模型列表」→ 选择实际 model ID（默认推荐 `group/auto-deepseek-v4-1-flash`）。
+2. 点「读取模型列表」→ 选择实际 model ID（默认推荐 `codex/gpt-6.1-sol`，其次 `workbuddy-ai/deepseek-v4.1-flash`）。
+   不要选 `group/auto…`、`auto/…` 这一族路由：它们不转发 system 消息，AI 主持会拿不到剧本资料。
    列表成功只说明端点可用，不代表生成一定成功。
 3. **中文声音**：下拉框选音色，点「试听」。没有中文音色时应用仍会显示文字，只是不播音。
 4. **caller key**（可选）：本机 Magpie 通常不需要。填了之后点「加密保存 caller key」，密钥用 Windows DPAPI 保存，

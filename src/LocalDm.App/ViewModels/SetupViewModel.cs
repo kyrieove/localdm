@@ -301,10 +301,19 @@ public sealed class SetupViewModel : ObservableObject
     {
         var list = models.ToArray();
         return list.FirstOrDefault(m => m == "codex/gpt-6.1-sol")
-            ?? list.FirstOrDefault(m => m == "group/auto-deepseek-v4-1-flash")
-            ?? list.FirstOrDefault()
+            ?? list.FirstOrDefault(m => m == "workbuddy-ai/deepseek-v4.1-flash")
+            ?? list.FirstOrDefault(m => !DropsSystemMessage(m))
             ?? string.Empty;
     }
+
+    /// <summary>
+    /// group/auto… 与 auto/… 这一族路由实测不转发 system 消息（见 docs/evidence/us3/ai-dm-acceptance.md「环境备注」）。
+    /// 主持资料和提示词都在 system 里，默认选到它们，AI 就什么资料都拿不到，所以不作为默认值；
+    /// 用户仍可以手动选。
+    /// </summary>
+    private static bool DropsSystemMessage(string modelId) =>
+        modelId.StartsWith("group/auto", StringComparison.OrdinalIgnoreCase)
+        || modelId.StartsWith("auto/", StringComparison.OrdinalIgnoreCase);
 
     private void RefreshVoices()
     {
