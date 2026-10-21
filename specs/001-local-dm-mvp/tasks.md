@@ -189,18 +189,18 @@ TextSubmissionTests.cs 与独立 HostUncertaintyTests.cs 可分别编写，HostI
 **顺序约束**：本节 T068–T070 的技术探针必须先通过，才允许进入后续任务；探针失败时交付实测证据并停下修订技术选择。
 
 - [x] T068 [P] [US6] 用合成图片与合成对话搭建最小探针：同进程启动和停止 ASP.NET Core 局域网服务，验证 HTTP 图片传输，记录端口、地址与防火墙提示到 docs/evidence/tablet/service-spike.md。
-- [x] T069 [P] [US6] 用 Blazor Interactive Server 实现加入、选角色、角色页翻页与按名称点单卡的最小页面，页面走 HTTP 图片接口，不用 Base64 传输图片。（合成探针实现，见 src/LocalDm.Tablet。）
-- [ ] T070 [P] [US6] 在 Windows 发布目录验证 Windows 原生 PDF 页数读取与逐页渲染，并核实二维码生成库许可与运行时依赖，结果写入 docs/evidence/tablet/pdf-render-spike.md。（已实测字符串计数在压缩 PDF 上不可靠；原生投影与二维码库未落地。）
+- [x] T069 [P] [US6] 用 Blazor Interactive Server 实现合成角色认领、文库纸页文字阅读、字号与行距、章节与文本位置恢复，以及按名称点单卡；图片走 HTTP，不用 Base64 传输。仅为 src/LocalDm.Tablet 合成探针，尚未接正式剧本和 WPF。
+- [ ] T070 [P] [US6] 在 Windows 发布目录验证 Windows 原生 PDF 页数读取与逐页渲染，并核实二维码生成库许可与运行时依赖，结果写入 docs/evidence/tablet/pdf-render-spike.md。（原生合成 PDF 已验证；二维码辅助脚本未完成独立扫码与正式发布验收，不标整项完成。）
 - [ ] T071 [US6] 记录真实 iPad 与安卓平板各一台的浏览器试验：扫码加入、图片阅读、双指缩放、横竖屏、切后台与锁屏恢复、6 会话并发，含设备型号、系统、浏览器版本与实际结果，写入 docs/evidence/tablet/browser-spike.md；未执行项标「未执行」，不得用桌面浏览器或模拟器替代。
 - [ ] T072 [US6] 在 src/LocalDm.Core/Tablet/ 定义 TabletManifest、TabletAsset、卡片索引与只读查询契约，落实「平板取图必须按 cardId 与冻结资产索引解析，不得按显示名称拼路径或模糊命中取第一张。」「卡片组未准备好时请求必须失败并显示原因，不得以整页图片替代单张。」
 - [ ] T073 [P] [US6] 在 tests/LocalDm.Tests/TabletQueryTests.cs 与 TabletAssetTests.cs 准备合成用例：同名卡、缺名称、配对冲突、组未准备好、旧包无清单。
-- [ ] T074 [US6] 在 src/LocalDm.Infrastructure/Import/ 实现单卡配对、通用网格裁切与角色本图片化，记录原文件 hash、页号、有效区域、网格、槽位与映射；不为任一剧本写专属尺寸或别名。
+- [ ] T074 [US6] 在 src/LocalDm.Infrastructure/Import/ 实现单卡配对、通用网格裁切及角色本原文块、插图与原稿资产建包，记录原文件 hash、页号、有效区域、网格、槽位与映射；不为任一剧本写专属尺寸或别名。文字阅读采用文库纸页，禁止改写或补写。
 - [ ] T075 [P] [US6] 在 tests/LocalDm.Tests/TabletAssetTests.cs 覆盖网格合成图：每槽不同标记、四边标记、空槽、非整数行高、5×2、左半区 5×1、反转映射。
 - [ ] T076 [US6] 在导入向导增加平板材料准备区与分组失败说明，取消导入只清理本次未发布临时资产；旧包缺清单时提示重新准备，纸质模式照常可用。
 - [ ] T077 [P] [US6] 在 tests/LocalDm.UiTests/TabletImportTests.cs 覆盖准备区公开字段与未准备好提示，不出现卡面或真相。
 - [ ] T078 [US6] 新建 src/LocalDm.Tablet/ 并加入 LocalDm.slnx，实现 HTTP 路由、局域网配置、二维码与浏览器会话；默认关闭，只绑定所选局域网 IPv4。
 - [ ] T079 [P] [US6] 在 tests/LocalDm.Tests/TabletHttpTests.cs 实际启动服务并发请求：加入、认领冲突、目录、取图、角色页、401/403/404/409、路径穿越与猜测资产。
-- [ ] [US6] T080 在 WPF 主持台接入开启/停止入口、二维码与连接状态，停止后旧页面与旧令牌立即失效，落实「局域网服务默认关闭，只在用户开启后绑定所选局域网 IPv4；停止后旧令牌与旧会话立即失效。」
+- [ ] T080 [US6] 在 WPF 主持台接入开启/停止入口、二维码与连接状态，停止后旧页面与旧令牌立即失效，落实「局域网服务默认关闭，只在用户开启后绑定所选局域网 IPv4；停止后旧令牌与旧会话立即失效。」
 - [ ] T081 [P] [US6] 在 tests/LocalDm.UiTests/TabletHostTests.cs 覆盖开启、停止与重启生命周期及「连不上怎么办」入口存在。
 - [ ] T082 [US6] 建立公开消息记录与按序号同步，接入 HostViewModel.AddMessage 的公共出口与已提交环节变化，落实「公开消息必须带本局 ID 与单调序号，按序号去重；模型备忘不得进入投影。」
 - [ ] T083 [P] [US6] 在 tests/LocalDm.Tests/TabletPublicFeedTests.cs 覆盖重连补发、重复消息、保存失败、重启与切局隔离，并断言备忘不进入同步。
@@ -306,6 +306,6 @@ US6 先过技术探针与真实平板门槛，再建资产、页面与同步；�
 部分完成与受阻项的差异均已写入对应 docs/evidence 文件，未以自动化替代真人验收。
 
 平板分发增量（US6，T068–T084）状态：T068、T069 已实现并通过自动化验证（`docs/evidence/tablet/browser-spike.md`）；
-T070 部分完成——字符串页数计数的不可靠性已实测，`Windows.Data.Pdf` 投影与二维码库尚未落地；
+T070 部分完成——原生 PDF 页数与渲染已在合成测试接入，二维码已有独立辅助脚本，但未完成正式应用入口及独立扫码验收；角色本主路径已改为原文排版，原生 PDF 用于必要的原稿核对。
 T071 真实 iPad 与安卓平板试验**未执行**（未连接设备，不限定浏览器品牌）。
 T072 起的正式建设在 T071 通过后进行。

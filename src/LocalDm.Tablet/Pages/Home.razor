@@ -2,80 +2,154 @@
 @using LocalDm.Core.Tablet
 @inject TabletSpikeState State
 @inject IHttpContextAccessor Http
+@inject NavigationManager Nav
+@inject IJSRuntime Js
 @implements IDisposable
 @* 交互渲染模式必须显式声明：只注册 AddInteractiveServerComponents 不会让按钮生效。 *@
-@rendermode RenderMode.InteractiveServer
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 
 @{
     // 没有会话 Cookie 时现场发一个：每台设备各拿各的键。
-    var _sessionKey = TabletSessions.KeyFor(Http.HttpContext) ?? TabletSessions.Issue(Http.HttpContext!);
     var session = State.Session(_sessionKey);
 }
 
-<h1>合成探针 · 平板</h1>
-<p class="meta">合成材料，不含任何真实剧本内容。</p>
+<div class="shell">
+    <header class="shell-bar">
+        <div class="shell-title">
+            <span class="mark" aria-hidden="true">局</span>
+            <span>本局主持 · 平板</span>
+        </div>
+        <div class="shell-right">
+            @if (session.RoleId is not null)
+            {
+                <span class="shell-role">@State.Roles.First(r => r.RoleId == session.RoleId).DisplayName</span>
+                <button class="tool" @onclick="Release">退出重选</button>
+            }
+        </div>
+    </header>
 
-@if (session.RoleId is null)
-{
-    <p class="status">先选一个角色。</p>
-    <ul class="card-list">
-        @foreach (var role in State.Roles)
-        {
-            var taken = State.ClaimedRoles.Contains(role.RoleId, StringComparer.Ordinal);
-            <li>
-                <button disabled="@taken" @onclick="() => Claim(role.RoleId)">
-                    <span class="card-name">@role.DisplayName</span>
-                    <span class="card-sub">@role.PageCount 页@(taken ? " · 已被认领" : "")</span>
-                </button>
-            </li>
-        }
-    </ul>
-    @if (_claimFailed)
+    @if (session.RoleId is null)
     {
-        <p class="status warn">这个角色刚被别人认领了，请另选一个。</p>
+        <section class="join">
+            <h1>加入本局</h1>
+            <p class="lead">
+                与电脑连接同一 Wi-Fi 后打开本页即可。选一个角色开始阅读；已被别人认领的角色不能再选。
+            </p>
+
+            <div class="address">
+                <label for="addr">本局地址</label>
+                <div class="address-row">
+                    <input id="addr" readonly value="@Nav.BaseUri.TrimEnd('/')" />
+                    <button @onclick="CopyAddress">复制</button>
+                </div>
+                <p class="hint">也可以扫描电脑上的二维码加入。</p>
+            </div>
+
+            <ul class="role-list">
+                @foreach (var role in State.Roles)
+                {
+                    var taken = State.ClaimedRoles.Contains(role.RoleId, StringComparer.Ordinal);
+                    <li>
+                        <button disabled="@taken" @onclick="() => Claim(role.RoleId)">
+                            <span class="role-name">@role.DisplayName</span>
+                            <span class="role-sub">@(taken ? "已被认领" : "可认领")</span>
+                        </button>
+                    </li>
+                }
+            </ul>
+            @if (_claimFailed)
+            {
+                <p class="warn">这个角色刚被别人认领了，请另选一个。</p>
+            }
+            @if (_copied)
+            {
+                <p class="ok">地址已复制。</p>
+            }
+            @if (_copyFailed)
+            {
+                <p class="warn">浏览器未允许自动复制，请选中上方网址后复制。</p>
+            }
+        </section>
     }
-}
-else
-{
-    var role = State.Roles.First(r => r.RoleId == session.RoleId);
-    <p class="status">
-        当前角色：@role.DisplayName
-        <button @onclick="() => Release()">退出重选</button>
-    </p>
-
-    <h2>线索卡目录（按名称）</h2>
-    <ul class="card-list">
-        @foreach (var card in State.Cards)
-        {
-            <li>
-                <button @onclick="() => Select(card.CardId)">
-                    <span class="card-name">@card.DisplayName</span>
-                    <span class="card-sub">@card.GroupName · @card.SourceOrder</span>
-                </button>
-            </li>
-        }
-    </ul>
-
-    @if (session.SelectedCardId is not null)
+    else
     {
-        <img class="shot" src="/tablet/cards/@session.SelectedCardId/front" alt="线索卡" />
-    }
+        <div class="workspace">
+            <nav class="tabs" aria-label="平板功能">
+                <button class="@(_tab == TabBook ? "active" : "")" @onclick="() => SwitchTab(TabBook)">我的角色本</button>
+                <button class="@(_tab == TabCards ? "active" : "")" @onclick="() => SwitchTab(TabCards)">全部线索卡</button>
+                <button class="@(_tab == TabPublic ? "active" : "")" @onclick="() => SwitchTab(TabPublic)">公共对话</button>
+            </nav>
 
-    <h2>角色本</h2>
-    <p class="meta">
-        <button @onclick="() => OpenPage(1)">第 1 页</button>
-        <button @onclick="() => OpenPage(2)">第 2 页</button>
-        <button @onclick="() => OpenPage(3)">第 3 页</button>
-    </p>
-    @if (session.RolePage is not null)
-    {
-        <img class="shot" src="/tablet/role/pages/@session.RolePage" alt="角色本" />
+            @if (_tab == TabBook)
+            {
+                <RoleReader @key="session.RoleId" Book="Book" RoleName="@RoleName" Settings="session.Settings"
+                            Offset="session.ReadingOffset" OnProgress="ProgressCallback" />
+            }
+            else if (_tab == "cards")
+            {
+                <section class="cards">
+                    <h2>全部线索卡</h2>
+                    <p class="lead">点哪张看哪张，只在这台设备上显示。已准备好的卡都能打开。</p>
+                    <ul class="card-list">
+                        @foreach (var card in State.Cards)
+                        {
+                            <li>
+                                <button class="@(session.SelectedCardId == card.CardId ? "active" : "")"
+                                        @onclick="() => Select(card.CardId)">
+                                    <span class="card-name">@card.DisplayName</span>
+                                    <span class="card-sub">@card.GroupName · @card.SourceOrder</span>
+                                </button>
+                            </li>
+                        }
+                    </ul>
+                    @if (session.SelectedCardId is not null)
+                    {
+                        <figure class="shot">
+                            <img src="/tablet/cards/@session.SelectedCardId/front" alt="线索卡" />
+                        </figure>
+                    }
+                </section>
+            }
+            else
+            {
+                <section class="public">
+                    <h2>公共对话</h2>
+                    <p class="lead">只读。提问、推进、投票和揭秘都在电脑上完成。</p>
+                    <ol class="feed">
+                        @foreach (var line in PublicFeed)
+                        {
+                            <li class="@line.Kind">@line.Text</li>
+                        }
+                    </ol>
+                </section>
+            }
+        </div>
     }
-}
+</div>
 
 @code {
+    private const string TabBook = "book";
+    private const string TabCards = "cards";
+    private const string TabPublic = "public";
+
+    private string _tab = TabBook;
     private bool _claimFailed;
+    private bool _copied;
+    private bool _copyFailed;
+
     private string _sessionKey = string.Empty;
+
+    private RoleBookText Book => State.Data.RoleBooks[State.Session(_sessionKey).RoleId!];
+
+    private string RoleName => State.Roles.First(r => r.RoleId == State.Session(_sessionKey).RoleId).DisplayName;
+
+    /// <summary>合成公共对话：探针不连真实本局，只证明只读投影的呈现。</summary>
+    private IReadOnlyList<(string Kind, string Text)> PublicFeed { get; } =
+    [
+        ("event", "合成环节：阅本"),
+        ("host", "这是合成公共对话，用于验证平板只读显示。"),
+        ("player", "合成玩家发言。"),
+    ];
 
     protected override void OnInitialized()
     {
@@ -98,6 +172,13 @@ else
     private void Release()
     {
         State.Release(_sessionKey);
+        _tab = TabBook;
+        TabletSessions.RaiseChanged();
+    }
+
+    private void SwitchTab(string tab)
+    {
+        _tab = tab;
         TabletSessions.RaiseChanged();
     }
 
@@ -107,9 +188,20 @@ else
         TabletSessions.RaiseChanged();
     }
 
-    private void OpenPage(int pageNumber)
+    private void SaveProgress(ReadingProgressUpdate update)
     {
-        State.Session(_sessionKey).RolePage = pageNumber;
-        TabletSessions.RaiseChanged();
+        var session = State.Session(_sessionKey);
+        session.ReadingOffset = Math.Max(0, update.CharacterOffset);
+        session.Settings = ReadingSettings.Clamp(update.Settings);
+    }
+
+    /// <summary>阅读器进度回调。Blazor 的 EventCallback 只接受同类型委托，用工厂构造。</summary>
+    private EventCallback<ReadingProgressUpdate> ProgressCallback =>
+        EventCallback.Factory.Create<ReadingProgressUpdate>(this, SaveProgress);
+
+    private async Task CopyAddress()
+    {
+        _copied = await Js.InvokeAsync<bool>("tabletClipboard.copy", Nav.BaseUri.TrimEnd('/'));
+        _copyFailed = !_copied;
     }
 }

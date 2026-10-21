@@ -41,7 +41,7 @@ truth 单独位于包的私有段，PublicPackageProjection 不含此字段。
 cards 每项含 cardId、displayName、groupName、sourceOrder、frontAssetId、可选 backAssetId、preparationState。
 preparationState 为 Ready 或 NotReady；NotReady 必须带脱敏原因分类（缺正面、配对冲突、裁切未确认、资产缺失）。
 名称是玩家定位入口，取图只用 cardId；同名卡的列表项必须显示分组和编号，禁止模糊搜索命中后自动取第一张。应用 C13、C14。
-roles 每项含 roleId 与有序 assetId 列表（角色页）；物理路径、SourceSpan 原文、组织者手册与 truth 不进入该段。
+roles 每项含 roleId、RoleBookText 与有序原稿 assetId 列表；本人原文仅由角色接口提供，物理路径、组织者手册与 truth 不进入该段。
 
 ## TabletAsset（新增）
 
@@ -55,6 +55,8 @@ roles 每项含 roleId 与有序 assetId 列表（角色页）；物理路径、
 浏览器按 sessionId + sequence 去重，重连后按 after=sequence 补发。应用 C16。
 
 ## TabletSession（新增）
+
+合成阅读探针已实现 RoleBookText、RoleBookChapter、RoleBookBlock、ReadingPosition 和 ReadingSettings。章节与块顺序保持原样，字符流包含一次章题、节题、正文和插图原有文字及图注；空分隔不加字符。偏移按 UTF-16 计数，0 为有效起点。原稿页号单独保留。正式冻结包接入与持久化尚未实现，当前内存中的合成会话不能当作完整存档。
 
 字段 browserSessionId、sessionId（本局）、roleId、joinedAt。
 由加入令牌换取，仅存 Cookie；不做设备绑定、账号或电脑审批。服务停止、切局或重启后失效。应用 C17。

@@ -1,13 +1,13 @@
 namespace LocalDm.Core.Tablet;
 
 /// <summary>合成角色：探针用，不含任何真实剧本内容。</summary>
-public sealed record TabletSpikeRole(string RoleId, string DisplayName, int PageCount);
+public sealed record TabletSpikeRole(string RoleId, string DisplayName);
 
 /// <summary>合成卡片目录项：名称、分组与来源序号。</summary>
 public sealed record TabletSpikeCard(string CardId, string DisplayName, string GroupName, int SourceOrder);
 
 /// <summary>
-/// 合成探针数据：角色、卡片目录与资产根目录。
+/// 合成材料探针数据：角色、卡片目录与角色本文本。
 /// 资产目录里的文件在探针启动时生成（合成 PNG），不读 stories/、.appdata/、.local/。
 /// </summary>
 public sealed class TabletSpikeData
@@ -18,4 +18,10 @@ public sealed class TabletSpikeData
 
     /// <summary>私有资产根目录；只经 cardId 与页码间接引用，客户端拿不到物理路径。</summary>
     public required string AssetRoot { get; init; }
+
+    /// <summary>剧本名，显示在阅读器顶部。</summary>
+    public required string StoryTitle { get; init; }
+
+    /// <summary>每个角色的阅读材料（合成文本）。</summary>
+    public required IReadOnlyDictionary<string, RoleBookText> RoleBooks { get; init; }
 }

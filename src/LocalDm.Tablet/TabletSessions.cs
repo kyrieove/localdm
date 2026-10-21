@@ -24,6 +24,11 @@ public static class TabletSessions
             return null;
         }
 
+        if (context.Items.TryGetValue(CookieName, out var issued) && issued is string key)
+        {
+            return key;
+        }
+
         if (context.Request.Cookies.TryGetValue(CookieName, out var existing) && existing.Length > 0)
         {
             return existing;
@@ -36,6 +41,7 @@ public static class TabletSessions
     public static string Issue(HttpContext context)
     {
         var fresh = Guid.NewGuid().ToString("N");
+        context.Items[CookieName] = fresh;
         context.Response.Cookies.Append(CookieName, fresh, new CookieOptions
         {
             HttpOnly = true,

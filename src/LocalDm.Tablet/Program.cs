@@ -15,7 +15,7 @@ if (args.Contains("--urls") is false && builder.Configuration["urls"] is not { L
 var assetRoot = Path.Combine(Path.GetTempPath(), "localdm-tablet-blazor-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(assetRoot);
 var roles = Enumerable.Range(1, 6)
-    .Select(i => new TabletSpikeRole($"role-{i}", $"合成角色 {i}", 3))
+    .Select(i => new TabletSpikeRole($"role-{i}", $"合成角色 {i}"))
     .ToArray();
 var cards = new[]
 {
@@ -32,21 +32,54 @@ foreach (var card in cards)
     SyntheticAssets.WriteCard(Path.Combine(assetRoot, card.CardId + ".png"), card.CardId);
 }
 
+// 角色本主阅读方式是文字排版；这里仍给每角色生成一页原稿图，
+// 用来验证「查看原稿」入口与角色页隔离。真实产品里原稿页来自导入资产。
 foreach (var role in roles)
 {
-    for (var page = 1; page <= role.PageCount; page++)
+    for (var page = 1; page <= 3; page++)
     {
-        SyntheticAssets.WritePage(Path.Combine(assetRoot, $"{role.RoleId}-p{page}.png"), $"{role.RoleId}-p{page}");
+        SyntheticAssets.WritePage(Path.Combine(assetRoot, $"{role.RoleId}-source-{page}.png"), $"{role.RoleId}-source-{page}");
     }
 }
 
+var book = SyntheticRoleBook.Create();
+var roleBooks = roles.ToDictionary(r => r.RoleId, r => book with
+{
+    RoleId = r.RoleId,
+    Chapters = book.Chapters.Select((chapter, index) => chapter with
+    {
+        Blocks = chapter.Blocks.Select(block => block with { SourcePageNumber = index + 1 }).ToArray(),
+    }).ToArray(),
+    SourcePageAssetIds = Enumerable.Range(1, 3).Select(page => $"{r.RoleId}-source-{page}").ToArray(),
+    Confidence = book.Confidence with { HasSourcePages = true },
+}, StringComparer.Ordinal);
+
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
-builder.Services.AddSingleton(new TabletSpikeData { Roles = roles, Cards = cards, AssetRoot = assetRoot });
+builder.Services.AddSingleton(new TabletSpikeData
+{
+    Roles = roles,
+    Cards = cards,
+    AssetRoot = assetRoot,
+    StoryTitle = SyntheticRoleBook.Title,
+    RoleBooks = roleBooks,
+});
 builder.Services.AddSingleton<TabletSpikeState>();
 builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/tablet"))
+    {
+        context.Response.Headers.CacheControl = "no-store";
+    }
+    if (context.Request.Path == "/" && TabletSessions.KeyFor(context) is null)
+    {
+        TabletSessions.Issue(context);
+    }
+    await next(context);
+});
 app.UseAntiforgery();
 
 // Debug 下 wwwroot 留在源目录；内容根指到输出目录时把它作为静态文件源。
@@ -70,6 +103,7 @@ app.MapPost("/tablet/release", (TabletSpikeState state, HttpContext context) =>
     if (key is not null)
     {
         state.Release(key);
+        TabletSessions.RaiseChanged();
     }
 
     return Results.Json(new { released = true });
@@ -87,7 +121,9 @@ app.MapPost("/tablet/claim", (string? roleId, TabletSpikeState state, HttpContex
     // 没有会话 Cookie 的请求先发一个：认领必须落到某个具体会话上，
     // 否则「谁认领的」无从谈起。
     var key = TabletSessions.KeyFor(context) ?? TabletSessions.Issue(context);
-    return state.TryClaim(key, roleId)
+    var claimed = state.TryClaim(key, roleId);
+    if (claimed) TabletSessions.RaiseChanged();
+    return claimed
         ? Results.Json(new { claimed = true, roleId })
         : Results.Conflict(new { claimed = false, reason = "TAKEN" });
 });
@@ -96,6 +132,7 @@ app.MapPost("/tablet/claim", (string? roleId, TabletSpikeState state, HttpContex
 // 同时给出「已被认领的角色」清单：真实设备上要能看到别人占了哪个角色。
 app.MapGet("/tablet/catalog", (TabletSpikeData data, TabletSpikeState state) => Results.Json(new
 {
+    storyTitle = data.StoryTitle,
     roles = data.Roles,
     cards = data.Cards,
     claimedRoles = state.ClaimedRoles,
@@ -117,29 +154,109 @@ app.MapGet("/tablet/cards/{cardId}/front", (string cardId, TabletSpikeData data)
     return File.Exists(path) ? Results.File(path, "image/png") : Results.NotFound();
 });
 
-app.MapGet("/tablet/role/pages/{pageNumber:int}", (
-    int pageNumber,
+// 角色本：按认领角色返回章节与块的纯文本。
+// 客户端不能传别人的角色；没有会话或没认领就什么都不给。
+app.MapGet("/tablet/role/book", (TabletSpikeData data, TabletSpikeState state, HttpContext context) =>
+{
+    var role = SessionRole(state, context);
+    if (role is null)
+    {
+        return Results.NotFound();
+    }
+
+    return Results.Json(new
+    {
+        roleId = role.RoleId,
+        storyTitle = data.StoryTitle,
+        chapters = data.RoleBooks[role.RoleId].Chapters.Select(c => new
+        {
+            chapterId = c.ChapterId,
+            title = c.Title,
+            blocks = c.Blocks.Select(b => new
+            {
+                blockId = b.BlockId,
+                kind = b.Kind.ToString(),
+                text = b.Text,
+                sourcePageNumber = b.SourcePageNumber,
+                imageAssetId = b.ImageAssetId,
+                imageCaption = b.ImageCaption,
+            }),
+        }),
+        confidence = new
+        {
+            totalBlocks = data.RoleBooks[role.RoleId].Confidence.TotalBlocks,
+            suspectBlocks = data.RoleBooks[role.RoleId].Confidence.EmptyOrSuspectBlocks,
+            hasSourcePages = data.RoleBooks[role.RoleId].Confidence.HasSourcePages,
+        },
+    });
+});
+
+// 阅读进度：按角色与会话保存，刷新、改字号、横竖屏切换后都能回到读到的位置。
+app.MapGet("/tablet/role/progress", (TabletSpikeState state, HttpContext context) =>
+{
+    var role = SessionRole(state, context);
+    if (role is null)
+    {
+        return Results.NotFound();
+    }
+
+    var session = state.Session(TabletSessions.KeyFor(context)!);
+    return Results.Json(new
+    {
+        roleId = role.RoleId,
+        characterOffset = session.ReadingOffset,
+        settings = new
+        {
+            fontSize = session.Settings.FontSize,
+            lineSpacing = session.Settings.LineSpacing,
+            focusMode = session.Settings.FocusMode,
+        },
+    });
+});
+
+app.MapPost("/tablet/role/progress", (
+    ReadingProgressRequest? request,
     TabletSpikeState state,
     HttpContext context) =>
 {
-    // 从 Cookie 解析本人角色：客户端不能传别人的角色。
-    // 没有会话 Cookie 直接拒绝，不能凭「不带 Cookie」读到任何角色页。
-    var key = TabletSessions.KeyFor(context);
-    if (key is null)
+    var role = SessionRole(state, context);
+    if (role is null || request is null)
     {
         return Results.NotFound();
     }
 
-    var session = state.Session(key);
-    var role = session.RoleId is null
-        ? null
-        : state.Roles.FirstOrDefault(r => r.RoleId == session.RoleId);
-    if (role is null || pageNumber < 1 || pageNumber > role.PageCount)
+    var session = state.Session(TabletSessions.KeyFor(context)!);
+    session.ReadingOffset = Math.Max(0, request.CharacterOffset);
+    session.Settings = ReadingSettings.Clamp(new ReadingSettings
+    {
+        FontSize = request.FontSize,
+        LineSpacing = request.LineSpacing,
+        FocusMode = request.FocusMode,
+    });
+    return Results.Json(new { saved = true, characterOffset = session.ReadingOffset });
+});
+
+// 原稿页核对入口：返回本人角色的原稿图，不给别人的，也不给物理路径。
+app.MapGet("/tablet/role/source", (TabletSpikeData data, TabletSpikeState state, HttpContext context) =>
+{
+    var role = SessionRole(state, context);
+    if (role is null)
     {
         return Results.NotFound();
     }
 
-    var path = Path.Combine(state.Data.AssetRoot, $"{role.RoleId}-p{pageNumber}.png");
+    var path = Path.Combine(data.AssetRoot, $"{role.RoleId}-source-1.png");
+    return File.Exists(path) ? Results.File(path, "image/png") : Results.NotFound();
+});
+
+app.MapGet("/tablet/role/source/{page:int}", (int page, TabletSpikeData data, TabletSpikeState state, HttpContext context) =>
+{
+    var role = SessionRole(state, context);
+    if (role is null || page < 1 || page > data.RoleBooks[role.RoleId].SourcePageAssetIds.Count)
+    {
+        return Results.NotFound();
+    }
+    var path = Path.Combine(data.AssetRoot, $"{role.RoleId}-source-{page}.png");
     return File.Exists(path) ? Results.File(path, "image/png") : Results.NotFound();
 });
 
@@ -147,6 +264,26 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+
+/// <summary>从 Cookie 解析本人角色；没有会话或没有认领时返回 null。</summary>
+static TabletSpikeRole? SessionRole(TabletSpikeState state, HttpContext context)
+{
+    var key = TabletSessions.KeyFor(context);
+    if (key is null)
+    {
+        return null;
+    }
+
+    var roleId = state.Session(key).RoleId;
+    return roleId is null ? null : state.Roles.FirstOrDefault(r => r.RoleId == roleId);
+}
+
+/// <summary>阅读进度请求体。偏移量 0 是有效值（第一页开头）。</summary>
+public sealed record ReadingProgressRequest(
+    long CharacterOffset,
+    int FontSize,
+    string LineSpacing,
+    bool FocusMode);
 
 /// <summary>合成图片写入：探针自己造内容，不读任何真实材料。</summary>
 /// <remarks>

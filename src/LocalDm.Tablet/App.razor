@@ -1,13 +1,12 @@
-@using Microsoft.AspNetCore.Components.Routing
-@using Microsoft.AspNetCore.Components.Web
 <!DOCTYPE html>
-<html lang="zh-Cans">
+<html lang="zh-CN">
 
 <head>
     <meta charset="utf-8" />
+    <title>本局主持 · 平板阅读</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <base href="/" />
-    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="reader.css" />
     <HeadOutlet />
 </head>
 
@@ -21,6 +20,8 @@
             <p>找不到这一页。</p>
         </NotFound>
     </Router>
+    <script src="reader-pagination.js"></script>
+    <script src="tablet-shell.js"></script>
     <script src="_framework/blazor.web.js"></script>
 </body>
 

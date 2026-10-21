@@ -1,0 +1,217 @@
+@using LocalDm.Core.Tablet
+@implements IAsyncDisposable
+@inject IJSRuntime Js
+
+<div class="reader @(_activeSettings.FocusMode ? "focus" : "")" style="--body-size:@(_activeSettings.FontSize)px;--leading:@_activeSettings.LineSpacing">
+    <div class="reader-bar">
+        <span class="crumb">@RoleName</span>
+        <div class="reader-tools">
+            <span class="page-read">第 @(_index + 1) / @_total 页</span>
+            <button class="tool" @onclick="ToggleSettings" aria-expanded="@_settingsOpen">Aa</button>
+            <button class="tool" @onclick="ToggleFocus">@(_activeSettings.FocusMode ? "退出专注" : "专注")</button>
+            @if (Book?.SourcePageAssetIds.Count > 0)
+            {
+                <button class="tool" @onclick="() => _showSource = !_showSource">@(_showSource ? "收起原稿" : "查看原稿")</button>
+            }
+        </div>
+    </div>
+
+    @if (_settingsOpen)
+    {
+        <div class="settings">
+            <h2>按你的习惯阅读</h2>
+            <div class="row">
+                <span>文字大小</span>
+                <div class="stepper">
+                    <button @onclick="() => ChangeFont(-1)" disabled="@(_activeSettings.FontSize <= ReadingSettings.MinFontSteps)" aria-label="减小字号">A−</button>
+                    <output>@_activeSettings.FontSize</output>
+                    <button @onclick="() => ChangeFont(1)" disabled="@(_activeSettings.FontSize >= ReadingSettings.MaxFontSteps)" aria-label="增大字号">A＋</button>
+                </div>
+            </div>
+            <label class="row"><span>行间留白</span>
+                <select value="@_activeSettings.LineSpacing" @onchange="OnSpacingChanged">
+                    <option value="@ReadingSettings.SpacingCompact">紧凑</option>
+                    <option value="@ReadingSettings.SpacingRelaxed">舒展</option>
+                    <option value="@ReadingSettings.SpacingLoose">宽松</option>
+                </select>
+            </label>
+            <p>字号和屏幕变化后按文本位置重新分页。阅读器页码与原稿页码不同。</p>
+        </div>
+    }
+
+    <div class="reader-body">
+        @if (_showSource)
+        {
+            <figure class="source-shot">
+                <img src="/tablet/role/source/@_sourcePage" alt="本人角色本原稿第 @_sourcePage 页" />
+                <figcaption>原稿第 @_sourcePage 页，仅用于核对识别文字。</figcaption>
+            </figure>
+        }
+        <header class="chapter-head">
+            <div class="chapter-meta"><span class="line"></span><span>@_chapterLabel</span></div>
+            @if (Book is not null)
+            {
+                <nav class="reader-chapters" aria-label="角色本章节">
+                    @for (var i = 0; i < Book.Chapters.Count; i++)
+                    {
+                        var chapter = i;
+                        <button class="tool" aria-current="@(i == _chapter ? "location" : null)" @onclick="() => JumpChapter(chapter)">@Book.Chapters[i].Title</button>
+                    }
+                </nav>
+            }
+        </header>
+        <div class="page-window">
+            <article class="page-body measure" aria-hidden="true" @ref="_measure"></article>
+            <article class="page-body" tabindex="0" aria-label="当前页正文" @ref="_body"></article>
+        </div>
+    </div>
+    <footer class="reader-foot">
+        <div class="foot-left"><span>@_chapterLabel · @_chapterTitle</span><span class="muted">按文本位置记录进度</span></div>
+        <div class="page-controls">
+            <button class="arrow" @onclick="() => Turn(-1)" disabled="@(_index <= 0)" aria-label="上一页">‹</button>
+            <button class="arrow" @onclick="() => Turn(1)" disabled="@(_index >= _total - 1)" aria-label="下一页">›</button>
+        </div>
+    </footer>
+</div>
+
+@code {
+    private ElementReference _body;
+    private ElementReference _measure;
+    private DotNetObjectReference<RoleReader>? _reference;
+    private RoleBookText? _loadedBook;
+    private ReadingSettings _activeSettings = new();
+    private ReadingProgressUpdate? _lastReported;
+    private bool _mounted;
+    private bool _needsMount;
+    private bool _needsPagination;
+    private bool _disposed;
+    private bool _settingsOpen;
+    private bool _showSource;
+    private long _offset;
+    private int _index;
+    private int _total;
+    private int _chapter;
+    private int _sourcePage = 1;
+    private string _chapterLabel = string.Empty;
+    private string _chapterTitle = string.Empty;
+
+    [Parameter] public RoleBookText? Book { get; set; }
+    [Parameter] public string RoleName { get; set; } = string.Empty;
+    [Parameter] public ReadingSettings Settings { get; set; } = new();
+    [Parameter] public long Offset { get; set; }
+    [Parameter] public EventCallback<ReadingProgressUpdate> OnProgress { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        var incoming = ReadingSettings.Clamp(Settings);
+        if (!ReferenceEquals(_loadedBook, Book))
+        {
+            _loadedBook = Book;
+            _offset = Offset;
+            _activeSettings = incoming;
+            _lastReported = null;
+            _needsMount = true;
+        }
+        else if (incoming != _activeSettings)
+        {
+            _activeSettings = incoming;
+            _needsPagination = true;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_disposed || Book is null || (!_needsMount && !_needsPagination)) return;
+        if (_needsMount)
+        {
+            _needsMount = false;
+            _reference ??= DotNetObjectReference.Create(this);
+            await Js.InvokeVoidAsync("tabletReader.mount", _body, _measure, Flatten(Book), _reference);
+            _mounted = true;
+        }
+        _needsPagination = false;
+        await Js.InvokeVoidAsync("tabletReader.paginate", _offset);
+        await SyncStateAsync();
+    }
+
+    private static object[] Flatten(RoleBookText book)
+    {
+        var result = new List<object>();
+        foreach (var chapter in book.Chapters)
+        {
+            result.Add(new { kind = "ChapterTitle", text = chapter.Title, sourcePageNumber = chapter.Blocks.FirstOrDefault()?.SourcePageNumber });
+            foreach (var block in chapter.Blocks.Where(block => block.Kind != RoleBookBlockKind.ChapterTitle))
+            {
+                result.Add(new
+                {
+                    kind = block.Kind.ToString(), text = block.Text, blockId = block.BlockId,
+                    sourcePageNumber = block.SourcePageNumber, imageAssetId = block.ImageAssetId,
+                    caption = block.ImageCaption,
+                    sourceUrl = block.ImageAssetId is not null && block.SourcePageNumber is int page
+                        ? $"/tablet/role/source/{page}" : null,
+                });
+            }
+        }
+        return result.ToArray();
+    }
+
+    private async Task Turn(int delta)
+    {
+        if (!_mounted) return;
+        await Js.InvokeVoidAsync("tabletReader.turn", delta);
+        await SyncStateAsync();
+    }
+
+    private async Task JumpChapter(int chapter)
+    {
+        if (!_mounted) return;
+        await Js.InvokeVoidAsync("tabletReader.jumpChapter", chapter);
+        await SyncStateAsync();
+    }
+
+    [JSInvokable]
+    public Task ReaderLayoutChanged() => InvokeAsync(SyncStateAsync);
+
+    private async Task SyncStateAsync()
+    {
+        if (!_mounted || _disposed) return;
+        _index = await Js.InvokeAsync<int>("tabletReader.index");
+        _total = await Js.InvokeAsync<int>("tabletReader.total");
+        _offset = await Js.InvokeAsync<long>("tabletReader.offset");
+        _chapter = await Js.InvokeAsync<int>("tabletReader.chapter");
+        _sourcePage = await Js.InvokeAsync<int?>("tabletReader.sourcePage") ?? 1;
+        if (Book is not null && _chapter >= 0 && _chapter < Book.Chapters.Count)
+        {
+            _chapterLabel = $"第 {_chapter + 1} 章";
+            _chapterTitle = Book.Chapters[_chapter].Title;
+        }
+        var update = new ReadingProgressUpdate(_offset, _activeSettings);
+        if (update != _lastReported)
+        {
+            _lastReported = update;
+            await OnProgress.InvokeAsync(update);
+        }
+        StateHasChanged();
+    }
+
+    private void ToggleSettings() => _settingsOpen = !_settingsOpen;
+    private void ToggleFocus() => SetSettings(_activeSettings with { FocusMode = !_activeSettings.FocusMode });
+    private void ChangeFont(int delta) => SetSettings(_activeSettings with { FontSize = _activeSettings.FontSize + delta });
+    private void OnSpacingChanged(ChangeEventArgs args) => SetSettings(_activeSettings with { LineSpacing = args.Value?.ToString() ?? ReadingSettings.SpacingRelaxed });
+    private void SetSettings(ReadingSettings settings)
+    {
+        _activeSettings = ReadingSettings.Clamp(settings);
+        _needsPagination = true;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        if (_mounted)
+        {
+            try { await Js.InvokeVoidAsync("tabletReader.reset"); }
+            catch (JSDisconnectedException) { }
+        }
+        _reference?.Dispose();
+    }
+}

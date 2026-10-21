@@ -14,6 +14,7 @@ namespace LocalDm.Tests;
 /// </summary>
 internal sealed class TabletBlazorHost : IDisposable
 {
+    private static readonly object PublishGate = new();
     private readonly Process _process;
     private readonly string _directory;
     private readonly int _port;
@@ -78,6 +79,15 @@ internal sealed class TabletBlazorHost : IDisposable
 
     private static void Publish(string projectPath, string directory)
     {
+        // 不同发布目录仍共用工程的 obj/bin，只串行构建，运行中的服务仍然独立。
+        lock (PublishGate)
+        {
+            PublishCore(projectPath, directory);
+        }
+    }
+
+    private static void PublishCore(string projectPath, string directory)
+    {
         var publish = new ProcessStartInfo("dotnet")
         {
             WorkingDirectory = Path.GetDirectoryName(projectPath)!,
@@ -92,20 +102,21 @@ internal sealed class TabletBlazorHost : IDisposable
         publish.ArgumentList.Add("-o");
         publish.ArgumentList.Add(directory);
 
-        var process = new Process { StartInfo = publish };
+        using var process = new Process { StartInfo = publish };
         process.Start();
-        _ = process.StandardOutput.ReadToEndAsync();
-        // 必须等 stderr 真正读完：直接拿 Task 进异常消息只会打出一串状态机类型名。
-        var error = process.StandardError.ReadToEndAsync().GetAwaiter().GetResult();
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
         if (!process.WaitForExit(180_000))
         {
             process.Kill(entireProcessTree: true);
+            process.WaitForExit();
             throw new TimeoutException("publish 探针应用超时。");
         }
 
         if (process.ExitCode != 0)
         {
-            throw new InvalidOperationException("publish 探针应用失败：" + error);
+            throw new InvalidOperationException(
+                $"publish 探针应用失败（{process.ExitCode}）：\n{output.GetAwaiter().GetResult()}\n{error.GetAwaiter().GetResult()}");
         }
     }
 
