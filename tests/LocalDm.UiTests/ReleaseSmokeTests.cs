@@ -27,6 +27,7 @@ public sealed class ReleaseSmokeTests
 
             var shell = await composition.CreateShellAsync(CancellationToken.None);
             var window = new MainWindow { DataContext = shell, ShowActivated = false };
+            WpfRunner.MoveOffScreen(window);
             window.Show();
             try
             {

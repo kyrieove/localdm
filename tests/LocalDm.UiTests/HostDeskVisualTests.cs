@@ -48,6 +48,7 @@ public sealed class HostDeskVisualTests
 
             var shell = await composition.CreateShellAsync(CancellationToken.None);
             var window = new MainWindow { DataContext = shell, ShowActivated = false, Width = 1320, Height = 820 };
+            WpfRunner.MoveOffScreen(window);
             window.Show();
             try
             {
@@ -108,6 +109,7 @@ public sealed class HostDeskVisualTests
 
             var shell = await composition.CreateShellAsync(CancellationToken.None);
             var window = new MainWindow { DataContext = shell, ShowActivated = false, Width = 1320, Height = 820 };
+            WpfRunner.MoveOffScreen(window);
             window.Show();
             try
             {
@@ -185,6 +187,7 @@ public sealed class HostDeskVisualTests
 
             var shell = await composition.CreateShellAsync(CancellationToken.None);
             var window = new MainWindow { DataContext = shell, ShowActivated = false, Width = 1320, Height = 820 };
+            WpfRunner.MoveOffScreen(window);
             window.Show();
             try
             {
@@ -217,6 +220,7 @@ public sealed class HostDeskVisualTests
 
             var shell = await composition.CreateShellAsync(CancellationToken.None);
             var window = new MainWindow { DataContext = shell, ShowActivated = false, Width = 1320, Height = 820 };
+            WpfRunner.MoveOffScreen(window);
             window.Show();
             try
             {
@@ -257,6 +261,7 @@ public sealed class HostDeskVisualTests
 
             var shell = await composition.CreateShellAsync(CancellationToken.None);
             var window = new MainWindow { DataContext = shell, ShowActivated = false, Width = 1320, Height = 820 };
+            WpfRunner.MoveOffScreen(window);
             window.Show();
             try
             {
@@ -299,6 +304,7 @@ public sealed class HostDeskVisualTests
 
             var shell = await composition.CreateShellAsync(CancellationToken.None);
             var window = new MainWindow { DataContext = shell, ShowActivated = false, Width = 1320, Height = 820 };
+            WpfRunner.MoveOffScreen(window);
             window.Show();
             try
             {

@@ -13,6 +13,20 @@ internal static class WpfRunner
     private static Application? _app;
     private static System.Windows.Threading.Dispatcher? _dispatcher;
 
+    /// <summary>
+    /// 把窗口放到屏幕外。界面测试必须真的 Show() 才能量布局、渲染快照，
+    /// 但跑测试的人不该被一路闪过的窗口打断；屏幕外位置让这两件事同时成立。
+    /// 只改位置，不动尺寸、可见性与渲染，所以快照与断言结果都不受影响。
+    /// </summary>
+    public static void MoveOffScreen(Window window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Left = -32000;
+        window.Top = -32000;
+        window.ShowInTaskbar = false;
+    }
+
     public static async Task RunAsync(Func<Task> body)
     {
         await Gate.WaitAsync(TestContext.Current.CancellationToken);

@@ -50,6 +50,7 @@ public sealed class ConversationVisualTests
             using var testShell = await TestShell.OpenAsync(root.Path);
             var shell = testShell.Shell;
             var window = NewWindow(shell, 1360, 860);
+            WpfRunner.MoveOffScreen(window);
             window.Show();
             try
             {
@@ -97,6 +98,7 @@ public sealed class ConversationVisualTests
             using var testShell = await TestShell.OpenAsync(root.Path);
             var shell = testShell.Shell;
             var window = NewWindow(shell, width, height);
+            WpfRunner.MoveOffScreen(window);
             window.Show();
             try
             {
@@ -128,6 +130,7 @@ public sealed class ConversationVisualTests
             using var testShell = await TestShell.OpenAsync(root.Path);
             var shell = testShell.Shell;
             var window = NewWindow(shell, 1360, 860);
+            WpfRunner.MoveOffScreen(window);
             window.Show();
             try
             {
@@ -178,6 +181,7 @@ public sealed class ConversationVisualTests
             using var testShell = await TestShell.OpenAsync(root.Path, tts);
             var shell = testShell.Shell;
             var window = NewWindow(shell, 1360, 860);
+            WpfRunner.MoveOffScreen(window);
             window.Show();
             try
             {
@@ -245,6 +249,7 @@ public sealed class ConversationVisualTests
             using var testShell = await TestShell.OpenAsync(root.Path);
             var shell = testShell.Shell;
             var window = NewWindow(shell, 1360, 860);
+            WpfRunner.MoveOffScreen(window);
             window.Show();
             try
             {
@@ -279,6 +284,7 @@ public sealed class ConversationVisualTests
             using var testShell = await TestShell.OpenAsync(root.Path);
             var shell = testShell.Shell;
             var window = NewWindow(shell, 1360, 860);
+            WpfRunner.MoveOffScreen(window);
             window.Show();
             try
             {
@@ -327,6 +333,7 @@ public sealed class ConversationVisualTests
             using var testShell = await TestShell.OpenAsync(root.Path);
             var shell = testShell.Shell;
             var window = NewWindow(shell, 1280, 800);
+            WpfRunner.MoveOffScreen(window);
             window.Show();
             window.Activate();
             try
