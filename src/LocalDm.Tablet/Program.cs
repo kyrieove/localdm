@@ -66,6 +66,7 @@ builder.Services.AddSingleton(new TabletSpikeData
 });
 builder.Services.AddSingleton<TabletSpikeState>();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<IPublicFeedSource, SpikePublicFeedSource>();
 
 var app = builder.Build();
 app.Use(async (context, next) =>
@@ -258,6 +259,49 @@ app.MapGet("/tablet/role/source/{page:int}", (int page, TabletSpikeData data, Ta
     }
     var path = Path.Combine(data.AssetRoot, $"{role.RoleId}-source-{page}.png");
     return File.Exists(path) ? Results.File(path, "image/png") : Results.NotFound();
+});
+
+// 公开消息：按序号取。断线重连时带着上次的序号来要，就只拿新的。
+// 没有浏览器会话就拒绝：平板必须先加入这一局，不能凭猜来读。
+app.MapGet("/tablet/public", async (IPublicFeedSource source, HttpContext context) =>
+{
+    if (TabletSessions.KeyFor(context) is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    if (!long.TryParse(context.Request.Query["after"], out var after))
+    {
+        // 没带 after 就是从头要；带错了必须说不行，不能悄悄当成 0。
+        if (context.Request.Query.ContainsKey("after"))
+        {
+            return Results.BadRequest();
+        }
+
+        after = 0;
+    }
+
+    if (after < 0)
+    {
+        return Results.BadRequest();
+    }
+
+    var snapshot = await source.ReadAsync(after, context.RequestAborted);
+    return Results.Json(new
+    {
+        sessionId = snapshot.SessionId,
+        phase = new { id = snapshot.PhaseId, title = snapshot.PhaseTitle },
+        messages = snapshot.Messages.Select(m => new
+        {
+            sequence = m.Sequence,
+            messageId = m.MessageId,
+            author = m.Author.ToString(),
+            kind = m.Kind.ToString(),
+            text = m.Text,
+            createdAt = m.CreatedAt.ToString("O"),
+        }),
+        nextSequence = snapshot.NextSequence,
+    });
 });
 
 app.MapRazorComponents<App>()

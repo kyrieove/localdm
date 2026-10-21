@@ -1,4 +1,6 @@
 using System.IO;
+using System.Net;
+using System.Net.Http;
 using LocalDm.Core.Hosting;
 using LocalDm.Core.Ports;
 using LocalDm.Core.Tablet;
@@ -291,6 +293,68 @@ public sealed class TabletPublicFeedTests : IDisposable
         var store = new SessionStore(Path.Combine(_root, "sessions.db"));
         await store.InitializeAsync(TestContext.Current.CancellationToken);
         return store;
+    }
+
+    /// <summary>
+    /// 真的起服务、真发请求：公开消息按序号取，断线重连能补发。
+    /// </summary>
+    [Fact]
+    public async Task The_public_endpoint_serves_messages_by_sequence()
+    {
+        using var host = TabletBlazorHost.Start(Project("LocalDm.Tablet.csproj"));
+        using var handler = new HttpClientHandler { UseCookies = true, CookieContainer = new CookieContainer() };
+        using var client = new HttpClient(handler)
+        {
+            BaseAddress = new Uri($"http://127.0.0.1:{host.Port}"),
+            Timeout = TimeSpan.FromSeconds(30),
+        };
+        var ct = TestContext.Current.CancellationToken;
+
+        // 没有浏览器会话就拒绝：平板必须先加入这一局
+        var anonymous = await client.GetAsync("/tablet/public", ct);
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+
+        // 首页会发会话 Cookie，之后就能读公开消息
+        await client.GetStringAsync("/", ct);
+
+        var payload = await client.GetStringAsync("/tablet/public", ct);
+        using var document = System.Text.Json.JsonDocument.Parse(payload);
+        var root = document.RootElement;
+
+        Assert.Equal("搜证", root.GetProperty("phase").GetProperty("title").GetString());
+        Assert.Equal(3, root.GetProperty("messages").GetArrayLength());
+        Assert.Equal(1, root.GetProperty("messages")[0].GetProperty("sequence").GetInt64());
+        Assert.Equal(3, root.GetProperty("nextSequence").GetInt64());
+
+        // 断线重连：带着上次的序号来要，只拿新的
+        var tail = await client.GetStringAsync("/tablet/public?after=2", ct);
+        using var tailDocument = System.Text.Json.JsonDocument.Parse(tail);
+        var tailRoot = tailDocument.RootElement;
+        Assert.Equal(1, tailRoot.GetProperty("messages").GetArrayLength());
+        Assert.Equal(3, tailRoot.GetProperty("messages")[0].GetProperty("sequence").GetInt64());
+        Assert.Equal(3, tailRoot.GetProperty("nextSequence").GetInt64());
+
+        // 已经是最新：没有新的可补，下一序号不变
+        var none = await client.GetStringAsync("/tablet/public?after=3", ct);
+        using var noneDocument = System.Text.Json.JsonDocument.Parse(none);
+        Assert.Equal(0, noneDocument.RootElement.GetProperty("messages").GetArrayLength());
+        Assert.Equal(3, noneDocument.RootElement.GetProperty("nextSequence").GetInt64());
+
+        // after 带错了必须说不行，不能悄悄当成从头
+        var bad = await client.GetAsync("/tablet/public?after=abc", ct);
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+    }
+
+    private static string Project(string projectFileName)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "LocalDm.slnx")))
+        {
+            dir = dir.Parent;
+        }
+
+        var root = dir?.FullName ?? throw new InvalidOperationException("找不到仓库根目录。");
+        return Directory.GetFiles(Path.Combine(root, "src"), projectFileName, SearchOption.AllDirectories).Single();
     }
 
     /// <summary>造一个「还没有公开消息表」的旧库：只有当时的几个表。</summary>
