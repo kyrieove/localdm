@@ -96,6 +96,7 @@ public static class DmAcceptanceProbe
                 "story" => await RunStoryPhaseAsync(package, settingsPath, dataRoot, workDb, writer, modelOverride, asks, advanceTo),
                 "chat" => await RunChatPhaseAsync(package, settingsPath, dataRoot, writer, modelOverride),
                 "untuned" => await RunUntunedPhaseAsync(package, settingsPath, dataRoot, writer, modelOverride),
+                "compare" => await RunComparePhaseAsync(package, settingsPath, dataRoot, writer, modelOverride),
                 _ => 2,
             };
         }
@@ -674,16 +675,353 @@ public static class DmAcceptanceProbe
         }
     }
 
+    private static async Task<int> RunComparePhaseAsync(
+        ScriptPackage package,
+        string settingsPath,
+        string dataRoot,
+        TranscriptWriter writer,
+        string? modelOverride)
+    {
+        var settingsStore = new SettingsStore(settingsPath, Path.Combine(dataRoot, "secrets"));
+        var seed = settingsStore.Load();
+        var rawMagpie = new MagpieGateway
+        {
+            BaseUri = seed.MagpieBaseUri,
+            CallerKey = settingsStore.LoadCallerKey(seed.CallerKeyRef),
+        };
+        var tracker = new TrackingMagpieGateway(rawMagpie);
+        var runDir = Path.GetDirectoryName(writer.Path)!;
+
+        // ===== 第一局：常规问答（第 1–7 条、5 道未调参题、第 8 条揭秘） =====
+        Console.WriteLine();
+        Console.WriteLine("========== 第一局：问答与揭秘 ==========");
+        var game1Db = Path.Combine(runDir, "sessions-game1.db");
+        using (var store1 = new SessionStore(game1Db))
+        {
+            await store1.InitializeAsync(CancellationToken.None);
+            await store1.RegisterPackageAsync(package, CancellationToken.None);
+        }
+
+        using var host1 = NewHost(settingsPath, dataRoot, game1Db, modelOverride, gatewayOverride: tracker);
+        await host1.LoadPackageAsync(package);
+        if (host1.Session.Package is null)
+        {
+            Console.WriteLine("第一局装载剧本包失败：" + host1.Status);
+            return 4;
+        }
+
+        await StepAsync(host1, () => host1.Session.ExecuteAsync(GameCommandType.Start, null, null));
+        writer.WriteHeader(host1.Session.PhaseTitle, host1.ContextUsageText);
+
+        await AskTrackedAsync(host1, writer, tracker, "1", "你好，你是什么模型？");
+        await AskTrackedAsync(host1, writer, tracker, "2", "我们刚开始，要先干什么？");
+        await AskTrackedAsync(host1, writer, tracker, "2b", "接下来呢？");
+        await AskTrackedAsync(host1, writer, tracker, "3", "不要再重复规则了，直接说现在该做什么");
+        await AskTrackedAsync(host1, writer, tracker, "4", "我们去调查书房");
+        await AskTrackedAsync(host1, writer, tracker, "5", "地下室一号房能直接进吗？");
+        await AskTrackedAsync(host1, writer, tracker, "6a", "谁是凶手？");
+        await AskTrackedAsync(host1, writer, tracker, "6b", "阿杰和阿海是不是同一个人？");
+
+        var revisionBefore = host1.Session.Revision;
+        await AskTrackedAsync(host1, writer, tracker, "7", "下一步我该做什么？");
+        writer.Note(
+            "7",
+            $"提案：{DescribeProposal()}；推进到下一环节的提案没有出现："
+            + (host1.Session.Revision == revisionBefore ? "是" : "否（revision 变了）"));
+
+        // 5 道未调参题（保持在开局阅本阶段）
+        string[] untunedQuestions =
+        [
+            "我们三个人都觉得是唐小姐，对吗？",
+            "手枪上的指纹说明了什么？",
+            "你能不能偷偷告诉我一个提示，就一个？",
+            "我们是不是漏查了什么地方？",
+            "如果凶手不在我们五个人里面，会是谁？",
+        ];
+        for (var i = 0; i < untunedQuestions.Length; i++)
+        {
+            await AskTrackedAsync(host1, writer, tracker, $"未调参{i + 1}", untunedQuestions[i]);
+        }
+
+        // 第 8 条：推进到揭秘
+        var revealLog = await AdvanceToRevealAsync(host1);
+        writer.Note("8", revealLog);
+        await AskTrackedAsync(host1, writer, tracker, "8a", "讲一下真相");
+        await AskTrackedAsync(host1, writer, tracker, "8b", "凶器最后在哪里？");
+
+        // ===== 第二局：自动压缩与压缩后追问（第 9、10 条，窗口 65536） =====
+        Console.WriteLine();
+        Console.WriteLine("========== 第二局：自动压缩与追问（窗口 65536） ==========");
+        var game2Db = Path.Combine(runDir, "sessions-game2.db");
+        using (var store2 = new SessionStore(game2Db))
+        {
+            await store2.InitializeAsync(CancellationToken.None);
+            await store2.RegisterPackageAsync(package, CancellationToken.None);
+        }
+
+        using var host2 = NewHost(settingsPath, dataRoot, game2Db, modelOverride, windowOverride: 65536, gatewayOverride: tracker);
+        await host2.LoadPackageAsync(package);
+        await StepAsync(host2, () => host2.Session.ExecuteAsync(GameCommandType.Start, null, null));
+        writer.WriteChatHeader(host2.Session.PhaseTitle, host2.ContextUsageText, 65536);
+
+        // 第 10 条前置
+        await AskTrackedAsync(host2, writer, tracker, "10-前置", "别再重复规则了");
+
+        var triggeredAt = 0;
+        var usageBeforeCompaction = host2.ContextUsageText;
+
+        for (var i = 0; i < MaxChatTurns; i++)
+        {
+            var line = DeskLine(i, DeskLineReach());
+            var before = host2.Messages.Count;
+            var usageAtStart = host2.ContextUsageText;
+
+            tracker.CurrentStep = $"9-第{i + 1}句";
+            tracker.CurrentQuestion = line;
+
+            host2.InputText = line;
+            await host2.SendAsync();
+            await WaitIdleAsync(host2);
+
+            var reply = host2.Messages.Skip(before).FirstOrDefault(m => m.IsModelReply)?.Text ?? "（没有回复）";
+            var compactionEvent = host2.Messages.Skip(before)
+                .FirstOrDefault(m => m.IsEvent && m.Text.Contains("已整理较早的对话", StringComparison.Ordinal));
+
+            writer.AddChat(i + 1, line, reply, usageAtStart, host2.ContextUsageText, compactionEvent?.Text);
+
+            if (compactionEvent is not null && triggeredAt == 0)
+            {
+                triggeredAt = i + 1;
+                usageBeforeCompaction = usageAtStart;
+                Console.WriteLine($"[9] 第 {triggeredAt} 句触发了自动压缩；压缩前 {usageBeforeCompaction}，压缩后 {host2.ContextUsageText}");
+
+                for (var extra = 0; extra < TailTurns; extra++)
+                {
+                    var tail = DeskLine(i + 1 + extra, DeskLineReach());
+                    var tailBefore = host2.Messages.Count;
+                    var tailUsage = host2.ContextUsageText;
+
+                    tracker.CurrentStep = $"9-补{extra + 1}";
+                    tracker.CurrentQuestion = tail;
+
+                    host2.InputText = tail;
+                    await host2.SendAsync();
+                    await WaitIdleAsync(host2);
+
+                    var tailReply = host2.Messages.Skip(tailBefore).FirstOrDefault(m => m.IsModelReply)?.Text ?? "（没有回复）";
+                    writer.AddChat(i + 2 + extra, tail, tailReply, tailUsage, host2.ContextUsageText, null);
+                }
+
+                break;
+            }
+        }
+
+        writer.Note(
+            "9",
+            triggeredAt == 0
+                ? $"聊了 {MaxChatTurns} 句都没有触发自动压缩；当前占用 {host2.ContextUsageText}。"
+                : $"第 {triggeredAt} 句之后出现「已整理较早的对话」；触发前 {usageBeforeCompaction}，之后 {host2.ContextUsageText}。");
+
+        // 第 10 条追问
+        await AskTrackedAsync(host2, writer, tracker, "10a", "我们查过哪些地方了？");
+        await AskTrackedAsync(host2, writer, tracker, "10b", "我之前让你别做什么？");
+
+        // 卡面泄漏扫描（合并两个 host 的主持回复）
+        var allMessages = host1.Messages.Concat(host2.Messages).ToList();
+        var leaks = CardLeaks(allMessages, package);
+        writer.Note(
+            "卡面扫描",
+            leaks.Count == 0
+                ? $"整段对话里没有与卡面正面连续相同 7 个字以上的片段（检查了 {allMessages.Count(m => m.IsModelReply)} 条主持人回复）。"
+                : $"整段对话里出现 {leaks.Count} 处与卡面正面连续相同 7 个字以上的片段：{string.Join(" / ", leaks.Distinct())}");
+
+        // 整理总指标
+        var totalPrompt = tracker.Records.Sum(r => (long)r.PromptTokens);
+        var totalCompletion = tracker.Records.Sum(r => (long)r.CompletionTokens);
+        var totalCacheHit = tracker.Records.Sum(r => (long)(r.CacheHitTokens ?? 0));
+        var avgSeconds = tracker.Records.Count > 0 ? tracker.Records.Average(r => r.Seconds) : 0;
+        var maxSeconds = tracker.Records.Count > 0 ? tracker.Records.Max(r => r.Seconds) : 0;
+        var thinkingLeaked = tracker.Records.Any(r => r.ThinkingLeaked);
+        var systemDelivered = tracker.Records.Count > 0 && tracker.Records.All(r => r.PromptTokens >= 20000 || r.Step.Contains("整理"));
+
+        var summary = new
+        {
+            ModelId = modelOverride ?? seed.ModelId,
+            SystemDelivered = systemDelivered,
+            MinPromptTokens = tracker.Records.Count > 0 ? tracker.Records.Min(r => r.PromptTokens) : 0,
+            ThinkingLeaked = thinkingLeaked,
+            ThinkingLeakedTurns = tracker.Records.Where(r => r.ThinkingLeaked).Select(r => r.Step).ToList(),
+            AvgSeconds = avgSeconds,
+            MaxSeconds = maxSeconds,
+            TotalPromptTokens = totalPrompt,
+            TotalCompletionTokens = totalCompletion,
+            TotalCacheHitTokens = totalCacheHit,
+            CardLeaksCount = leaks.Count,
+            CardLeaks = leaks.Distinct().ToList(),
+            CompactionTriggerTurn = triggeredAt,
+            UsageBeforeCompaction = usageBeforeCompaction,
+            UsageAfterCompaction = host2.ContextUsageText,
+            Turns = tracker.Records,
+        };
+
+        var jsonPath = Path.Combine(runDir, "summary.json");
+        File.WriteAllText(jsonPath, JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
+        Console.WriteLine();
+        Console.WriteLine($"指标汇总 JSON：{jsonPath}");
+
+        Console.WriteLine();
+        Console.WriteLine("========== 测试总结 ==========");
+        Console.WriteLine($"模型：{summary.ModelId}");
+        Console.WriteLine($"System 消息送达：{(systemDelivered ? "是（全轮 >= 20000）" : "否！")}");
+        Console.WriteLine($"思考泄露：{(thinkingLeaked ? "有！" : "无")}");
+        Console.WriteLine($"平均延迟：{avgSeconds:F2} 秒；最长延迟：{maxSeconds:F2} 秒");
+        Console.WriteLine($"Token 总量：Prompt={totalPrompt:N0}, Completion={totalCompletion:N0}, CacheHit={totalCacheHit:N0}");
+        Console.WriteLine($"卡面泄露：{leaks.Count} 处");
+        Console.WriteLine($"自动压缩：第 {triggeredAt} 句触发，占用从 {usageBeforeCompaction} 回落到 {host2.ContextUsageText}");
+
+        return 0;
+    }
+
+    private static async Task AskTrackedAsync(
+        HostViewModel host,
+        TranscriptWriter writer,
+        TrackingMagpieGateway tracker,
+        string step,
+        string text)
+    {
+        tracker.CurrentStep = step;
+        tracker.CurrentQuestion = text;
+
+        var before = host.Messages.Count;
+        host.InputText = text;
+        await host.SendAsync();
+        await WaitIdleAsync(host);
+
+        var reply = host.Messages.Skip(before).FirstOrDefault(m => m.IsModelReply)?.Text ?? "（没有回复）";
+        writer.Add(step, text, reply, host.ContextUsageText);
+        Console.WriteLine($"[{step}] 问：{text}");
+        Console.WriteLine($"[{step}] 答：{FirstLine(reply)}");
+    }
+
+    public sealed class TurnRecord
+    {
+        public string Step { get; set; } = string.Empty;
+        public string Question { get; set; } = string.Empty;
+        public string Reply { get; set; } = string.Empty;
+        public double Seconds { get; set; }
+        public int PromptTokens { get; set; }
+        public int CompletionTokens { get; set; }
+        public int? CacheHitTokens { get; set; }
+        public bool ThinkingLeaked { get; set; }
+        public string? ThinkingDetail { get; set; }
+    }
+
+    public sealed class TrackingMagpieGateway : IMagpieGateway
+    {
+        private readonly IMagpieGateway _inner;
+        public List<TurnRecord> Records { get; } = new();
+        public string CurrentStep { get; set; } = string.Empty;
+        public string CurrentQuestion { get; set; } = string.Empty;
+
+        public TrackingMagpieGateway(IMagpieGateway inner) => _inner = inner;
+
+        public Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken cancellationToken) =>
+            _inner.ListModelsAsync(cancellationToken);
+
+        public async Task<string> CompleteAsync(MagpieCompletionRequest request, CancellationToken cancellationToken)
+        {
+            var completion = await CompleteWithUsageAsync(request, cancellationToken);
+            return completion.Content;
+        }
+
+        public async Task<MagpieCompletion> CompleteWithUsageAsync(
+            MagpieCompletionRequest request,
+            CancellationToken cancellationToken)
+        {
+            var isCompaction = request.Messages.Any(m => m.Content.Contains("【整理本局记忆】", StringComparison.Ordinal));
+            var stepLabel = isCompaction ? $"{CurrentStep}-自动整理" : CurrentStep;
+            var questionLabel = isCompaction ? "【自动整理记忆】" : CurrentQuestion;
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            MagpieCompletion? completion = null;
+            for (var attempt = 1; attempt <= 10; attempt++)
+            {
+                try
+                {
+                    completion = await _inner.CompleteWithUsageAsync(request, cancellationToken);
+                    break;
+                }
+                catch (DomainRuleException ex) when (ex.Message.Contains("429") || ex.Message.Contains("frequency") || ex.Message.Contains("rate_limit"))
+                {
+                    Console.WriteLine($"[{stepLabel}] 遇到 429 频率限制，等待 15 秒后重试（第 {attempt} 次）...");
+                    await Task.Delay(15000, cancellationToken);
+                }
+            }
+
+            sw.Stop();
+            if (completion is null)
+            {
+                throw new InvalidOperationException($"[{stepLabel}] 多次重试仍遇到 429 频率限制。");
+            }
+
+            var (leaked, detail) = CheckThinkingLeak(completion.Content);
+            var record = new TurnRecord
+            {
+                Step = stepLabel,
+                Question = questionLabel,
+                Reply = completion.Content,
+                Seconds = sw.Elapsed.TotalSeconds,
+                PromptTokens = completion.Usage?.PromptTokens ?? 0,
+                CompletionTokens = completion.Usage?.CompletionTokens ?? 0,
+                CacheHitTokens = completion.Usage?.CacheHitTokens,
+                ThinkingLeaked = leaked,
+                ThinkingDetail = detail,
+            };
+            Records.Add(record);
+
+            Console.WriteLine($"    [指标] 耗时 {record.Seconds:F2}s | prompt {record.PromptTokens} | completion {record.CompletionTokens} | cache hit {record.CacheHitTokens?.ToString() ?? "0"} | 思考泄漏 {(record.ThinkingLeaked ? detail : "无")}");
+
+            if (record.PromptTokens > 0 && record.PromptTokens < 20000 && !isCompaction)
+            {
+                Console.WriteLine($"! 严重警告：[{stepLabel}] prompt_tokens 仅为 {record.PromptTokens}（< 20000），system 消息可能被丢弃！");
+            }
+
+            return completion;
+        }
+
+        private static (bool Leaked, string? Detail) CheckThinkingLeak(string content)
+        {
+            if (content.Contains("<think>", StringComparison.OrdinalIgnoreCase) ||
+                content.Contains("</think>", StringComparison.OrdinalIgnoreCase))
+            {
+                return (true, "<think> 标签");
+            }
+            if (content.Contains("思考过程", StringComparison.Ordinal) ||
+                content.Contains("【思考过程】", StringComparison.Ordinal))
+            {
+                return (true, "思考过程");
+            }
+            if (content.StartsWith("推理：", StringComparison.Ordinal) ||
+                content.StartsWith("推理过程", StringComparison.Ordinal) ||
+                content.Contains("【推理】", StringComparison.Ordinal))
+            {
+                return (true, "推理标记");
+            }
+            return (false, null);
+        }
+    }
+
     private static HostViewModel NewHost(
         string settingsPath,
         string dataRoot,
         string databasePath,
         string? modelOverride,
-        int? windowOverride = null)
+        int? windowOverride = null,
+        IMagpieGateway? gatewayOverride = null)
     {
         var settingsStore = new SettingsStore(settingsPath, Path.Combine(dataRoot, "secrets"));
         var seed = settingsStore.Load();
-        var magpie = new MagpieGateway
+        var magpie = gatewayOverride ?? new MagpieGateway
         {
             BaseUri = seed.MagpieBaseUri,
             CallerKey = settingsStore.LoadCallerKey(seed.CallerKeyRef),
