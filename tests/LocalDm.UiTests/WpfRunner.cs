@@ -42,6 +42,31 @@ internal static class WpfRunner
         }
     }
 
+    /// <summary>
+    /// 把窗口显示到所有屏幕之外，然后调用 Show()。
+    ///
+    /// 测试需要真实窗口（布局、模板、可视树都要真的生成），但人正在用电脑时
+    /// 不该被打断：这里把窗口挪到虚拟桌面左上角再往外退一个窗口宽高加 100，
+    /// 接了几台显示器都落在可见范围之外。截图走 RenderTargetBitmap，
+    /// 只要求窗口已经渲染，不要求它在屏幕上可见。
+    ///
+    /// 窗口的 Width / Height 由调用方决定，这里不碰。
+    /// 以后新增的界面测试一律通过这个方法显示窗口，不要直接调用 window.Show()。
+    /// </summary>
+    public static void ShowOffscreen(Window window)
+    {
+        // 尺寸可能还没成型（没设 Width 时取 XAML 或默认值），两个都兜住。
+        var width = window.Width is double w && !double.IsNaN(w) && w > 0 ? w : 800;
+        var height = window.Height is double h && !double.IsNaN(h) && h > 0 ? h : 600;
+
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Left = SystemParameters.VirtualScreenLeft - width - 100;
+        window.Top = SystemParameters.VirtualScreenTop - height - 100;
+        window.ShowInTaskbar = false;
+        window.ShowActivated = false;
+        window.Show();
+    }
+
     private static void EnsureApp()
     {
         if (_dispatcher is not null)

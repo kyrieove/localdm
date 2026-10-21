@@ -50,7 +50,7 @@ public sealed class ConversationVisualTests
             using var testShell = await TestShell.OpenAsync(root.Path);
             var shell = testShell.Shell;
             var window = NewWindow(shell, 1360, 860);
-            window.Show();
+            WpfRunner.ShowOffscreen(window);
             try
             {
                 await WalkToSearchWithChatAsync(shell);
@@ -97,7 +97,7 @@ public sealed class ConversationVisualTests
             using var testShell = await TestShell.OpenAsync(root.Path);
             var shell = testShell.Shell;
             var window = NewWindow(shell, width, height);
-            window.Show();
+            WpfRunner.ShowOffscreen(window);
             try
             {
                 await WalkToSearchWithChatAsync(shell);
@@ -128,7 +128,7 @@ public sealed class ConversationVisualTests
             using var testShell = await TestShell.OpenAsync(root.Path);
             var shell = testShell.Shell;
             var window = NewWindow(shell, 1360, 860);
-            window.Show();
+            WpfRunner.ShowOffscreen(window);
             try
             {
                 var host = shell.Host;
@@ -178,7 +178,7 @@ public sealed class ConversationVisualTests
             using var testShell = await TestShell.OpenAsync(root.Path, tts);
             var shell = testShell.Shell;
             var window = NewWindow(shell, 1360, 860);
-            window.Show();
+            WpfRunner.ShowOffscreen(window);
             try
             {
                 var host = shell.Host;
@@ -245,7 +245,7 @@ public sealed class ConversationVisualTests
             using var testShell = await TestShell.OpenAsync(root.Path);
             var shell = testShell.Shell;
             var window = NewWindow(shell, 1360, 860);
-            window.Show();
+            WpfRunner.ShowOffscreen(window);
             try
             {
                 shell.ShowHostCommand.Execute(null);
@@ -279,7 +279,7 @@ public sealed class ConversationVisualTests
             using var testShell = await TestShell.OpenAsync(root.Path);
             var shell = testShell.Shell;
             var window = NewWindow(shell, 1360, 860);
-            window.Show();
+            WpfRunner.ShowOffscreen(window);
             try
             {
                 var host = shell.Host;
@@ -327,7 +327,7 @@ public sealed class ConversationVisualTests
             using var testShell = await TestShell.OpenAsync(root.Path);
             var shell = testShell.Shell;
             var window = NewWindow(shell, 1280, 800);
-            window.Show();
+            WpfRunner.ShowOffscreen(window);
             window.Activate();
             try
             {

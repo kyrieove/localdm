@@ -48,7 +48,7 @@ public sealed class HostDeskVisualTests
 
             var shell = await composition.CreateShellAsync(CancellationToken.None);
             var window = new MainWindow { DataContext = shell, ShowActivated = false, Width = 1320, Height = 820 };
-            window.Show();
+            WpfRunner.ShowOffscreen(window);
             try
             {
                 shell.ShowHostCommand.Execute(null);
@@ -108,7 +108,7 @@ public sealed class HostDeskVisualTests
 
             var shell = await composition.CreateShellAsync(CancellationToken.None);
             var window = new MainWindow { DataContext = shell, ShowActivated = false, Width = 1320, Height = 820 };
-            window.Show();
+            WpfRunner.ShowOffscreen(window);
             try
             {
                 shell.ShowHostCommand.Execute(null);
@@ -185,7 +185,7 @@ public sealed class HostDeskVisualTests
 
             var shell = await composition.CreateShellAsync(CancellationToken.None);
             var window = new MainWindow { DataContext = shell, ShowActivated = false, Width = 1320, Height = 820 };
-            window.Show();
+            WpfRunner.ShowOffscreen(window);
             try
             {
                 shell.ShowSetupCommand.Execute(null);
@@ -217,7 +217,7 @@ public sealed class HostDeskVisualTests
 
             var shell = await composition.CreateShellAsync(CancellationToken.None);
             var window = new MainWindow { DataContext = shell, ShowActivated = false, Width = 1320, Height = 820 };
-            window.Show();
+            WpfRunner.ShowOffscreen(window);
             try
             {
                 await WaitForRenderAsync();
@@ -257,7 +257,7 @@ public sealed class HostDeskVisualTests
 
             var shell = await composition.CreateShellAsync(CancellationToken.None);
             var window = new MainWindow { DataContext = shell, ShowActivated = false, Width = 1320, Height = 820 };
-            window.Show();
+            WpfRunner.ShowOffscreen(window);
             try
             {
                 shell.ShowHostCommand.Execute(null);
@@ -299,7 +299,7 @@ public sealed class HostDeskVisualTests
 
             var shell = await composition.CreateShellAsync(CancellationToken.None);
             var window = new MainWindow { DataContext = shell, ShowActivated = false, Width = 1320, Height = 820 };
-            window.Show();
+            WpfRunner.ShowOffscreen(window);
             try
             {
                 shell.ShowHostCommand.Execute(null);

@@ -32,7 +32,7 @@ public sealed class UiScaleVisualTests
             var store = new SettingsStore(Path.Combine(settings, "settings.json"), Path.Combine(settings, "secrets"));
             var window = new MainWindow { DataContext = shell.Shell, ShowActivated = false, Width = 1280, Height = 720 };
             window.ApplyUiSettings(store, store.Load());
-            window.Show();
+            WpfRunner.ShowOffscreen(window);
             try
             {
                 Assert.Equal(1.0, ScaleOf(window));
@@ -77,7 +77,7 @@ public sealed class UiScaleVisualTests
 
             var window = new MainWindow { DataContext = shell.Shell, ShowActivated = false, Width = 1280, Height = 720 };
             window.ApplyUiSettings(store, store.Load() with { UiScale = 2.0 });
-            window.Show();
+            WpfRunner.ShowOffscreen(window);
             try
             {
                 await shell.WalkToChatAsync();
@@ -132,7 +132,7 @@ public sealed class UiScaleVisualTests
 
             // 窗口要宽到能看出三档差别：满宽 = 2000 − 278 左栏 − 68 两端边距 − 滚动条。
             var window = new MainWindow { DataContext = shell.Shell, ShowActivated = false, Width = 2000, Height = 900 };
-            window.Show();
+            WpfRunner.ShowOffscreen(window);
             try
             {
                 await shell.WalkToChatAsync();
@@ -183,7 +183,7 @@ public sealed class UiScaleVisualTests
                 Path.Combine(root.Path, "secrets"));
 
             var window = new MainWindow { DataContext = shell.Shell, ShowActivated = false, Width = 1360, Height = 860 };
-            window.Show();
+            WpfRunner.ShowOffscreen(window);
             try
             {
                 shell.Shell.ShowSetupCommand.Execute(null);

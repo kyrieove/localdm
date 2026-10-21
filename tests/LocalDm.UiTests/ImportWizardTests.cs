@@ -534,7 +534,7 @@ public sealed class ImportWizardTests
             Width = 1200,
             Height = 900,
         };
-        window.Show();
+        WpfRunner.ShowOffscreen(window);
         return window;
     }
 
