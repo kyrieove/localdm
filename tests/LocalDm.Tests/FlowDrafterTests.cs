@@ -144,6 +144,33 @@ public sealed class FlowDrafterTests
     }
 
     [Fact]
+    public void Prompt_spells_out_the_json_structure_the_parser_reads()
+    {
+        // 不给结构时，模型会自拟字段名，解析出来没有 steps：提示词里必须写明解析器认的字段名。
+        foreach (var field in new[] { "\"layering\"", "\"truthPages\"", "\"ignoredPages\"", "\"steps\"",
+                     "\"stepId\"", "\"title\"", "\"kind\"", "\"hint\"", "\"conditions\"", "\"sourceRef\"",
+                     "\"offersOpeningSpeech\"" })
+        {
+            Assert.Contains(field, FlowDrafter.Prompt, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task Missing_step_ids_are_filled_in_order_instead_of_failing_the_draft()
+    {
+        var json = GoodJson
+            .Replace("\"stepId\": \"read\", ", string.Empty)
+            .Replace("\"stepId\": \"reveal\"", "\"stepId\": \"  \"");
+
+        var result = await new FlowDrafter(new ScriptedGateway(json))
+            .DraftAsync(Input(), "test-model", TestContext.Current.CancellationToken);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(1, result.Attempts);
+        Assert.Equal(new[] { "step-1", "search", "step-3" }, result.Flow!.Steps.Select(step => step.StepId));
+    }
+
+    [Fact]
     public void Request_carries_every_manual_page_and_both_group_name_lists()
     {
         var input = Input();

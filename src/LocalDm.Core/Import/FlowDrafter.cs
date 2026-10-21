@@ -59,6 +59,7 @@ public sealed class FlowDrafter
     /// <summary>
     /// 固定提示词。措辞是方案里定下的，不要改写：
     /// 它规定了只写流程不写剧情、kind 的取值、唯一 Reveal、页码依据与禁止输出 publicPages。
+    /// 第 8 条给出 JSON 的确切结构：不给结构时，模型会自拟字段名，解析出来没有 steps。
     /// </summary>
     public const string Prompt =
         """
@@ -71,6 +72,22 @@ public sealed class FlowDrafter
         5. layering.truthPages 列出所有写着真相、凶手、作案经过、复盘答案的页；拿不准的页也算进去。layering.ignoredPages 只列封面、版权页、空白页、"后面是真相"这类警告页。
         6. 不要输出 publicPages。
         7. 只输出 JSON，不要任何解释。
+        8. JSON 必须是下面这个结构，字段名一字不改，steps 按游戏顺序排列：
+        {
+          "layering": { "truthPages": [8, 9], "ignoredPages": [1] },
+          "steps": [
+            {
+              "stepId": "read",
+              "title": "阅本",
+              "kind": "Read",
+              "hint": "一句话说明这一环大家要做什么",
+              "conditions": ["进入下一环之前要满足的条件"],
+              "sourceRef": "组织者手册第 3 页",
+              "offersOpeningSpeech": true
+            }
+          ]
+        }
+        stepId 用英文小写短词，各环节互不相同。offersOpeningSpeech 只在需要主持人开场讲背景的那一环写 true，其余写 false。上面的页号和文字只是格式示例，按手册实际内容填写。
         """;
 
     /// <summary>
@@ -89,7 +106,7 @@ public sealed class FlowDrafter
         {
             var messages = attempt == 1
                 ? request
-                : [.. request, new MagpieMessage { Role = "user", Content = $"上一次的输出不能用：{failure}。请按上面的要求重新只输出 JSON。" }];
+                : [.. request, new MagpieMessage { Role = "user", Content = $"上一次的输出不能用：{failure}。请严格按第 8 条的结构重新只输出 JSON。" }];
 
             var reply = await _gateway.CompleteAsync(
                 new MagpieCompletionRequest { ModelId = modelId, Messages = messages },
@@ -186,7 +203,8 @@ public sealed class FlowDrafter
 
         var steps = dto.Steps.Select((step, index) => new ScriptFlowStep
         {
-            StepId = step.StepId ?? string.Empty,
+            // 模型漏写 stepId 时按顺序补一个：它只是内部标识，导入的人看不到，不值得为此整份重来。
+            StepId = string.IsNullOrWhiteSpace(step.StepId) ? $"step-{index + 1}" : step.StepId.Trim(),
             Title = step.Title ?? string.Empty,
             Kind = kinds[index],
             Hint = string.IsNullOrWhiteSpace(step.Hint) ? null : step.Hint,

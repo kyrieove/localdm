@@ -121,7 +121,13 @@ public sealed class ScriptImportService
   5. layering.truthPages 列出所有写着真相、凶手、作案经过、复盘答案的页；拿不准的页也算进去。layering.ignoredPages 只列封面、版权页、空白页、"后面是真相"这类警告页。
   6. 不要输出 publicPages。
   7. 只输出 JSON，不要任何解释。
+  8. JSON 必须是下面这个结构，字段名一字不改，steps 按游戏顺序排列：
+  （此处为上面那段 JSON 示例；实际文字以 `src/LocalDm.Core/Import/FlowDrafter.cs` 的 `Prompt` 常量为准）
+  stepId 用英文小写短词，各环节互不相同。offersOpeningSpeech 只在需要主持人开场讲背景的那一环写 true，其余写 false。上面的页号和文字只是格式示例，按手册实际内容填写。
   ```
+
+  > 2026-10-21 修订：初版提示词没有第 8 条，模型不知道字段名，自拟结构后解析不出 `steps`，
+  > 真实剧本验收时连续四个模型起草失败。补上结构说明；模型漏写 `stepId` 时按顺序补成 `step-N`，不再整份判失败。
 
 - 解析与校验：
   - JSON 解析失败或校验不通过（`ScriptFlow.ValidationIssues` 非空、没有 Reveal、页号超出手册页数）→ 自动重试一次，把失败原因附在请求里。第二次仍失败，就显示"AI 没能起草流程"，并提供一份**空白**环节表让导入的人手填，不要套默认流程。
