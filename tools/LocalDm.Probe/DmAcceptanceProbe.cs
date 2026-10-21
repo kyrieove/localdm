@@ -45,6 +45,7 @@ public static class DmAcceptanceProbe
                      ?? Path.Combine(repoRoot, ".local", "dm-acceptance");
         var phase = ArgumentValue(args, "--phase") ?? "story";
         var asks = ParseAsks(ArgumentValue(args, "--ask"));
+        var advanceTo = ArgumentValue(args, "--advance-to");
 
         // 每一次验收单独一个目录：上一次的记录要留得住，验收才比得出前后差别。
         var runDir = NewRunDirectory(outDir);
@@ -92,7 +93,7 @@ public static class DmAcceptanceProbe
         {
             return phase switch
             {
-                "story" => await RunStoryPhaseAsync(package, settingsPath, dataRoot, workDb, writer, modelOverride, asks),
+                "story" => await RunStoryPhaseAsync(package, settingsPath, dataRoot, workDb, writer, modelOverride, asks, advanceTo),
                 "chat" => await RunChatPhaseAsync(package, settingsPath, dataRoot, writer, modelOverride),
                 "untuned" => await RunUntunedPhaseAsync(package, settingsPath, dataRoot, writer, modelOverride),
                 _ => 2,
@@ -113,7 +114,8 @@ public static class DmAcceptanceProbe
         string workDb,
         TranscriptWriter writer,
         string? modelOverride,
-        IReadOnlyList<(string Label, string Text)>? asks = null)
+        IReadOnlyList<(string Label, string Text)>? asks = null,
+        string? advanceTo = null)
     {
         using var store = new SessionStore(workDb);
         await store.InitializeAsync(CancellationToken.None);
@@ -139,6 +141,14 @@ public static class DmAcceptanceProbe
         // --ask：只问指定的几条（换一本剧本时用，不问固定脚本里那些别的剧本才有的问题）。
         if (asks is { Count: > 0 })
         {
+            // --advance-to：先用阶段面板的同一条推进命令走到指定环节，再问。
+            if (!string.IsNullOrWhiteSpace(advanceTo))
+            {
+                var advanceLog = await AdvanceToPhaseAsync(host, advanceTo);
+                writer.Note("推进", advanceLog);
+                Console.WriteLine($"[推进] {advanceLog}");
+            }
+
             foreach (var (label, text) in asks)
             {
                 await AskAsync(host, writer, label, text);
@@ -547,35 +557,10 @@ public static class DmAcceptanceProbe
                 break;
             }
 
-            foreach (var material in host.Session.PendingMaterials.ToArray())
+            if (!await AdvanceOneStepAsync(host, log))
             {
-                await StepAsync(host, () => host.Session.ExecuteAsync(GameCommandType.ReleaseMaterials, [material], null));
-            }
-
-            if (host.Session.IsVotePhase && !host.Session.HasVoteSummary)
-            {
-                if (SessionViewModel.TryParseVotes(VoteText(host), out var votes, out var error))
-                {
-                    await StepAsync(host, () => host.Session.ExecuteAsync(GameCommandType.SubmitVoteSummary, null, votes));
-                }
-                else
-                {
-                    log.Append($"投票汇总无法解析（{error}）；");
-                }
-            }
-
-            if (!host.Session.CanAdvance)
-            {
-                log.Append($"卡在「{host.Session.PhaseTitle}」(state={host.Session.SessionStateText}, "
-                           + $"phase={host.Session.Projection?.CurrentPhase.PhaseId}, "
-                           + $"actions={(host.Session.Projection is null ? "-" : string.Join(',', host.Session.Projection.CurrentPhase.AllowedActions))}, "
-                           + $"canAdvance={host.Session.CanAdvance}, busy={host.Session.Busy}, "
-                           + $"blockedByMaterials={host.Session.IsBlockedByMaterials}, "
-                           + $"status={host.Session.Status})；");
                 break;
             }
-
-            await StepAsync(host, () => host.Session.ExecuteAsync(GameCommandType.Advance, null, null));
         }
 
         log.Append($"当前环节={host.Session.PhaseTitle}；状态={host.Session.SessionStateText}；");
@@ -586,6 +571,62 @@ public static class DmAcceptanceProbe
         }
 
         return log.ToString();
+    }
+
+    /// <summary>推进到标题含 <paramref name="targetTitle"/> 的那一环并停下（不揭秘）。</summary>
+    private static async Task<string> AdvanceToPhaseAsync(HostViewModel host, string targetTitle)
+    {
+        var log = new StringBuilder();
+        for (var guard = 0; guard < 12; guard++)
+        {
+            if (host.Session.PhaseTitle.Contains(targetTitle, StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            if (!await AdvanceOneStepAsync(host, log))
+            {
+                break;
+            }
+        }
+
+        log.Append($"当前环节={host.Session.PhaseTitle}；状态={host.Session.SessionStateText}；");
+        return log.ToString();
+    }
+
+    /// <summary>走一步正常推进：先发完本环节的材料、投票环节补上汇总，再点推进。</summary>
+    private static async Task<bool> AdvanceOneStepAsync(HostViewModel host, StringBuilder log)
+    {
+        foreach (var material in host.Session.PendingMaterials.ToArray())
+        {
+            await StepAsync(host, () => host.Session.ExecuteAsync(GameCommandType.ReleaseMaterials, [material], null));
+        }
+
+        if (host.Session.IsVotePhase && !host.Session.HasVoteSummary)
+        {
+            if (SessionViewModel.TryParseVotes(VoteText(host), out var votes, out var error))
+            {
+                await StepAsync(host, () => host.Session.ExecuteAsync(GameCommandType.SubmitVoteSummary, null, votes));
+            }
+            else
+            {
+                log.Append($"投票汇总无法解析（{error}）；");
+            }
+        }
+
+        if (!host.Session.CanAdvance)
+        {
+            log.Append($"卡在「{host.Session.PhaseTitle}」(state={host.Session.SessionStateText}, "
+                       + $"phase={host.Session.Projection?.CurrentPhase.PhaseId}, "
+                       + $"actions={(host.Session.Projection is null ? "-" : string.Join(',', host.Session.Projection.CurrentPhase.AllowedActions))}, "
+                       + $"canAdvance={host.Session.CanAdvance}, busy={host.Session.Busy}, "
+                       + $"blockedByMaterials={host.Session.IsBlockedByMaterials}, "
+                       + $"status={host.Session.Status})；");
+            return false;
+        }
+
+        await StepAsync(host, () => host.Session.ExecuteAsync(GameCommandType.Advance, null, null));
+        return true;
     }
 
     /// <summary>投票那一步用纸笔汇总的合成票数：五人平均分到五个角色上。</summary>
