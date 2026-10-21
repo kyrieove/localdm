@@ -18,3 +18,6 @@ ts	phase	decision	why	evidence	result
 2026-10-22T02:30:00+03:00	test	补界面验证：让公开消息写入必然失败，确认横幅从折叠变成可见、写着「同步异常」、「重试同步」可点	之前只在 ViewModel 层验了标志，没验真实视图；绑定名对过也不等于渲染过	tests/LocalDm.UiTests/PublicSyncBannerTests.cs 提交 d2022a0	1 条界面测试通过
 2026-10-22T02:40:00+03:00	cleanup	关掉本轮起的 4 个测试服务（5311-5314）	不留后台进程占着端口与内存	复查四个端口均已停	已清理
 2026-10-22T02:45:00+03:00	question	把两个需要产品口径的问题写进 QUESTIONS-minimax.md：要不要退回演示剧本；一张卡配不唯一要不要连带整组 5 张一起停	这两件都不是我能替产品决定的	QUESTIONS-minimax.md（未提交）	两个问题已记录
+2026-10-22T02:50:00+03:00	fork	不另造一套「自己从包里推目录」的设计：清单、资产索引、网格切图按 deepseek 已提交的 TabletManifest/TabletQueries 来，我的活限定在服务侧	方案第 5.1 节写死「旧包没有清单就纸质模式」，另造一套等于把那条决定绕过去	提交 6019cb1 引入其模型；src/LocalDm.Tablet/PackageTabletContent.cs 只消费清单	避免了平行设计
+2026-10-22T02:52:00+03:00	fork	「继续一局」退回演示剧本这件事没有自己改，只修记忆存档	那是产品口径，不是 bug	提交 4bb0bff 只动记忆绑定；QUESTIONS-minimax.md 第 1 条	等用户一句话结论
+2026-10-22T03:00:00+03:00	verify	最终核验：build 0 警告 0 错误；LocalDm.Tests 368 条（362 通过 / 6 跳过 / 0 失败）；LocalDm.UiTests 34 条全通过	对着 Phase A 的判据核验真实产物，不是靠自述	dotnet build LocalDm.slnx；dotnet test tests/LocalDm.Tests；dotnet test tests/LocalDm.UiTests	三条命令全绿
