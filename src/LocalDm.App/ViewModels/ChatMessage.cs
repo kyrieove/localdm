@@ -96,6 +96,7 @@ public sealed class ChatMessage : ObservableObject
             {
                 OnPropertyChanged(nameof(IsSpeaking));
                 OnPropertyChanged(nameof(CanReplay));
+                ReplayCommand?.RaiseCanExecuteChanged();
             }
         }
     }

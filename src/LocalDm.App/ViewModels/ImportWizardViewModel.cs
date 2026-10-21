@@ -42,6 +42,8 @@ public sealed class ImportGroupRow : ObservableObject
 {
     private ScriptGroupKind _kind;
 
+    public event EventHandler? Changed;
+
     public ImportGroupRow(ScriptGroup group)
     {
         Name = group.Name;
@@ -74,7 +76,13 @@ public sealed class ImportGroupRow : ObservableObject
     public ScriptGroupKind Kind
     {
         get => _kind;
-        set => SetProperty(ref _kind, value);
+        set
+        {
+            if (SetProperty(ref _kind, value))
+            {
+                Changed?.Invoke(this, EventArgs.Empty);
+            }
+        }
     }
 
     public string Summary => $"{RelativePath} · {PageCount} 页 · {FileTypeLabel}";
@@ -94,6 +102,8 @@ public sealed class ImportFlowStepRow : ObservableObject
     private bool _isHidden;
     private string? _sourceRef;
 
+    public event EventHandler? Changed;
+
     /// <summary>
     /// 这一行的来源环节：AI 起草出来的，或从流程文件读出来的。
     ///
@@ -107,7 +117,13 @@ public sealed class ImportFlowStepRow : ObservableObject
     public string Title
     {
         get => _title;
-        set => SetProperty(ref _title, value);
+        set
+        {
+            if (SetProperty(ref _title, value))
+            {
+                Changed?.Invoke(this, EventArgs.Empty);
+            }
+        }
     }
 
     public ScriptStepKind Kind
@@ -118,6 +134,7 @@ public sealed class ImportFlowStepRow : ObservableObject
             if (SetProperty(ref _kind, value))
             {
                 OnPropertyChanged(nameof(KindLabel));
+                Changed?.Invoke(this, EventArgs.Empty);
             }
         }
     }
@@ -147,6 +164,7 @@ public sealed class ImportFlowStepRow : ObservableObject
                 // 改了提示就要重新判定：不能靠上一次的结论一直停着。
                 IsHidden = false;
                 OnPropertyChanged(nameof(DisplayHint));
+                Changed?.Invoke(this, EventArgs.Empty);
             }
         }
     }
@@ -163,6 +181,7 @@ public sealed class ImportFlowStepRow : ObservableObject
             {
                 OnPropertyChanged(nameof(DisplayHint));
                 OnPropertyChanged(nameof(IsEditable));
+                Changed?.Invoke(this, EventArgs.Empty);
             }
         }
     }
@@ -478,8 +497,8 @@ public sealed class ImportWizardViewModel : ObservableObject
     public void Start()
     {
         Step = ImportWizardStep.Folder;
-        Groups.Clear();
-        FlowSteps.Clear();
+        ClearGroups();
+        ClearFlowSteps();
         LayeringPages.Clear();
         _scan = null;
         _extraction = null;
@@ -543,10 +562,10 @@ public sealed class ImportWizardViewModel : ObservableObject
             Busy = true;
             var scan = _serviceFactory().Scan(FolderPath);
             _scan = scan;
-            Groups.Clear();
+            ClearGroups();
             foreach (var group in scan.Groups)
             {
-                Groups.Add(new ImportGroupRow(group));
+                AddGroup(new ImportGroupRow(group));
             }
 
             Step = ImportWizardStep.Groups;
@@ -678,7 +697,7 @@ public sealed class ImportWizardViewModel : ObservableObject
     /// <summary>起草流程并按剧透检查标出要重写的条目。</summary>
     private async Task DraftFlowAsync()
     {
-        FlowSteps.Clear();
+        ClearFlowSteps();
         DraftFailureReason = null;
         DraftAttempts = 0;
         if (_extraction is null)
@@ -731,7 +750,7 @@ public sealed class ImportWizardViewModel : ObservableObject
 
         foreach (var step in result.Flow!.Steps)
         {
-            FlowSteps.Add(new ImportFlowStepRow
+            AddFlowStep(new ImportFlowStepRow
             {
                 Source = step,
                 Title = step.Title,
@@ -839,20 +858,69 @@ public sealed class ImportWizardViewModel : ObservableObject
         return string.Join("、", ranges);
     }
 
+    private void AddGroup(ImportGroupRow row)
+    {
+        row.Changed += OnGroupRowChanged;
+        Groups.Add(row);
+    }
+
+    private void ClearGroups()
+    {
+        foreach (var group in Groups)
+        {
+            group.Changed -= OnGroupRowChanged;
+        }
+
+        Groups.Clear();
+    }
+
+    private void OnGroupRowChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(CanGoNext));
+        NextCommand.RaiseCanExecuteChanged();
+    }
+
+    private void AddFlowStep(ImportFlowStepRow row)
+    {
+        row.Changed += OnFlowStepRowChanged;
+        FlowSteps.Add(row);
+    }
+
+    private void ClearFlowSteps()
+    {
+        foreach (var step in FlowSteps)
+        {
+            step.Changed -= OnFlowStepRowChanged;
+        }
+
+        FlowSteps.Clear();
+    }
+
+    private void OnFlowStepRowChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(CanBuild));
+        OnPropertyChanged(nameof(CanGoNext));
+        BuildCommand.RaiseCanExecuteChanged();
+        NextCommand.RaiseCanExecuteChanged();
+    }
+
     /// <summary>起草失败或没有模型时给一张空白环节表：不套任何默认流程。</summary>
     private void AddBlankStep()
     {
-        FlowSteps.Clear();
-        FlowSteps.Add(new ImportFlowStepRow { Title = string.Empty, Kind = ScriptStepKind.Read });
-        FlowSteps.Add(new ImportFlowStepRow { Title = string.Empty, Kind = ScriptStepKind.Reveal });
+        ClearFlowSteps();
+        AddFlowStep(new ImportFlowStepRow { Title = string.Empty, Kind = ScriptStepKind.Read });
+        AddFlowStep(new ImportFlowStepRow { Title = string.Empty, Kind = ScriptStepKind.Reveal });
         OnPropertyChanged(nameof(CanBuild));
         RaiseCommandStates();
     }
 
     private void AddStep()
     {
-        FlowSteps.Add(new ImportFlowStepRow { Title = "新环节", Kind = ScriptStepKind.Talk });
+        AddFlowStep(new ImportFlowStepRow { Title = "新环节", Kind = ScriptStepKind.Talk });
         OnPropertyChanged(nameof(CanBuild));
+        OnPropertyChanged(nameof(CanGoNext));
+        NextCommand.RaiseCanExecuteChanged();
+        BuildCommand.RaiseCanExecuteChanged();
         RaiseCommandStates();
     }
 
@@ -871,10 +939,16 @@ public sealed class ImportWizardViewModel : ObservableObject
             return;
         }
 
+        row.Changed -= OnFlowStepRowChanged;
         FlowSteps.Remove(row);
         OnPropertyChanged(nameof(CanBuild));
+        OnPropertyChanged(nameof(CanGoNext));
+        NextCommand.RaiseCanExecuteChanged();
+        BuildCommand.RaiseCanExecuteChanged();
         RaiseCommandStates();
     }
+
+    public void RemoveStep(ImportFlowStepRow row) => DeleteStep(row);
 
     /// <summary>上下移动。改完要重新过一遍剧透检查：位置变了，命中的环节也跟着变。</summary>
     public void MoveStep(ImportFlowStepRow row, int offset)
@@ -888,6 +962,10 @@ public sealed class ImportWizardViewModel : ObservableObject
 
         FlowSteps.Move(index, target);
         ApplySpoilerCheck();
+        OnPropertyChanged(nameof(CanBuild));
+        OnPropertyChanged(nameof(CanGoNext));
+        NextCommand.RaiseCanExecuteChanged();
+        BuildCommand.RaiseCanExecuteChanged();
     }
 
     /// <summary>按界面上的环节与分层组装一份流程声明。</summary>
@@ -1026,7 +1104,7 @@ public sealed class ImportWizardViewModel : ObservableObject
         FolderPath = storyRoot;
         var scan = _serviceFactory().Scan(storyRoot);
         _scan = scan;
-        Groups.Clear();
+        ClearGroups();
         foreach (var group in scan.Groups)
         {
             var row = new ImportGroupRow(group);
@@ -1035,7 +1113,7 @@ public sealed class ImportWizardViewModel : ObservableObject
                 row.Kind = ScriptGroupKind.Organizer;
             }
 
-            Groups.Add(row);
+            AddGroup(row);
         }
 
         await ExtractAndDraftFromExistingAsync(flow);
@@ -1080,10 +1158,10 @@ public sealed class ImportWizardViewModel : ObservableObject
                 .ToArray();
 
             // 用已有的流程，不重新起草。
-            FlowSteps.Clear();
+            ClearFlowSteps();
             foreach (var step in existing.Steps)
             {
-                FlowSteps.Add(new ImportFlowStepRow
+                AddFlowStep(new ImportFlowStepRow
                 {
                     Source = step,
                     Title = step.Title,

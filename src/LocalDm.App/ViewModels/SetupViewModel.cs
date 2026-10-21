@@ -197,7 +197,9 @@ public sealed class SetupViewModel : ObservableObject
             if (SetProperty(ref _busy, value))
             {
                 CheckConnectionCommand.RaiseCanExecuteChanged();
+                CheckVoicesCommand.RaiseCanExecuteChanged();
                 PreviewVoiceCommand.RaiseCanExecuteChanged();
+                SaveCommand.RaiseCanExecuteChanged();
             }
         }
     }

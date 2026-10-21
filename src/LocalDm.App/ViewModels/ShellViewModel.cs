@@ -32,6 +32,7 @@ public sealed class RelayCommand : ICommand
 {
     private readonly Func<Task> _execute;
     private readonly Func<bool>? _canExecute;
+    private EventHandler? _canExecuteChanged;
 
     public RelayCommand(Func<Task> execute, Func<bool>? canExecute = null)
     {
@@ -39,7 +40,24 @@ public sealed class RelayCommand : ICommand
         _canExecute = canExecute;
     }
 
-    public event EventHandler? CanExecuteChanged;
+    /// <summary>
+    /// 事件同时挂接到 CommandManager.RequerySuggested 上，
+    /// 这样用户点击、输入、切换焦点后，所有按钮都会自动重新判断。
+    /// 注意：后台任务结束这类没有用户输入的变化，仍然要手动调用 RaiseCanExecuteChanged()。
+    /// </summary>
+    public event EventHandler? CanExecuteChanged
+    {
+        add
+        {
+            _canExecuteChanged += value;
+            CommandManager.RequerySuggested += value;
+        }
+        remove
+        {
+            _canExecuteChanged -= value;
+            CommandManager.RequerySuggested -= value;
+        }
+    }
 
     public bool CanExecute(object? parameter) => _canExecute?.Invoke() ?? true;
 
@@ -57,7 +75,7 @@ public sealed class RelayCommand : ICommand
 
     public event EventHandler<Exception>? ExecutionFailed;
 
-    public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+    public void RaiseCanExecuteChanged() => _canExecuteChanged?.Invoke(this, EventArgs.Empty);
 }
 
 /// <summary>宿主视图共用的页面切换。</summary>

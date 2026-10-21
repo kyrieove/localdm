@@ -155,6 +155,83 @@ public sealed class ImportWizardTests
     }
 
     [Fact]
+    public async Task Flow_page_rewriting_hidden_hint_notifies_build_command_and_makes_it_executable()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            var wizard = NewWizard(root.Path);
+            var window = Show(WizardView(wizard));
+            try
+            {
+                wizard.SetFolder(NewStory(root.Path));
+                await wizard.ScanAsync();
+                await wizard.ExtractAndDraftAsync();
+                Assert.True(wizard.IsFlowStep);
+
+                var flagged = wizard.FlowSteps.First(row => row.IsHidden);
+                Assert.False(wizard.CanBuild);
+                Assert.False(wizard.BuildCommand.CanExecute(null));
+
+                var buildRaised = 0;
+                wizard.BuildCommand.CanExecuteChanged += (_, _) => buildRaised++;
+
+                // 把提示改写成不含真相原文的句子
+                flagged.Hint = "翻开线索卡，逐张读完。";
+
+                Assert.True(buildRaised > 0, "把提示改写后，BuildCommand 必须收到 CanExecuteChanged 通知。");
+                Assert.False(flagged.IsHidden);
+                Assert.True(wizard.CanBuild);
+                Assert.True(wizard.BuildCommand.CanExecute(null));
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public async Task Groups_page_changing_organizer_to_role_and_back_notifies_next_command()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            var wizard = NewWizard(root.Path);
+            var window = Show(WizardView(wizard));
+            try
+            {
+                wizard.SetFolder(NewStory(root.Path));
+                await wizard.ScanAsync();
+                Assert.True(wizard.IsGroupsStep);
+
+                var organizer = wizard.Groups.Single(g => g.Kind == ScriptGroupKind.Organizer);
+                Assert.True(wizard.NextCommand.CanExecute(null));
+
+                var nextRaised = 0;
+                wizard.NextCommand.CanExecuteChanged += (_, _) => nextRaised++;
+
+                // 把唯一的组织者手册改成角色本
+                organizer.Kind = ScriptGroupKind.Role;
+
+                Assert.True(nextRaised > 0, "改动组织者手册类别后，NextCommand 必须收到 CanExecuteChanged 通知。");
+                Assert.False(wizard.NextCommand.CanExecute(null), "缺少组织者手册时 NextCommand 必须不可用。");
+
+                nextRaised = 0;
+                // 再改回来
+                organizer.Kind = ScriptGroupKind.Organizer;
+
+                Assert.True(nextRaised > 0, "改回组织者手册后，NextCommand 必须收到 CanExecuteChanged 通知。");
+                Assert.True(wizard.NextCommand.CanExecute(null), "拥有唯一组织者手册时 NextCommand 必须变为可用。");
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
     public async Task Library_lists_the_new_package_after_a_finished_import()
     {
         await WpfRunner.RunAsync(async () =>
