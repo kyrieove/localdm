@@ -160,9 +160,11 @@ public static class ImportWizardProbe
 
         Console.WriteLine();
         Console.WriteLine($"【④ 流程】{wizard.LayeringSummary}");
+        Console.WriteLine($"  起草尝试：{wizard.DraftAttempts} 次");
         report.AppendLine("## ④ 流程确认");
         report.AppendLine();
         report.AppendLine($"- 分层摘要：{wizard.LayeringSummary}");
+        report.AppendLine($"- 起草尝试：{wizard.DraftAttempts} 次");
         Console.WriteLine("  序号 类别     依据页      隐藏  标题");
         report.AppendLine();
         report.AppendLine("| # | 类别 | 依据页 | 隐藏 | 标题 |");

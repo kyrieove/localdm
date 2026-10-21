@@ -44,6 +44,7 @@ public static class DmAcceptanceProbe
         var outDir = ArgumentValue(args, "--out")
                      ?? Path.Combine(repoRoot, ".local", "dm-acceptance");
         var phase = ArgumentValue(args, "--phase") ?? "story";
+        var asks = ParseAsks(ArgumentValue(args, "--ask"));
 
         // 每一次验收单独一个目录：上一次的记录要留得住，验收才比得出前后差别。
         var runDir = NewRunDirectory(outDir);
@@ -91,7 +92,7 @@ public static class DmAcceptanceProbe
         {
             return phase switch
             {
-                "story" => await RunStoryPhaseAsync(package, settingsPath, dataRoot, workDb, writer, modelOverride),
+                "story" => await RunStoryPhaseAsync(package, settingsPath, dataRoot, workDb, writer, modelOverride, asks),
                 "chat" => await RunChatPhaseAsync(package, settingsPath, dataRoot, writer, modelOverride),
                 "untuned" => await RunUntunedPhaseAsync(package, settingsPath, dataRoot, writer, modelOverride),
                 _ => 2,
@@ -111,7 +112,8 @@ public static class DmAcceptanceProbe
         string dataRoot,
         string workDb,
         TranscriptWriter writer,
-        string? modelOverride)
+        string? modelOverride,
+        IReadOnlyList<(string Label, string Text)>? asks = null)
     {
         using var store = new SessionStore(workDb);
         await store.InitializeAsync(CancellationToken.None);
@@ -133,6 +135,17 @@ public static class DmAcceptanceProbe
         // 开局：和真人点「开始这一局」走同一条路径。
         await StepAsync(host, () => host.Session.ExecuteAsync(GameCommandType.Start, null, null));
         writer.WriteHeader(host.Session.PhaseTitle, host.ContextUsageText);
+
+        // --ask：只问指定的几条（换一本剧本时用，不问固定脚本里那些别的剧本才有的问题）。
+        if (asks is { Count: > 0 })
+        {
+            foreach (var (label, text) in asks)
+            {
+                await AskAsync(host, writer, label, text);
+            }
+
+            return 0;
+        }
 
         await AskAsync(host, writer, "1", "你好，你是什么模型？");
         await AskAsync(host, writer, "2", "我们刚开始，要先干什么？");
@@ -684,7 +697,11 @@ public static class DmAcceptanceProbe
     {
         var dir = Path.Combine(dataRoot, "packages");
         return Directory.Exists(dir)
-            ? Directory.GetFiles(dir, "pkg-*.json").OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault()
+            ? Directory.GetFiles(dir, "pkg-*.json")
+                // 流程声明写在旁边那份 *.flow.json 里，不是包；按时间取最新的会把那份挑出来。
+                .Where(path => !path.EndsWith(".flow.json", StringComparison.Ordinal))
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .FirstOrDefault()
             : null;
     }
 
@@ -730,6 +747,29 @@ public static class DmAcceptanceProbe
         }
 
         return target;
+    }
+
+    /// <summary>解析 --ask：“标签=问题”用分号隔开，例如 “1=你好,你是什么模型？;6a=谁是凶手？”。</summary>
+    private static List<(string Label, string Text)>? ParseAsks(string? spec)
+    {
+        if (string.IsNullOrWhiteSpace(spec))
+        {
+            return null;
+        }
+
+        var asks = new List<(string Label, string Text)>();
+        foreach (var part in spec.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var split = part.IndexOf('=');
+            if (split <= 0 || split == part.Length - 1)
+            {
+                continue;
+            }
+
+            asks.Add((part[..split].Trim(), part[(split + 1)..].Trim()));
+        }
+
+        return asks;
     }
 
     private static string? ArgumentValue(string[] args, string name)

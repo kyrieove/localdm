@@ -671,6 +671,7 @@ public sealed class ImportWizardViewModel : ObservableObject
     {
         FlowSteps.Clear();
         DraftFailureReason = null;
+        DraftAttempts = 0;
         if (_extraction is null)
         {
             return;
@@ -708,6 +709,7 @@ public sealed class ImportWizardViewModel : ObservableObject
         }
 
         var result = await _drafter.DraftAsync(input, modelId, CancellationToken.None);
+        DraftAttempts = result.Attempts;
         if (!result.Succeeded)
         {
             // 起草失败就给空白环节表，不套默认流程。
@@ -974,6 +976,9 @@ public sealed class ImportWizardViewModel : ObservableObject
 
     /// <summary>起草失败的原因（给界面与验收看）；成功时为 null。</summary>
     public string? DraftFailureReason { get; private set; }
+
+    /// <summary>起草用了几次模型调用：1 表示第一次就成，2 表示重试过一次。没起草过为 0。</summary>
+    public int DraftAttempts { get; private set; }
 
     private Task OpenBuiltAsync()
     {
