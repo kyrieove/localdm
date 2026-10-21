@@ -37,6 +37,9 @@
 /.appdata/
 /LocalDm/
 
+# Playwright CLI 的本机运行产物（快照、控制台日志、截图副本）
+/.playwright-cli/
+
 # Synthetic fixture ground truth: kept locally for tests, never committed
 /fixtures/synthetic/.private/
 

@@ -1,58 +1,79 @@
+using System.Collections.Concurrent;
 using LocalDm.Core.Tablet;
 
 namespace LocalDm.Tablet;
 
 /// <summary>
-/// 合成材料探针用的会话状态。业务状态放在服务端单例里，
-/// 不依赖浏览器 circuit：刷新后重新建立页面时仍能读回同一份。
+/// 合成材料探针用的会话状态。
+///
+/// 每个浏览器会话一份（按 circuit 或 Cookie 取键），
+/// 这样 6 台设备同时加入时各认各的角色，不会互相顶掉；
+/// 同时实现「已认领的角色不能再被别人认领」，与产品契约一致。
+/// 业务状态存在服务端字典里，不依赖浏览器连接：刷新后重新建立 circuit 仍读回同一份。
 /// </summary>
 public sealed class TabletSpikeState
 {
-    private readonly object _gate = new();
-    private string? _roleId;
+    private readonly ConcurrentDictionary<string, SessionEntry> _sessions = new(StringComparer.Ordinal);
+    private readonly object _claimGate = new();
 
     public TabletSpikeState(TabletSpikeData data) => Data = data;
 
     public TabletSpikeData Data { get; }
 
-    public TabletSpikeRole? Role
-    {
-        get
-        {
-            lock (_gate)
-            {
-                return _roleId is null ? null : Data.Roles.FirstOrDefault(r => r.RoleId == _roleId);
-            }
-        }
-    }
-
     public IReadOnlyList<TabletSpikeRole> Roles => Data.Roles;
 
     public IReadOnlyList<TabletSpikeCard> Cards => Data.Cards;
 
-    public string? SelectedCardId { get; private set; }
-
-    public int? RolePage { get; private set; }
-
-    public void Claim(string roleId)
+    /// <summary>取一个会话；不存在时建一份空的。</summary>
+    public SessionEntry Session(string key) =>
+        _sessions.GetOrAdd(key, _ => new SessionEntry());
+    /// <summary>已被别人认领的角色 ID 集合。</summary>
+    public IReadOnlyList<string> ClaimedRoles
     {
-        lock (_gate)
+        get
         {
-            _roleId = roleId;
+            lock (_claimGate)
+            {
+                return _sessions.Values
+                    .Select(s => s.RoleId)
+                    .Where(id => id is not null)
+                    .Select(id => id!)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
+            }
         }
     }
 
-    public void Release()
+    /// <summary>认领角色：被别人抢先认领时返回 false，界面提示重选。</summary>
+    public bool TryClaim(string key, string roleId)
     {
-        lock (_gate)
+        lock (_claimGate)
         {
-            _roleId = null;
-            SelectedCardId = null;
-            RolePage = null;
+            var current = Session(key).RoleId;
+            if (string.Equals(current, roleId, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            var taken = _sessions.Values.Any(s => string.Equals(s.RoleId, roleId, StringComparison.Ordinal));
+            if (taken)
+            {
+                return false;
+            }
+
+            Session(key).RoleId = roleId;
+            return true;
         }
     }
 
-    public void Select(string cardId) => SelectedCardId = cardId;
+    public void Release(string key) => Session(key).RoleId = null;
 
-    public void OpenPage(int pageNumber) => RolePage = pageNumber;
+    public sealed class SessionEntry
+    {
+        public string? RoleId { get; set; }
+
+        public string? SelectedCardId { get; set; }
+
+        public int? RolePage { get; set; }
+    }
 }

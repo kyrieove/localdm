@@ -82,5 +82,7 @@ img.shot {
     margin-top: 12px;
     border: 1px solid #ddd2bd;
     background: #fff;
-    touch-action: pinch-zoom;
+    /* 合成图是色带加黑块，浏览器默认按高倍屏缩放时可能把细条带抹平。
+       关掉平滑并按像素比 1:1 渲染，验收截图才看得出真实内容。 */
+    image-rendering: pixelated;
 }

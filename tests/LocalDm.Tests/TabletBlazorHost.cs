@@ -6,91 +6,116 @@ using System.Net.Sockets;
 namespace LocalDm.Tests;
 
 /// <summary>
-/// 在测试进程里以子进程方式启动 LocalDm.Tablet 探针服务，并等待端口就绪。
-/// 停止时结束进程树，避免残留监听。
+/// 探针应用的宿主：按测试隔离发布目录，只构建一次、只启动一次。
+///
+/// 早期版本用 <c>Directory.Exists</c> 检查一个 DLL 文件（永假），
+/// 又固定共享临时目录，导致并发测试互相覆盖、重复 publish。
+/// 现在每次调用都生成新的 GUID 目录，进程完整回收。
 /// </summary>
 internal sealed class TabletBlazorHost : IDisposable
 {
     private readonly Process _process;
+    private readonly string _directory;
+    private readonly int _port;
 
-    private TabletBlazorHost(Process process) => _process = process;
-
-    public static TabletBlazorHost Start(string projectPath, int port)
+    private TabletBlazorHost(Process process, string directory, int port)
     {
+        _process = process;
+        _directory = directory;
+        _port = port;
+    }
+
+    /// <summary>应用监听的端口。</summary>
+    public int Port => _port;
+
+    /// <summary>发布并启动探针应用，返回就绪的宿主。</summary>
+    public static TabletBlazorHost Start(string projectPath)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "localdm-tablet-host-" + Guid.NewGuid().ToString("N"));
+        Publish(projectPath, directory);
+
+        var port = FreePort();
         var startInfo = new ProcessStartInfo("dotnet")
         {
+            WorkingDirectory = directory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
         };
-        // 直接跑 publish 产物：Debug 输出里没有 _framework/blazor.web.js，
-        // dotnet run 又会在测试进程里挂住输出管道。
-        var published = Path.Combine(Path.GetTempPath(), "localdm-tablet-pub");
-        if (!Directory.Exists(Path.Combine(published, "LocalDm.Tablet.dll")))
-        {
-            var publish = Process.Start(new ProcessStartInfo("dotnet")
-            {
-                WorkingDirectory = Path.GetDirectoryName(projectPath)!,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-            })!;
-            publish.StartInfo.ArgumentList.Add("publish");
-            publish.StartInfo.ArgumentList.Add(projectPath);
-            publish.StartInfo.ArgumentList.Add("-c");
-            publish.StartInfo.ArgumentList.Add("Release");
-            publish.StartInfo.ArgumentList.Add("-o");
-            publish.StartInfo.ArgumentList.Add(published);
-            publish.Start();
-            _ = publish.StandardOutput.ReadToEndAsync();
-            var error = publish.StandardError.ReadToEndAsync();
-            if (!publish.WaitForExit(180_000))
-            {
-                publish.Kill(entireProcessTree: true);
-                throw new TimeoutException("publish 探针工程超时。");
-            }
-
-            if (publish.ExitCode != 0)
-            {
-                throw new InvalidOperationException("publish 探针工程失败：" + error);
-            }
-        }
-
-        var assembly = Path.Combine(published, "LocalDm.Tablet.dll");
-        startInfo.WorkingDirectory = published;
-        startInfo.ArgumentList.Add(assembly);
+        startInfo.ArgumentList.Add(Path.Combine(directory, "LocalDm.Tablet.dll"));
         startInfo.ArgumentList.Add("--urls");
         startInfo.ArgumentList.Add($"http://127.0.0.1:{port}");
-
         var process = new Process { StartInfo = startInfo };
         process.Start();
-        // 立即开始异步排空输出：管道满了会让子进程卡住，测试就永远等不到端口。
+        // 立即异步排空输出管道：管道满会让子进程挂住，测试永远等不到端口就绪。
         _ = process.StandardOutput.ReadToEndAsync();
         _ = process.StandardError.ReadToEndAsync();
 
-        // 等端口能连上：最多 120 秒（首次 dotnet run 可能触发一次构建）。
-        var deadline = DateTime.UtcNow.AddSeconds(120);
+        var deadline = DateTime.UtcNow.AddSeconds(180);
         while (DateTime.UtcNow < deadline)
         {
             if (process.HasExited)
             {
-                var error = process.StandardError.ReadToEnd();
-                throw new InvalidOperationException("探针服务提前退出：" + error);
+                throw new InvalidOperationException("探针应用提前退出（启动失败）。");
             }
 
             try
             {
-                using var client = new TcpClient();
-                client.Connect(IPAddress.Loopback, port);
-                return new TabletBlazorHost(process);
+                using var probe = new TcpClient();
+                probe.Connect(IPAddress.Loopback, port);
+                return new TabletBlazorHost(process, directory, port);
             }
             catch (SocketException)
             {
-                Thread.Sleep(300);
+                Thread.Sleep(250);
             }
         }
 
-        throw new TimeoutException("探针服务在 120 秒内没有监听端口。");
+        process.Kill(entireProcessTree: true);
+        process.Dispose();
+        throw new TimeoutException("探针应用在 180 秒内没有监听端口。");
+    }
+
+    private static void Publish(string projectPath, string directory)
+    {
+        var publish = new ProcessStartInfo("dotnet")
+        {
+            WorkingDirectory = Path.GetDirectoryName(projectPath)!,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        publish.ArgumentList.Add("publish");
+        publish.ArgumentList.Add(projectPath);
+        publish.ArgumentList.Add("-c");
+        publish.ArgumentList.Add("Release");
+        publish.ArgumentList.Add("-o");
+        publish.ArgumentList.Add(directory);
+
+        var process = new Process { StartInfo = publish };
+        process.Start();
+        _ = process.StandardOutput.ReadToEndAsync();
+        // 必须等 stderr 真正读完：直接拿 Task 进异常消息只会打出一串状态机类型名。
+        var error = process.StandardError.ReadToEndAsync().GetAwaiter().GetResult();
+        if (!process.WaitForExit(180_000))
+        {
+            process.Kill(entireProcessTree: true);
+            throw new TimeoutException("publish 探针应用超时。");
+        }
+
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException("publish 探针应用失败：" + error);
+        }
+    }
+
+    private static int FreePort()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        return port;
     }
 
     public void Dispose()
@@ -108,6 +133,17 @@ internal sealed class TabletBlazorHost : IDisposable
         finally
         {
             _process.Dispose();
+            try
+            {
+                Directory.Delete(_directory, recursive: true);
+            }
+            catch (IOException)
+            {
+                // 发布目录删不掉不影响断言结论。
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
         }
     }
 }

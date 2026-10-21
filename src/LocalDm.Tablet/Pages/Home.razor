@@ -1,30 +1,46 @@
 @page "/"
 @using LocalDm.Core.Tablet
 @inject TabletSpikeState State
+@inject IHttpContextAccessor Http
+@implements IDisposable
+@* 交互渲染模式必须显式声明：只注册 AddInteractiveServerComponents 不会让按钮生效。 *@
+@rendermode RenderMode.InteractiveServer
+
+@{
+    // 没有会话 Cookie 时现场发一个：每台设备各拿各的键。
+    var _sessionKey = TabletSessions.KeyFor(Http.HttpContext) ?? TabletSessions.Issue(Http.HttpContext!);
+    var session = State.Session(_sessionKey);
+}
 
 <h1>合成探针 · 平板</h1>
 <p class="meta">合成材料，不含任何真实剧本内容。</p>
 
-@if (State.Role is null)
+@if (session.RoleId is null)
 {
     <p class="status">先选一个角色。</p>
     <ul class="card-list">
         @foreach (var role in State.Roles)
         {
+            var taken = State.ClaimedRoles.Contains(role.RoleId, StringComparer.Ordinal);
             <li>
-                <button @onclick="() => State.Claim(role.RoleId)">
+                <button disabled="@taken" @onclick="() => Claim(role.RoleId)">
                     <span class="card-name">@role.DisplayName</span>
-                    <span class="card-sub">@role.PageCount 页</span>
+                    <span class="card-sub">@role.PageCount 页@(taken ? " · 已被认领" : "")</span>
                 </button>
             </li>
         }
     </ul>
+    @if (_claimFailed)
+    {
+        <p class="status warn">这个角色刚被别人认领了，请另选一个。</p>
+    }
 }
 else
 {
+    var role = State.Roles.First(r => r.RoleId == session.RoleId);
     <p class="status">
-        当前角色：@State.Role.DisplayName
-        <button @onclick="() => State.Release()">退出重选</button>
+        当前角色：@role.DisplayName
+        <button @onclick="() => Release()">退出重选</button>
     </p>
 
     <h2>线索卡目录（按名称）</h2>
@@ -32,7 +48,7 @@ else
         @foreach (var card in State.Cards)
         {
             <li>
-                <button @onclick="() => State.Select(card.CardId)">
+                <button @onclick="() => Select(card.CardId)">
                     <span class="card-name">@card.DisplayName</span>
                     <span class="card-sub">@card.GroupName · @card.SourceOrder</span>
                 </button>
@@ -40,19 +56,60 @@ else
         }
     </ul>
 
-    @if (State.SelectedCardId is not null)
+    @if (session.SelectedCardId is not null)
     {
-        <img class="shot" src="/tablet/cards/@State.SelectedCardId/front" alt="线索卡" />
+        <img class="shot" src="/tablet/cards/@session.SelectedCardId/front" alt="线索卡" />
     }
 
     <h2>角色本</h2>
     <p class="meta">
-        <button @onclick="() => State.OpenPage(1)">第 1 页</button>
-        <button @onclick="() => State.OpenPage(2)">第 2 页</button>
-        <button @onclick="() => State.OpenPage(3)">第 3 页</button>
+        <button @onclick="() => OpenPage(1)">第 1 页</button>
+        <button @onclick="() => OpenPage(2)">第 2 页</button>
+        <button @onclick="() => OpenPage(3)">第 3 页</button>
     </p>
-    @if (State.RolePage is not null)
+    @if (session.RolePage is not null)
     {
-        <img class="shot" src="/tablet/role/pages/@State.RolePage" alt="角色本" />
+        <img class="shot" src="/tablet/role/pages/@session.RolePage" alt="角色本" />
+    }
+}
+
+@code {
+    private bool _claimFailed;
+    private string _sessionKey = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        // 渲染时已经发过 Cookie，这里直接复用同一个键。
+        _sessionKey = TabletSessions.KeyFor(Http.HttpContext) ?? string.Empty;
+        TabletSessions.Changed += OnAnySessionChanged;
+    }
+
+    void IDisposable.Dispose() => TabletSessions.Changed -= OnAnySessionChanged;
+
+    /// <summary>任何会话变化都重画：别的设备认领后，这里的「已被认领」要立刻更新。</summary>
+    private void OnAnySessionChanged() => InvokeAsync(StateHasChanged);
+
+    private void Claim(string roleId)
+    {
+        _claimFailed = !State.TryClaim(_sessionKey, roleId);
+        TabletSessions.RaiseChanged();
+    }
+
+    private void Release()
+    {
+        State.Release(_sessionKey);
+        TabletSessions.RaiseChanged();
+    }
+
+    private void Select(string cardId)
+    {
+        State.Session(_sessionKey).SelectedCardId = cardId;
+        TabletSessions.RaiseChanged();
+    }
+
+    private void OpenPage(int pageNumber)
+    {
+        State.Session(_sessionKey).RolePage = pageNumber;
+        TabletSessions.RaiseChanged();
     }
 }

@@ -153,9 +153,10 @@ HTTP 服务默认关闭，电脑点击“开启平板分发”才绑定所选局
 
 ### 第一步：技术探针
 
-- [x] 用合成材料验证同进程服务、HTTP 图片、Blazor、6 会话及停止/恢复的服务端部分，按第 3 节记录结果（见 [browser-spike.md](../evidence/tablet/browser-spike.md)：自动化 8 项全通过；Blazor Interactive Server 零新增 NuGet 依赖、离线可构建）。
+- [x] 用合成材料验证同进程服务、HTTP 图片、Blazor 交互渲染、6 会话及停止/恢复的服务端部分，按第 3 节记录结果（见 [browser-spike.md](../evidence/tablet/browser-spike.md)）。
+- [x] 在桌面真实浏览器（Chrome 156）确认选角色、点卡、翻页可用，图片真实解码显示，会话按 Cookie 隔离，刷新后状态保持；证据见 `artifacts/tablet/`。
+- [x] 原生 PDF 已实际接入 `Windows.Data.Pdf` 并验证页数与逐页渲染（见 [pdf-render-spike.md](../evidence/tablet/pdf-render-spike.md)）；二维码库本机离线不可用，待第三步前锁定。
 - [ ] 真实 iPad 与安卓平板浏览器试验：扫码加入、图片阅读、双指缩放、横竖屏、切后台与锁屏恢复、6 会话并发、停止与重启生命周期——**未执行**，需用户提供设备；未通过前不进入第二步。
-- [ ] 在 Windows 发布目录验证原生 PDF 页数和渲染；核实新增二维码库许可及运行时依赖。资料和运行物存私有位置，仓库只交脱敏证据。（当前事实：字符串页数计数在压缩 PDF 上数不准，`Windows.Data.Pdf` 投影未接入；二维码库本机离线不可用。）
 - [ ] 通过后固定技术路线、更新本方案中的试验状态；失败则交事实和修订建议，不继续搭完整界面。
 
 ### 第二步：冻结资产和名称索引
