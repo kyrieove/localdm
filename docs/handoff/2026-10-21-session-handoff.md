@@ -123,39 +123,20 @@ LocalDm（本局主持）：Windows 单电脑剧本杀 AI 主持软件。.NET 10
 | 第二本剧本 K7-星火号验收通过 | `bec00f1`、`830f380` | `docs/evidence/us3/import-wizard-acceptance.md` |
 | 模型对比报告 | `d0e1c5c` | `docs/evidence/us3/model-comparison.md`，见第 5 节第 2 项 |
 | 向导第一步输入框字被裁、选完文件夹后"下一步"不亮 | `a45a55c` | 云端助手修的，已合进 `main` 并测试通过 |
+| 按钮自动刷新与手动通知补齐 | `ec8a3be` | |
+| 默认模型不退回 `group/auto…` 路由 | `2520c1f` | |
 
-测试数（`a45a55c` 时）：`LocalDm.Tests` 287 通过 / 0 失败 / 6 跳过；`LocalDm.UiTests` 30 通过 / 0 失败。
+测试数（`2520c1f` 时）：`LocalDm.Tests` 287 通过 / 0 失败 / 6 跳过；`LocalDm.UiTests` 33 通过 / 0 失败。
 
 ---
 
 ## 5. 未完成事项（按优先级）
 
-### 5.1 按钮"该亮不亮"——下一步就做这个
+### 5.1 按钮"该亮不亮"——已完成
 
-项目里自己写的 `RelayCommand`（`src/LocalDm.App/ViewModels/ShellViewModel.cs`）不会自动刷新。属性变了，如果没有手动调用 `RaiseCanExecuteChanged()`，按钮就一直保持旧状态。`a45a55c` 修了向导第一步，DeepSeek 又查出一批同类遗漏，**还没修**。其中会实际挡住用户的是：导入向导第 ④ 页重写被隐藏的提示、或改环节类别后，"下一步 / 建包"可能一直不亮。
-
-待发给 DeepSeek 的提示词（已和用户确认过方向）：
-
-```
-修按钮"该亮不亮"的问题，从根上修，再补齐你列出的遗漏。
-
-1. src/LocalDm.App/ViewModels/ShellViewModel.cs 的 RelayCommand：CanExecuteChanged 的 add/remove 同时挂到 CommandManager.RequerySuggested 上（保留它自己的事件，RaiseCanExecuteChanged() 照旧触发自己的事件）。这样用户点击、输入、切换焦点后，所有按钮都会自动重新判断。注释里写明：后台任务结束这类没有用户输入的变化，仍然要手动调用 RaiseCanExecuteChanged()。
-
-2. 补齐你清单里的手动通知：
-   - SetupViewModel.Busy 的 setter：补上 CheckVoicesCommand、SaveCommand。
-   - ChatMessage.SpeechState 的 setter：补上 ReplayCommand?.RaiseCanExecuteChanged()。
-   - ImportGroupRow.Kind、ImportFlowStepRow 的 Title / Kind / Hint（重写被隐藏的提示后 IsHidden 会变）：行对象加一个 Changed 事件或回调，向导收到后调用 NextCommand 和 BuildCommand 的 RaiseCanExecuteChanged()。
-   - AddStep、RemoveStep、MoveStep：同样刷新 NextCommand、BuildCommand。
-
-3. 补界面测试：
-   - ④ 页有一条被隐藏的提示时 BuildCommand 不可用；把提示改写成不含真相原文的句子后，BuildCommand 收到 CanExecuteChanged 并变为可用。
-   - ② 页把唯一的组织者手册改成角色本，NextCommand 收到通知并变为不可用；再改回来，变为可用。
-   - 设置页 Busy 从 true 变回 false 时，SaveCommand 和 CheckVoicesCommand 收到 CanExecuteChanged。
-
-4. 构建、两套测试全部通过后提交（提交信息用中文），推送 origin main。告诉我提交号和测试数（通过 / 失败 / 跳过分开写）。
-```
-
-修完后，请用户从界面导入 K7 再走一遍，重点看第 ④ 页重写提示后"下一步"能不能点。
+`ec8a3be`：`RelayCommand` 同时挂接 `CommandManager.RequerySuggested`，并补齐设置页、聊天消息、导入向导各处的手动通知，新增 3 条界面测试。
+`2520c1f`：默认模型不再退回会丢 system 消息的 `group/auto…` 路由。
+还没做的只有人工确认：用户从界面导入 K7 再走一遍，看第 ④ 页重写提示后"下一步"能不能点。
 
 ### 5.2 选主持模型
 
