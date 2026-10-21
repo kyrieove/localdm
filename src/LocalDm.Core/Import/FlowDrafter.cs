@@ -60,6 +60,7 @@ public sealed class FlowDrafter
     /// 固定提示词。措辞是方案里定下的，不要改写：
     /// 它规定了只写流程不写剧情、kind 的取值、唯一 Reveal、页码依据与禁止输出 publicPages。
     /// 第 8 条给出 JSON 的确切结构：不给结构时，模型会自拟字段名，解析出来没有 steps。
+    /// 分层只要 truthPages：publicPages 与 ignoredPages 都不让模型决定，解析时一律置空。
     /// </summary>
     public const string Prompt =
         """
@@ -69,12 +70,12 @@ public sealed class FlowDrafter
         2. 不写任何角色的秘密，也不写只有读过真相才知道的名词。
         3. kind 只能是 Read、Intro、Search、Talk、Vote、Reveal、Review 之一；必须有且只有一个 Reveal 环节，Reveal 之后才能出现 Review。
         4. sourceRef 写成"组织者手册第 N 页"，N 是这一环在手册里的依据页。
-        5. layering.truthPages 列出所有写着真相、凶手、作案经过、复盘答案的页；拿不准的页也算进去。layering.ignoredPages 只列封面、版权页、空白页、"后面是真相"这类警告页。
+        5. layering.truthPages 列出所有写着真相、凶手、作案经过、复盘答案的页；拿不准的页也算进去。
         6. 不要输出 publicPages。
         7. 只输出 JSON，不要任何解释。
         8. JSON 必须是下面这个结构，字段名一字不改，steps 按游戏顺序排列：
         {
-          "layering": { "truthPages": [8, 9], "ignoredPages": [1] },
+          "layering": { "truthPages": [8, 9] },
           "steps": [
             {
               "stepId": "read",
@@ -221,7 +222,10 @@ public sealed class FlowDrafter
             // 一律置空：导入的人看不到正文，没法确认哪页能上公共屏幕；开场由 AI 主持自己讲。
             PublicPages = [],
             TruthPages = dto.Layering?.TruthPages ?? [],
-            IgnoredPages = dto.Layering?.IgnoredPages ?? [],
+            // 同样一律置空：导入的人看不到正文，也没法确认哪页能丢。手册第 2 页常同时有版权声明与
+            // 开场信，整页丢掉后 AI 主持就读不到开场信息；多留几页只是多几百字。
+            // ④ 页仍可手动把某页切成「不入包」。
+            IgnoredPages = [],
         };
 
         var flow = new ScriptFlow { Steps = steps, Layering = layering };
@@ -282,7 +286,7 @@ public sealed class FlowDrafter
             return "复盘不能排在揭晓之前";
         }
 
-        var pages = (flow.Layering?.TruthPages ?? []).Concat(flow.Layering?.IgnoredPages ?? []).ToArray();
+        var pages = (flow.Layering?.TruthPages ?? []).ToArray();
         var outOfRange = pages.Where(page => page < 1 || page > maxPage).ToArray();
         if (outOfRange.Length > 0)
         {
@@ -332,6 +336,7 @@ public sealed class FlowDrafter
 
         public List<int>? TruthPages { get; set; }
 
+        /// <summary>模型可能输出它；解析出来也不采用（一律置空，④ 页由人手动选）。</summary>
         public List<int>? IgnoredPages { get; set; }
     }
 

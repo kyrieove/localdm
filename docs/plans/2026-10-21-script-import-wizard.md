@@ -98,7 +98,7 @@ public sealed class ScriptImportService
 
   ```json
   {
-    "layering": { "truthPages": [8,9,10,11], "ignoredPages": [7,12] },
+    "layering": { "truthPages": [8,9,10,11] },
     "steps": [
       { "stepId": "read", "title": "阅本", "kind": "Read",
         "hint": "拿到角色本，读到写着先不要翻页的地方为止。",
@@ -118,7 +118,7 @@ public sealed class ScriptImportService
   2. 不写任何角色的秘密，也不写只有读过真相才知道的名词。
   3. kind 只能是 Read、Intro、Search、Talk、Vote、Reveal、Review 之一；必须有且只有一个 Reveal 环节，Reveal 之后才能出现 Review。
   4. sourceRef 写成"组织者手册第 N 页"，N 是这一环在手册里的依据页。
-  5. layering.truthPages 列出所有写着真相、凶手、作案经过、复盘答案的页；拿不准的页也算进去。layering.ignoredPages 只列封面、版权页、空白页、"后面是真相"这类警告页。
+  5. layering.truthPages 列出所有写着真相、凶手、作案经过、复盘答案的页；拿不准的页也算进去。
   6. 不要输出 publicPages。
   7. 只输出 JSON，不要任何解释。
   8. JSON 必须是下面这个结构，字段名一字不改，steps 按游戏顺序排列：
@@ -129,9 +129,15 @@ public sealed class ScriptImportService
   > 2026-10-21 修订：初版提示词没有第 8 条，模型不知道字段名，自拟结构后解析不出 `steps`，
   > 真实剧本验收时连续四个模型起草失败。补上结构说明；模型漏写 `stepId` 时按顺序补成 `step-N`，不再整份判失败。
 
+  > 2026-10-21 修订二：分层只让模型出 `truthPages`。`ignoredPages` 从提示词里去掉，解析出来也一律置空
+  > （和 `publicPages` 同一个处理）。理由：《孽岛疑云》手册第 2 页同时有版权声明和开场信，
+  > 模型把它当「版权页」整页丢进 `ignoredPages` 后，AI 主持读不到开场信息；而导入的人看不到正文，
+  > 没法替这个决定背书。多留几页只是多几百字。④ 页仍保留「不入包」选项，由人手动切。
+
 - 解析与校验：
   - JSON 解析失败或校验不通过（`ScriptFlow.ValidationIssues` 非空、没有 Reveal、页号超出手册页数）→ 自动重试一次，把失败原因附在请求里。第二次仍失败，就显示"AI 没能起草流程"，并提供一份**空白**环节表让导入的人手填，不要套默认流程。
   - `layering.publicPages` 一律置空（即使模型输出了）。理由：AI 主持会自己讲开场，手册页不需要直接上公共屏幕；而导入的人看不到正文，没法确认某页能否公开。
+  - `layering.ignoredPages` 同样一律置空（即使模型输出了）。理由同上：导入的人看不到正文，没法确认哪页能丢；多留几页只是多几百字。
   - `layering.organizerGroup` 由 ② 页确认的组织者手册分组名填入，不让模型填。
 
 #### 3.2.1 剧透检查（显示给导入的人之前）
@@ -197,6 +203,7 @@ public sealed class ScriptImportService
 |---|---|
 | 合法 JSON | 解析成 `ScriptFlow`；`OrganizerGroup` 取自确认的分组名；`PublicPages` 为空 |
 | 模型输出了 `publicPages` | 被清空 |
+| 模型输出了 `ignoredPages` | 被清空，`truthPages` 保留 |
 | 第一次 JSON 坏、第二次合法 | 只重试一次；第二次请求里带上失败原因 |
 | 两次都失败 | 返回"起草失败"，不返回任何默认流程 |
 | 没有 Reveal 环节 / 两个 Reveal | 判为校验失败 |

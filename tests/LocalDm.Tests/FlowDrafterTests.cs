@@ -62,6 +62,22 @@ public sealed class FlowDrafterTests
     }
 
     [Fact]
+    public async Task Ignored_pages_from_the_model_are_dropped()
+    {
+        // 导入的人看不到正文，没法确认哪页能丢；④ 页仍可手动切成「不入包」。
+        var json = GoodJson.Replace(
+            "\"truthPages\": [3]",
+            "\"truthPages\": [3], \"ignoredPages\": [1, 2]");
+
+        var result = await new FlowDrafter(new ScriptedGateway(json))
+            .DraftAsync(Input(), "test-model", TestContext.Current.CancellationToken);
+
+        Assert.True(result.Succeeded);
+        Assert.Empty(result.Flow!.Layering!.IgnoredPages);
+        Assert.Equal(new[] { 3 }, result.Flow.Layering.TruthPages);
+    }
+
+    [Fact]
     public async Task Broken_json_is_retried_once_and_the_retry_carries_the_reason()
     {
         var gateway = new ScriptedGateway("这不是 JSON", GoodJson);
@@ -147,12 +163,16 @@ public sealed class FlowDrafterTests
     public void Prompt_spells_out_the_json_structure_the_parser_reads()
     {
         // 不给结构时，模型会自拟字段名，解析出来没有 steps：提示词里必须写明解析器认的字段名。
-        foreach (var field in new[] { "\"layering\"", "\"truthPages\"", "\"ignoredPages\"", "\"steps\"",
+        foreach (var field in new[] { "\"layering\"", "\"truthPages\"", "\"steps\"",
                      "\"stepId\"", "\"title\"", "\"kind\"", "\"hint\"", "\"conditions\"", "\"sourceRef\"",
                      "\"offersOpeningSpeech\"" })
         {
             Assert.Contains(field, FlowDrafter.Prompt, StringComparison.Ordinal);
         }
+
+        // 分层只要 truthPages：publicPages 与 ignoredPages 不让模型决定，提示词里也不再提。
+        Assert.DoesNotContain("\"ignoredPages\"", FlowDrafter.Prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"publicPages\"", FlowDrafter.Prompt, StringComparison.Ordinal);
     }
 
     [Fact]
