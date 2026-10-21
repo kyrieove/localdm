@@ -82,5 +82,21 @@ internal static class SqliteSchemaSql
             snapshot_json TEXT NOT NULL,
             updated_at    TEXT NOT NULL
         );
+
+        -- 公开消息记录：给平板看的桌上公开对话。
+        -- 和 dm_conversations 分开存：这里没有备忘、没有角色本、没有真相，
+        -- 也不会从 AI 备忘里重建。序号在本局内单调递增，平板按它去重与补发。
+        -- 同一 message_id 在本局内只存一次，重试不会多出一条、不会跳号。
+        CREATE TABLE IF NOT EXISTS public_messages (
+            session_id TEXT NOT NULL,
+            sequence   INTEGER NOT NULL,
+            message_id TEXT NOT NULL,
+            author     INTEGER NOT NULL,
+            kind       INTEGER NOT NULL,
+            body       TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (session_id, sequence),
+            UNIQUE (session_id, message_id)
+        );
         """;
 }

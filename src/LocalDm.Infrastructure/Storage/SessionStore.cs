@@ -1,6 +1,7 @@
 using System.Text.Json;
 using LocalDm.Core.Domain;
 using LocalDm.Core.Ports;
+using LocalDm.Core.Tablet;
 using Microsoft.Data.Sqlite;
 
 namespace LocalDm.Infrastructure.Storage;
@@ -353,6 +354,237 @@ public sealed class SessionStore : ISessionStore, IDisposable
             // 存档损坏不该让这一局开不了：这一局从空记忆继续。
             return null;
         }
+    }
+
+    /// <summary>公开消息每页默认条数。</summary>
+    public const int DefaultPublicMessagePageSize = 200;
+
+    /// <summary>
+    /// 追加一条公开消息，返回入库后的那一条（带存储层分配的序号）。
+    ///
+    /// 同一局内同一个消息 ID 只存一次：重试或多路写入不会多出一条，
+    /// 序号也不会因此跳号（跳号会让平板补发出现缺口）。
+    ///
+    /// 写不进去时抛 <see cref="PublicMessageSyncException"/>：
+    /// 界面据此显示「同步异常」并停住继续累加，不能吞掉，也不能报告已同步。
+    /// </summary>
+    public async Task<PublicMessage> AppendPublicMessageAsync(
+        PublicMessage message,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+
+        if (string.IsNullOrWhiteSpace(message.SessionId))
+        {
+            throw new PublicMessageSyncException("公开消息缺少本局 ID，没有存下来。");
+        }
+
+        if (string.IsNullOrWhiteSpace(message.MessageId))
+        {
+            throw new PublicMessageSyncException("公开消息缺少消息 ID，没有存下来。");
+        }
+
+        await InitializeAsync(cancellationToken);
+        await _writeLock.WaitAsync(cancellationToken);
+        try
+        {
+            await using var connection = await OpenAsync(cancellationToken);
+            await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                // 1. 同一消息 ID 只存一次：重复写入返回原来那条，序号不动。
+                var existing = await FindPublicMessageAsync(
+                    connection,
+                    transaction,
+                    message.SessionId,
+                    message.MessageId,
+                    cancellationToken);
+                if (existing is not null)
+                {
+                    await transaction.CommitAsync(cancellationToken);
+                    return existing;
+                }
+
+                // 2. 序号按本局单调递增
+                var sequence = await NextPublicSequenceAsync(
+                    connection,
+                    transaction,
+                    message.SessionId,
+                    cancellationToken);
+                var stored = message with { Sequence = sequence };
+
+                await using (var insert = connection.CreateCommand())
+                {
+                    insert.Transaction = transaction;
+                    insert.CommandText =
+                        "INSERT INTO public_messages " +
+                        "(session_id, sequence, message_id, author, kind, body, created_at) " +
+                        "VALUES ($s, $q, $m, $a, $k, $b, $t)";
+                    insert.Parameters.AddWithValue("$s", stored.SessionId);
+                    insert.Parameters.AddWithValue("$q", stored.Sequence);
+                    insert.Parameters.AddWithValue("$m", stored.MessageId);
+                    insert.Parameters.AddWithValue("$a", (int)stored.Author);
+                    insert.Parameters.AddWithValue("$k", (int)stored.Kind);
+                    insert.Parameters.AddWithValue("$b", stored.Text);
+                    insert.Parameters.AddWithValue(
+                        "$t",
+                        stored.CreatedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
+                    await insert.ExecuteNonQueryAsync(cancellationToken);
+                }
+
+                await transaction.CommitAsync(cancellationToken);
+                return stored;
+            }
+            catch (OperationCanceledException)
+            {
+                await TryRollbackAsync(transaction);
+                throw;
+            }
+            catch (PublicMessageSyncException)
+            {
+                await TryRollbackAsync(transaction);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // 存不进去必须说清楚：界面据此显示「同步异常」，不能当成已经同步。
+                await TryRollbackAsync(transaction);
+                throw new PublicMessageSyncException(
+                    "公开消息没有存下来：同步已停住，不能继续累加。",
+                    ex);
+            }
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// 按 after 序号分页读取本局的公开消息：只给序号大于 after 的，按序号升序。
+    /// 平板重连时用 after 补发；after 为 0 表示从头要。
+    /// 读不出来时抛 <see cref="PublicMessageSyncException"/>：不能当成「没有新消息」。
+    /// </summary>
+    public async Task<IReadOnlyList<PublicMessage>> ReadPublicMessagesAsync(
+        string sessionId,
+        long after,
+        int limit = DefaultPublicMessagePageSize,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new PublicMessageSyncException("公开消息缺少本局 ID，没有读出来。");
+        }
+
+        if (limit <= 0)
+        {
+            limit = DefaultPublicMessagePageSize;
+        }
+
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT sequence, message_id, author, kind, body, created_at " +
+                "FROM public_messages WHERE session_id = $s AND sequence > $after " +
+                "ORDER BY sequence LIMIT $limit";
+            command.Parameters.AddWithValue("$s", sessionId);
+            command.Parameters.AddWithValue("$after", after);
+            command.Parameters.AddWithValue("$limit", limit);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            var messages = new List<PublicMessage>();
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                messages.Add(ReadPublicMessage(sessionId, reader));
+            }
+
+            return messages;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new PublicMessageSyncException("公开消息没有读出来：同步不能报告已完成。", ex);
+        }
+    }
+
+    /// <summary>
+    /// 回滚尽力而为：回滚自己失败时不能盖掉真正的错因
+    /// （连接已经断了，事务随后会被丢弃）。
+    /// </summary>
+    private static async Task TryRollbackAsync(SqliteTransaction transaction)
+    {
+        try
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    private static async Task<PublicMessage?> FindPublicMessageAsync(
+        SqliteConnection connection,
+        SqliteTransaction? transaction,
+        string sessionId,
+        string messageId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            "SELECT sequence, message_id, author, kind, body, created_at " +
+            "FROM public_messages WHERE session_id = $s AND message_id = $m";
+        command.Parameters.AddWithValue("$s", sessionId);
+        command.Parameters.AddWithValue("$m", messageId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken)
+            ? ReadPublicMessage(sessionId, reader)
+            : null;
+    }
+
+    private static async Task<long> NextPublicSequenceAsync(
+        SqliteConnection connection,
+        SqliteTransaction? transaction,
+        string sessionId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            "SELECT COALESCE(MAX(sequence), 0) + 1 FROM public_messages WHERE session_id = $s";
+        command.Parameters.AddWithValue("$s", sessionId);
+        var value = await command.ExecuteScalarAsync(cancellationToken);
+        return Convert.ToInt64(value, System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static PublicMessage ReadPublicMessage(string sessionId, SqliteDataReader reader)
+    {
+        var author = reader.GetInt32(2);
+        var kind = reader.GetInt32(3);
+        if (!Enum.IsDefined(typeof(PublicMessageAuthor), author)
+            || !Enum.IsDefined(typeof(PublicMessageKind), kind))
+        {
+            throw new PublicMessageSyncException("公开消息的数据不对，没有读出来。");
+        }
+
+        return new PublicMessage
+        {
+            SessionId = sessionId,
+            Sequence = reader.GetInt64(0),
+            MessageId = reader.GetString(1),
+            Author = (PublicMessageAuthor)author,
+            Kind = (PublicMessageKind)kind,
+            Text = reader.GetString(4),
+            CreatedAt = DateTimeOffset.Parse(
+                reader.GetString(5),
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind),
+        };
     }
 
     public void Dispose() => _writeLock.Dispose();
