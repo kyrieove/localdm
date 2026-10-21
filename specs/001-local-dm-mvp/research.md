@@ -79,12 +79,20 @@ Alternatives：全知 prompt 或任意改写后由另一个 LLM 判断安全，�
 
 Decision：WPF 进程内托管 ASP.NET Core 局域网服务，默认关闭；用户点击开启后才绑定所选局域网 IPv4 与端口，二维码在本机生成。图片经 HTTP 图片响应按需传输，不 Base64 进连接消息，不一次下载全部角色本或全部卡面。页面技术候选为 Blazor Interactive Server，须先通过真实平板浏览器验证。
 
+卡片全部按名称列出，点击提供对应单卡，没有按环节解锁，不设前提确认、领取次数或独占；旧游戏状态规则、阶段推进、投票汇总与揭秘裁决完全保持不变。
+拆分失败或配对不可靠时暂停该组数字分发，明确显示未准备好，不以整页图片替代单张。
+
+契约端点与错误码约定：
+- 入口：POST /tablet/join（加入令牌换会话 Cookie）、POST /tablet/role（认领角色）、GET /tablet/catalog（全部卡片目录）、GET /tablet/cards/{cardId}/front（单张卡图片）、GET /tablet/role/book（本人角色的原文章节与插图）、GET/POST /tablet/role/progress（文本位置与阅读设置）、GET /tablet/role/source/{pageNumber}（原稿核对源页，no-store）、GET /tablet/public?after={sequence}（公开消息同步）。
+- 错误码：会话无效 401，未认领角色访问角色本 403，ID 或页号不存在 404，组未准备好 409，角色认领冲突 409。
+- 公共消息投影：接入 HostViewModel.AddMessage 公共显示出口与已提交环节变化，单调序号去重，由同一个 SessionStore 写入 SQLite 独立表，不含模型备忘（DmConversationSnapshot），升级前未保存的历史不从 AI 备忘重建；公开消息恢复不触发 TTS。
+
 Rationale：沿用 C# 与同一进程的剧本包/存档/防剧透逻辑，平板只收到它该看的内容；服务端渲染避免把别人的角色本发到本机。相比纯静态 HTML 需另写状态同步，相比 WASM 不增加客户端运行时与共享契约。
 
 Alternatives：WASM 增加客户端运行时和契约面，一期不选；纯 HTML + HTTP 接口保留为 Blazor 失败后的修订候选，但更换技术栈必须先交付实测证据，不能自行跳过门槛。
 
 实施验证（未执行，不得当作通过）：
-- 真实 iPad 与安卓平板各一台，用设备上可用的浏览器扫码加入、选角色、看角色本、按名称点单卡；不限定浏览器品牌，不要求安装 App。
+- 真实 iPad 与安卓平板各一台，用设备上可用的浏览器扫码加入、选角色、看角色本、按名称点单卡；平板浏览器不限定品牌，不要求安装 App。
 - 6 个浏览器会话并发打开不同卡与角色本，页码不串台；刷新与断线（锁屏 60 秒、切后台 60 秒、Wi-Fi 断开 30 秒）后可恢复。
 - 停止服务、切换剧本、重启 WPF 后旧页面与旧令牌不能读到旧局或新局资产。
 - 证据写入 `docs/evidence/tablet/browser-spike.md`，记录设备型号、系统、浏览器版本与实际结果；桌面浏览器和模拟器不计入。

@@ -5,15 +5,16 @@
 **Input**: `specs/001-local-dm-mvp/spec.md`，取代早期平板和 SoloPlay 范围。
 
 > **2026-10-21 平板分发增量（ADR 0005）**：本节新增局域网平板分发范围，实施顺序与证据以
-> `docs/plans/2026-10-21-tablet-distribution.md` 为准。技术路线先验证 Blazor Interactive Server，
-> 真实平板浏览器通过后才定型；失败时交付实测证据再修订，不自行更换技术栈。
+> `docs/plans/2026-10-21-tablet-distribution.md` 为准。卡片全部按名称列出，点哪张给哪张，没有按环节解锁。
+> 平板浏览器不限定品牌（iPad、安卓平板用各自设备上可用的浏览器即可，不要求安装 App）。
+> 技术路线先验证 Blazor Interactive Server，真实平板浏览器通过后才定型；失败时交付实测证据再修订，不自行更换技术栈。
 
 ## Summary
 
 自建 WPF 软件，OpenLess 向原生文字框输入，Windows Magpie 普通文字模型返回公共主持文字，System.Speech TTS 朗读。
 文档准备复用现有 MinerU；生成保留页块来源的冻结剧本包，正式游戏无需 OCR 服务。
 规则核心决定阶段、材料提示、人工投票汇总和揭秘，公共模型没有状态写权限。
-WPF 进程内可开启局域网 HTTP 服务，向本局平板只读分发公共对话与当前环节，并按认领角色提供角色本、按名称点选提供单张线索卡；服务默认关闭，只绑定局域网 IPv4。
+WPF 进程内可开启局域网 HTTP 服务，向本局平板只读分发公共对话与当前环节，并按认领角色提供角色本、按名称点选提供单张线索卡；服务默认关闭，只绑定局域网 IPv4。旧游戏状态规则保持不变。
 当前完成的是规格、研究、设计及任务，不是应用实现。
 
 ## Technical Context
@@ -38,7 +39,7 @@ WPF 进程内可开启局域网 HTTP 服务，向本局平板只读分发公共�
 
 ## Constitution Check
 
-基准为宪章 3.0.0。以下为设计符合性，不代表运行验收通过。
+基准为宪章 5.0.0（2026-10-21 ADR 0005 修订）。以下为设计符合性，不代表运行验收通过。
 
 | 原则 | Phase 0 前 | Phase 1 后设计证据 |
 |---|---|---|
@@ -70,6 +71,7 @@ specs/001-local-dm-mvp/
     integrations.md
     game-commands.md
     document-package.md
+    tablet-distribution.md
   tasks.md
 ```
 
