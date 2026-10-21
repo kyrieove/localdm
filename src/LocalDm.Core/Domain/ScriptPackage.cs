@@ -1,3 +1,6 @@
+using System.Text.Json.Serialization;
+using LocalDm.Core.Tablet;
+
 namespace LocalDm.Core.Domain;
 
 /// <summary>
@@ -51,6 +54,18 @@ public sealed record ScriptPackage
     public required TruthSection Truth { get; init; }
 
     public required PackageValidationState Validation { get; init; }
+
+    /// <summary>
+    /// 可选的平板清单：按名称列出的线索卡目录、冻结资产索引与各组准备状态。
+    ///
+    /// 旧包没有这一段，读出来为 null，纸质模式照常；
+    /// 有清单的包会比同一批材料生成的旧包多一个内容指纹（清单内容计入 <see cref="ContentHash"/>），
+    /// 所以重新准备会得到新版本，旧存档不会静默接受新资产。
+    ///
+    /// 为 null 时不写进 JSON：没有平板清单的包，写出来的文件与加这一项之前逐字节相同。
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public TabletManifest? Tablet { get; init; }
 }
 
 public sealed record RoleIndex

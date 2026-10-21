@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using LocalDm.Core.Domain;
 using LocalDm.Core.Ports;
+using LocalDm.Core.Tablet;
 
 namespace LocalDm.Core.Import;
 
@@ -100,7 +101,8 @@ public static class RealScriptPackageBuilder
         IReadOnlyList<ExtractedPage> pages,
         IReadOnlyList<SourceFile> sourceFiles,
         ScriptLayeringRule? rule = null,
-        ScriptFlow? flow = null)
+        ScriptFlow? flow = null,
+        TabletManifest? tablet = null)
     {
         rule ??= ScriptLayeringRule.Default;
 
@@ -186,10 +188,11 @@ public static class RealScriptPackageBuilder
         var (phases, referenceIssues) = BuildPhases(flow, publicSegments, materialItems);
         var manifestHash = ManifestHash(sourceFiles);
 
-        // 内容身份：来源 + 玩法配置 + 规范化流程。
+        // 内容身份：来源 + 玩法配置 + 规范化流程 + 可选的平板清单。
         // 只按来源算指纹的话，同一批材料换成另一套流程会得到完全相同的包身份，
-        // 旧存档就会静默接受新流程、跳过新增环节。
-        var contentHash = ContentHash(manifestHash, playerCount, phases);
+        // 旧存档就会静默接受新流程、跳过新增环节；平板清单同理：
+        // 改了名称或切片参数必须得到新版本，旧局才不会静默换卡、换名。
+        var contentHash = ContentHash(manifestHash, playerCount, phases, tablet);
 
         var keyFacts = segments
             .Where(s => s.Visibility != SegmentVisibility.Private)
@@ -271,6 +274,7 @@ public static class RealScriptPackageBuilder
             Validation = readiness.CanStart
                 ? PackageValidationState.Ready
                 : PackageValidationState.NeedsReview,
+            Tablet = tablet,
         };
 
         return new BuildResult
@@ -293,11 +297,15 @@ public static class RealScriptPackageBuilder
     /// <summary>
     /// 规范化流程 → 内容指纹。用「生成的阶段」而不是声明原文来算，
     /// 是因为真正影响玩法的是阶段本身：两份声明只要产出的阶段一样，就是同一份剧本。
+    ///
+    /// 平板清单只在存在时才写进指纹：没有清单的包与改动前逐字节相同，
+    /// 旧存档不会因为这次升级被判定成另一份剧本。
     /// </summary>
     private static string ContentHash(
         string manifestHash,
         int playerCount,
-        IReadOnlyList<ScriptPhase> phases)
+        IReadOnlyList<ScriptPhase> phases,
+        TabletManifest? tablet)
     {
         var builder = new StringBuilder();
         builder.Append("schema=").Append(ScriptPackage.CurrentSchemaVersion)
@@ -321,6 +329,49 @@ public static class RealScriptPackageBuilder
                 .Append('|').Append(string.Join(',', phase.PublicSegmentIds))
                 .Append('|').Append(string.Join(',', phase.Conditions))
                 .Append('\n');
+        }
+
+        if (tablet is not null)
+        {
+            builder.Append("tablet=").Append(tablet.ManifestVersion)
+                .Append('|').Append(tablet.AssetRootFingerprint)
+                .Append('\n');
+
+            foreach (var group in tablet.Groups.Values.OrderBy(g => g.GroupName, StringComparer.Ordinal))
+            {
+                builder.Append("group=").Append(group.GroupName)
+                    .Append('|').Append(group.IsReady ? '1' : '0')
+                    .Append('|').Append((int)(group.Reason ?? TabletNotReadyReason.CropUnconfirmed))
+                    .Append('|').Append(group.NotReadyCardCount)
+                    .Append('\n');
+            }
+
+            foreach (var card in tablet.Cards.Values.OrderBy(c => c.CardId, StringComparer.Ordinal))
+            {
+                builder.Append("card=").Append(card.CardId)
+                    .Append('|').Append(card.DisplayName)
+                    .Append('|').Append(card.GroupName)
+                    .Append('|').Append(card.SourceOrder)
+                    .Append('|').Append(card.FrontAssetId)
+                    .Append('|').Append(card.BackAssetId ?? string.Empty)
+                    .Append('|').Append((int)card.PreparationState)
+                    .Append('\n');
+            }
+
+            foreach (var asset in tablet.Assets.Values.OrderBy(a => a.AssetId, StringComparer.Ordinal))
+            {
+                builder.Append("asset=").Append(asset.AssetId)
+                    .Append('|').Append(asset.RelativePath)
+                    .Append('|').Append(asset.ContentHash)
+                    .Append('|').Append((int)asset.Kind)
+                    .Append('|').Append(asset.SourceFileId)
+                    .Append('|').Append(asset.SourceContentHash ?? string.Empty)
+                    .Append('|').Append(asset.SourcePageNumber)
+                    .Append('|').Append(asset.GridRows?.ToString() ?? string.Empty)
+                    .Append('|').Append(asset.GridColumns?.ToString() ?? string.Empty)
+                    .Append('|').Append(asset.Slot is { } slot ? $"{slot.Row},{slot.Column}" : string.Empty)
+                    .Append('\n');
+            }
         }
 
         return Sha256Text(builder.ToString());
