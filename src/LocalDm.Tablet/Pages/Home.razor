@@ -1,0 +1,58 @@
+@page "/"
+@using LocalDm.Core.Tablet
+@inject TabletSpikeState State
+
+<h1>合成探针 · 平板</h1>
+<p class="meta">合成材料，不含任何真实剧本内容。</p>
+
+@if (State.Role is null)
+{
+    <p class="status">先选一个角色。</p>
+    <ul class="card-list">
+        @foreach (var role in State.Roles)
+        {
+            <li>
+                <button @onclick="() => State.Claim(role.RoleId)">
+                    <span class="card-name">@role.DisplayName</span>
+                    <span class="card-sub">@role.PageCount 页</span>
+                </button>
+            </li>
+        }
+    </ul>
+}
+else
+{
+    <p class="status">
+        当前角色：@State.Role.DisplayName
+        <button @onclick="() => State.Release()">退出重选</button>
+    </p>
+
+    <h2>线索卡目录（按名称）</h2>
+    <ul class="card-list">
+        @foreach (var card in State.Cards)
+        {
+            <li>
+                <button @onclick="() => State.Select(card.CardId)">
+                    <span class="card-name">@card.DisplayName</span>
+                    <span class="card-sub">@card.GroupName · @card.SourceOrder</span>
+                </button>
+            </li>
+        }
+    </ul>
+
+    @if (State.SelectedCardId is not null)
+    {
+        <img class="shot" src="/tablet/cards/@State.SelectedCardId/front" alt="线索卡" />
+    }
+
+    <h2>角色本</h2>
+    <p class="meta">
+        <button @onclick="() => State.OpenPage(1)">第 1 页</button>
+        <button @onclick="() => State.OpenPage(2)">第 2 页</button>
+        <button @onclick="() => State.OpenPage(3)">第 3 页</button>
+    </p>
+    @if (State.RolePage is not null)
+    {
+        <img class="shot" src="/tablet/role/pages/@State.RolePage" alt="角色本" />
+    }
+}

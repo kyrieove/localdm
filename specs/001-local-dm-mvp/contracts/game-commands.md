@@ -1,6 +1,7 @@
 # Game command contract
 
 桌面进程内契约，无 HTTP 端点。所有外部输入先验证，再交 GameEngine。
+平板分发沿用同一局状态但不新增命令：浏览卡片与角色本不产生 GameCommand，不改变 revision、阶段或材料释放。
 
 ## Dispatch
 

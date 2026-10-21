@@ -3,6 +3,7 @@
     <Project Path="src/LocalDm.App/LocalDm.App.csproj" />
     <Project Path="src/LocalDm.Core/LocalDm.Core.csproj" />
     <Project Path="src/LocalDm.Infrastructure/LocalDm.Infrastructure.csproj" />
+    <Project Path="src/LocalDm.Tablet/LocalDm.Tablet.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/LocalDm.Tests/LocalDm.Tests.csproj" />

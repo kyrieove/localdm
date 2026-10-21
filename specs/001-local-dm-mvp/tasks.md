@@ -180,22 +180,52 @@ PhaseFlowTests.cs/RevealLockTests.cs 与 IdempotencyTests.cs/RecoveryTests.cs �
 
 TextSubmissionTests.cs 与独立 HostUncertaintyTests.cs 可分别编写，HostInputController/HostViewModel 接线串行。
 
-## Parallel Example: User Story 5
+## Phase 8: User Story 6 - 局域网平板分发 (Priority: P1)
 
-锁定发布目录后，打包者与独立干净用户环境验证者可并行；真实一局等待实际发布物可用。
+**Goal**: 玩家扫码加入本机局域网页面，认领角色，阅读整本角色本，从完整名称列表点击并查看对应单张线索卡，同时只读查看公共对话和当前环节。依据 ADR 0005 与 `docs/plans/2026-10-21-tablet-distribution.md`。
+
+**Independent Test**: 用合成材料从 WPF 同进程启动服务，6 个浏览器会话并发加入、认领、翻页、点卡，断言各自只拿到本人角色页与所点单卡；旧令牌与切局隔离可复现。
+
+**顺序约束**：本节 T068–T070 的技术探针必须先通过，才允许进入后续任务；探针失败时交付实测证据并停下修订技术选择。
+
+- [x] T068 [P] [US6] 用合成图片与合成对话搭建最小探针：同进程启动和停止 ASP.NET Core 局域网服务，验证 HTTP 图片传输，记录端口、地址与防火墙提示到 docs/evidence/tablet/service-spike.md。
+- [x] T069 [P] [US6] 用 Blazor Interactive Server 实现加入、选角色、角色页翻页与按名称点单卡的最小页面，页面走 HTTP 图片接口，不用 Base64 传输图片。（合成探针实现，见 src/LocalDm.Tablet。）
+- [ ] T070 [P] [US6] 在 Windows 发布目录验证 Windows 原生 PDF 页数读取与逐页渲染，并核实二维码生成库许可与运行时依赖，结果写入 docs/evidence/tablet/pdf-render-spike.md。（已实测字符串计数在压缩 PDF 上不可靠；原生投影与二维码库未落地。）
+- [ ] T071 [US6] 记录真实 iPad 与安卓平板各一台的浏览器试验：扫码加入、图片阅读、双指缩放、横竖屏、切后台与锁屏恢复、6 会话并发，含设备型号、系统、浏览器版本与实际结果，写入 docs/evidence/tablet/browser-spike.md；未执行项标「未执行」，不得用桌面浏览器或模拟器替代。
+- [ ] T072 [US6] 在 src/LocalDm.Core/Tablet/ 定义 TabletManifest、TabletAsset、卡片索引与只读查询契约，落实「平板取图必须按 cardId 与冻结资产索引解析，不得按显示名称拼路径或模糊命中取第一张。」「卡片组未准备好时请求必须失败并显示原因，不得以整页图片替代单张。」
+- [ ] T073 [P] [US6] 在 tests/LocalDm.Tests/TabletQueryTests.cs 与 TabletAssetTests.cs 准备合成用例：同名卡、缺名称、配对冲突、组未准备好、旧包无清单。
+- [ ] T074 [US6] 在 src/LocalDm.Infrastructure/Import/ 实现单卡配对、通用网格裁切与角色本图片化，记录原文件 hash、页号、有效区域、网格、槽位与映射；不为任一剧本写专属尺寸或别名。
+- [ ] T075 [P] [US6] 在 tests/LocalDm.Tests/TabletAssetTests.cs 覆盖网格合成图：每槽不同标记、四边标记、空槽、非整数行高、5×2、左半区 5×1、反转映射。
+- [ ] T076 [US6] 在导入向导增加平板材料准备区与分组失败说明，取消导入只清理本次未发布临时资产；旧包缺清单时提示重新准备，纸质模式照常可用。
+- [ ] T077 [P] [US6] 在 tests/LocalDm.UiTests/TabletImportTests.cs 覆盖准备区公开字段与未准备好提示，不出现卡面或真相。
+- [ ] T078 [US6] 新建 src/LocalDm.Tablet/ 并加入 LocalDm.slnx，实现 HTTP 路由、局域网配置、二维码与浏览器会话；默认关闭，只绑定所选局域网 IPv4。
+- [ ] T079 [P] [US6] 在 tests/LocalDm.Tests/TabletHttpTests.cs 实际启动服务并发请求：加入、认领冲突、目录、取图、角色页、401/403/404/409、路径穿越与猜测资产。
+- [ ] [US6] T080 在 WPF 主持台接入开启/停止入口、二维码与连接状态，停止后旧页面与旧令牌立即失效，落实「局域网服务默认关闭，只在用户开启后绑定所选局域网 IPv4；停止后旧令牌与旧会话立即失效。」
+- [ ] T081 [P] [US6] 在 tests/LocalDm.UiTests/TabletHostTests.cs 覆盖开启、停止与重启生命周期及「连不上怎么办」入口存在。
+- [ ] T082 [US6] 建立公开消息记录与按序号同步，接入 HostViewModel.AddMessage 的公共出口与已提交环节变化，落实「公开消息必须带本局 ID 与单调序号，按序号去重；模型备忘不得进入投影。」
+- [ ] T083 [P] [US6] 在 tests/LocalDm.Tests/TabletPublicFeedTests.cs 覆盖重连补发、重复消息、保存失败、重启与切局隔离，并断言备忘不进入同步。
+- [ ] T084 [US6] 更新 docs/project-state.md 与 docs/evidence/tablet/ 证据，区分已实现、自动化通过与真实设备通过，再交审查。
+
+**Checkpoint**: T068–T071 全部有实测证据后才进入 T072 起的正式建设；真实平板未通过前不得宣称平板模式可用。
+
+## Parallel Example: User Story 6
+
+T068/T069/T070 可并行（互不依赖的探针）；T073/T075/T077/T079/T081/T083 为对应实现的测试准备，可在实现前先写。
 
 ## Implementation Strategy
 
 先完成 US1 获得看得见、听得到的切片。再做完整来源与确定性玩法，不用自由聊天掩盖导入或流程缺口。
-每段先准备有意义的边界用例，再实现并通过真实界面验证；不扩展通用 OCR、语音大模型、平板或账户。
+US6 先过技术探针与真实平板门槛，再建资产、页面与同步；探针失败时停下交证据，不自行更换技术栈。
+每段先准备有意义的边界用例，再实现并通过真实界面验证；不扩展通用 OCR、语音大模型或账户。
 纸笔汇总只在开局明确接受且原本允许时使用；正式游玩读取冻结包，不要求 MinerU 服务运行。
 不把合成测试或自动化当作真人整局。最终交付必须满足所有成功标准。
 选择一个故事实现前阅读其契约及 data-model 约束，任何契约变动先同步设计再改代码。
 
 ## Notes
 
-当前任务总数 67，其中可并行标记 11。故事任务计数：US1=10，US2=13，US3=12，US4=6，US5=8。
-本轮只生成清单，不将已存在的探针或规划文档当作应用实施完成。
+历史任务总数 67，其中可并行标记 11。故事任务计数：US1=10，US2=13，US3=12，US4=6，US5=8。
+2026-10-21 平板增量新增 Phase 8（T068–T084，US6），路径与范围以 ADR 0005 和
+`docs/plans/2026-10-21-tablet-distribution.md` 为准；本节不改动 US1–US5 的既有状态表。
 
 ## 实施状态（2026-10-19 本轮实施后）
 
@@ -274,3 +304,8 @@ TextSubmissionTests.cs 与独立 HostUncertaintyTests.cs 可分别编写，HostI
 
 统计：已完成 59 项，部分完成 5 项（T024/T028/T035/T055/T060），受阻 2 项（T036/T037），未执行 1 项（T062）。
 部分完成与受阻项的差异均已写入对应 docs/evidence 文件，未以自动化替代真人验收。
+
+平板分发增量（US6，T068–T084）状态：T068、T069 已实现并通过自动化验证（`docs/evidence/tablet/browser-spike.md`）；
+T070 部分完成——字符串页数计数的不可靠性已实测，`Windows.Data.Pdf` 投影与二维码库尚未落地；
+T071 真实 iPad 与安卓平板试验**未执行**（未连接设备，不限定浏览器品牌）。
+T072 起的正式建设在 T071 通过后进行。

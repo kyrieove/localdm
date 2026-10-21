@@ -28,3 +28,16 @@ KeyFacts 的 sourceSpanIds 全部存在，未知事实保留 NeedsReview，绝�
 只返回公共标题、人数、文件/页覆盖、脱敏问题代码及 canStart。
 不返回 truth、murderer、privateStory、原始 secret span、原始路径或未清洗的工具 stderr。
 工具层 Complete 与应用层 Ready 必须分开，不声称结构校验自动证明语义保真。
+
+## Tablet preparation extension
+
+导入向导在识别完成后、最终建包前增加「平板材料准备」区，不另建一套导入流程。
+每张卡建立稳定 cardId、displayName、groupName、sourceOrder、frontAssetId 与可选 backAssetId；
+名称优先取自卡背已有名称或卡面明确印刷的标题/卡号，不让模型从正文概括剧情式名称；
+仍缺名称显示来源编号并标「待命名」，编辑后才供平板分发。
+
+整版使用通用网格参数（行数、列数、有效区域、有效槽位、正背面槽位映射），
+不为任一剧本写专属尺寸、别名或匹配分支。记录原文件 hash、页号、有效区域、网格、槽位与映射以回溯每张派生单卡。
+拆分质量未确认或组资产缺失时该组 NotReady，请求 409，不返回整页；取消导入只清理本次未发布临时资产，成功后原子发布清单与文件。
+角色本图片化：图片按确认页序复制到私有资产目录；PDF 优先 Windows 原生 PdfDocument 的 PageCount 与逐页渲染，
+先用 150 DPI 导出，页数不以现有 CountPdfPages 的字符串计数作最终依据；密码保护、损坏或页数失配明确失败，不少页交付。

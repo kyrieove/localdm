@@ -18,6 +18,11 @@
 - C10「每次请求有唯一 requestId；取消或被替代请求的输出不得显示或播音。」
 - C11「同一时刻最多一段播音；重播不得生成事件、调用模型或重新提交操作。」
 - C12「未知外发边界视为禁止；没有数据授权不得发送真实文档或真实剧本文字。」
+- C13「平板取图必须按 cardId 与冻结资产索引解析，不得按显示名称拼路径或模糊命中取第一张。」
+- C14「卡片组未准备好时请求必须失败并显示原因，不得以整页图片替代单张。」
+- C15「角色页只能从 Cookie 认领角色解析，客户端不能指定他人角色或任意文件路径。」
+- C16「公开消息必须带本局 ID 与单调序号，按序号去重；模型备忘不得进入投影。」
+- C17「局域网服务默认关闭，只在用户开启后绑定所选局域网 IPv4；停止后旧令牌与旧会话立即失效。」
 
 ## ScriptPackage
 
@@ -28,6 +33,31 @@ roles 仅保存外部私人材料索引；私密正文存在准备/引擎私有�
 phases 含有序 phaseId、公开口播片段、允许动作、原本条件、材料包编号、投票/揭秘标志及 sourceSpanIds。
 truth 单独位于包的私有段，PublicPackageProjection 不含此字段。
 应用 C01、C02、C04、C05。准备完成后只读，变更生成新版本，不改已有局。
+
+## TabletManifest（新增，可选）
+
+字段 manifestVersion、assetRootFingerprint、roles、cards、groups、preparedAt。
+旧包没有该段时继续支持纸质模式，界面提示重新准备后才能使用平板。
+cards 每项含 cardId、displayName、groupName、sourceOrder、frontAssetId、可选 backAssetId、preparationState。
+preparationState 为 Ready 或 NotReady；NotReady 必须带脱敏原因分类（缺正面、配对冲突、裁切未确认、资产缺失）。
+名称是玩家定位入口，取图只用 cardId；同名卡的列表项必须显示分组和编号，禁止模糊搜索命中后自动取第一张。应用 C13、C14。
+roles 每项含 roleId 与有序 assetId 列表（角色页）；物理路径、SourceSpan 原文、组织者手册与 truth 不进入该段。
+
+## TabletAsset（新增）
+
+字段 assetId、相对路径、内容 hash、类型（CardFront/CardBack/RolePage）、来源文件与页号、网格槽位信息。
+资产目录以包内容指纹隔离，客户端只经 assetId 间接引用，不接收物理路径。应用 C05、C13、C15。
+
+## PublicTabletMessage（新增）
+
+字段 sessionId、sequence、author、text、kind、committedAt。
+由同一个 SessionStore 写入 SQLite，与模型记忆（DmConversationSnapshot）分别保存；备忘不进入该记录。
+浏览器按 sessionId + sequence 去重，重连后按 after=sequence 补发。应用 C16。
+
+## TabletSession（新增）
+
+字段 browserSessionId、sessionId（本局）、roleId、joinedAt。
+由加入令牌换取，仅存 Cookie；不做设备绑定、账号或电脑审批。服务停止、切局或重启后失效。应用 C17。
 
 ## SourceSpan 与 CanonicalSegment
 
@@ -83,3 +113,4 @@ packages 的 packageId/version/manifestHash 对应只读剧本包。
 sessions 引用 package，events 与 operation_receipts 引用 session；receipts 对 sessionId/operationId 建唯一约束。
 session projection 与 events/receipts 在单 SQLite 事务中更新；单进程串行处理写操作。
 prepared bundles 与原材料不在数据库事务中改写；新包先完整写入临时位置并验证，再注册引用，未完成包不能开局。
+public_tablet_messages 引用 session，按 sessionId + sequence 唯一；与 dm_conversations 分开存储，互不读取。

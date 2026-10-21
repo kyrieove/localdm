@@ -1,5 +1,9 @@
 # 当前项目状态
 
+2026-10-21 规划补充：局域网平板分发一期方案已写，见 `docs/plans/2026-10-21-tablet-distribution.md` 和 ADR 0005，宪章已升 5.0.0。卡片按完整名称列表点选，不做环节解锁；拆分不可靠的组暂停分发；Blazor Server 待真实平板浏览器验证（不限定 Safari，iPad 与安卓平板用各自可用的浏览器）。此项尚未实施，以下已有功能与历史验收不代表平板能力通过。
+
+2026-10-21 实施补充（第一步技术探针）：`src/LocalDm.Tablet/` 已建并加入解决方案，用合成材料验证同进程服务启停、HTTP 单卡取图、6 会话并发、Blazor Interactive Server 页面与脚本可达、同名卡不串图、路径穿越 404；自动化 8 项全通过（`LocalDm.Tests` 304 项 / 298 通过 / 6 已授权跳过，`LocalDm.UiTests` 33 通过）。证据见 `docs/evidence/tablet/service-spike.md`、`browser-spike.md`、`pdf-render-spike.md`。**真实 iPad 与安卓平板浏览器验收未执行**，未通过前不进入第二步建设；原生 PDF 页数渲染与二维码库尚未落地。
+
 更新日期 2026-10-20。本轮执行 `speckit-implement`，按 tasks.md 实施 US1–US5 与收尾；
 随后做了一轮代码审查并修完全部发现（见 `docs/reviews/2026-10-20-code-review.md`）；
 再做五轮交互与界面自检（见 `docs/reviews/2026-10-20-ux-hardening.md`）；

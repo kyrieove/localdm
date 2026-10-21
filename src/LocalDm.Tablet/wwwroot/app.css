@@ -1,0 +1,86 @@
+/* 平板端最小样式：合成材料探针用，不引入第三方库。 */
+html, body {
+    margin: 0;
+    padding: 0;
+    background: #f6f2ea;
+    color: #2b2620;
+    font-family: "Microsoft YaHei UI", system-ui, sans-serif;
+}
+
+.loading {
+    display: block;
+    margin: 40vh auto 0;
+    color: #8c7a5f;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.page {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 20px 16px 48px;
+}
+
+h1 {
+    font-size: 20px;
+    margin: 0 0 4px;
+}
+
+.meta {
+    font-size: 12px;
+    color: #7a6a52;
+    margin: 0 0 16px;
+}
+
+.card-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.card-list li {
+    border-bottom: 1px solid #ddd2bd;
+}
+
+.card-list button {
+    display: block;
+    width: 100%;
+    padding: 14px 4px;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.card-list button:active {
+    background: #ece3d1;
+}
+
+.card-name {
+    font-size: 15px;
+}
+
+.card-sub {
+    font-size: 11px;
+    color: #7a6a52;
+    margin-top: 2px;
+}
+
+.status {
+    font-size: 13px;
+    color: #7a6a52;
+    margin: 12px 0;
+}
+
+img.shot {
+    width: 100%;
+    height: auto;
+    margin-top: 12px;
+    border: 1px solid #ddd2bd;
+    background: #fff;
+    touch-action: pinch-zoom;
+}
