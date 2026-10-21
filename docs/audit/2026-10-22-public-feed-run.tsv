@@ -2,5 +2,16 @@ ts	phase	decision	why	evidence	result
 2026-10-22T00:25:00+03:00	start	接手本轮工作：检查 D:\2\dev\dm 的潜在问题并修复，然后持续推进项目	用户授权自主推进，睡觉期间不打扰	docs/handoff/2026-10-21-session-handoff.md	范围已定
 2026-10-22T00:30:00+03:00	frame	先量清仓库现状再动手：D:\2\dev\dm 在 main 上干净且全绿，三个工作树各有未合并的分支	动手前先知道别人在改什么，免得撞车	git worktree list；git -C D:\2\dev\dm log	main 绿；deepseek 在做平板资产，gemini 在做 RelayCommand 与规范同步
 2026-10-22T00:35:00+03:00	frame	判据定为：分支上 build 0 警告 0 错误、两条测试命令 0 失败，且公开消息能从桌面出口落到存档并能被平板按序号读出	「做完」要能被否证，不能靠自述	docs/plans/2026-10-21-tablet-distribution.md 5.2 与 5.3	判据已写定
-2026-10-22T00:40:00+03:00	frame	发现并定位真问题：私有合成真值只在主检出里，三个工作树都没有，所以新工作树开箱第一条测试就是红的	新工作树开箱即红，下一个助手很可能去删测试或加 Skip	ImportCoverageTests.Public_readiness_view_hides_secret_phrases_from_expected_file 在 dm-minimax 失败、在 D:\2\dev\dm 通过	根因已确认
+2026-10-22T00:40:00+03:00	frame	发现并定位真问题：私有合成真值只在主检出里，三个工作树都没有，所以新工作树开箱第一条测试就是红的	新工作树开箱即红，下一个接手的人很容易去删测试或加 Skip	ImportCoverageTests.Public_readiness_view_hides_secret_phrases_from_expected_file 在 dm-minimax 失败、在 D:\2\dev\dm 通过	根因已确认
 2026-10-22T00:42:00+03:00	branch	把 agent/minimax 变基到 main，保留备份分支 agent/minimax-backup-2026-10-22	main 多了 372eec4（界面测试离屏显示），用户睡觉时跑界面测试不该弹窗；变基让分支保持线性	git rebase main 输出；备份分支指向 a3dfac8	两个提交重写为 4bb0bff、fdeae70
+2026-10-22T00:55:00+03:00	fixture	修工作树卫生：加 scripts/sync-local-fixtures.ps1，测试缺文件时给能照做的提示（本机四份检出已补齐）	让下一个接手的人不必删测试或加 Skip就能把套件跑绿	提交 21a7e4d；脚本输出「已从 D:\2\dev\dm 复制私有合成真值」	336 条 0 失败
+2026-10-22T01:05:00+03:00	outlet	公开消息接桌面出口：AddMessage 里复制成不可变公开消息，排进单写者队列；失败显「同步异常」并停住，重试后序号连续	方案 5.3 要求写失败不能吞掉也不能报告已同步；序号由存储层在事务里分配，所以重试不会跳号	提交 681fd8e；tests/LocalDm.Tests/HostPublicFeedTests.cs	4 条新测试通过
+2026-10-22T01:15:00+03:00	feed	平板公开消息端点 GET /tablet/public?after=N：401 无会话、400 after 带错、按序号补发、下一序号不变	断线重连要能只拿新的；序号跳号会让平板漏消息	提交 9213c7e；测试真起服务发请求	10 条新测试通过
+2026-10-22T01:20:00+03:00	real-script	用户补充要求：网站测试要用真实剧本《孽岛疑云》	用户明确要求，先查真实包还在不在	.appdata/localdm-data/packages/pkg-2d4a70531111-1.json 是 Ready 包：7 环节、55 张卡、5 角色、180 图	真实包可用，不用重新导入
+2026-10-22T01:30:00+03:00	real-script	核对真实包：180 个源文件全部在位且 SHA-256 与包里记录一致；每张线索卡独占一个图片文件（正反面各一张）	能不能拿到剧本和线索卡，取决于源文件在不在、绑不绑得住	python 探针输出：180/180 hash 相符、55 张卡、5 角色 × 12 页	这本剧本不需要网格切图
+2026-10-22T01:35:00+03:00	step2	引入 deepseek 已提交的平板第二步（6019cb1），用 cherry-pick 而不是合并整条分支	他们那条分支与 main 在界面测试上有等效但不同的提交，合并会冲突；只取做平板资产那一笔	git cherry-pick 6019cb1	清单、资产索引、切图就位
+2026-10-22T01:45:00+03:00	prepare	新增 TabletPackagePreparer 与命令行 --prepare-tablet：按通用编号规则配正反面、冻结资产、写出新版本包	清单是平板准备的产品路径，不能另造一套；重新准备必须得到新版本与新内容指纹	--prepare-tablet 输出：新包 pkg-14761fe2c052 版本 2、53 张卡、9/10 组可用、106 资产	孽岛疑云已可上平板
+2026-10-22T01:55:00+03:00	service	平板服务加包模式：内容来源抽成 ITabletContent，合成探针与真实包走同一个口子；目录、卡面、卡背、角色本、原稿页都从包出	网页只认内容，不该分合成与真实两套；旧包没有清单就明确不支持	发布版服务实测：目录 53 卡/5 角色、卡面 193KB JPEG、卡背 165KB、角色本 12 章、原稿页 722KB	真实剧本在网站上跑通
+2026-10-22T02:00:00+03:00	browser	浏览器实测：页面渲染出「加入本局」与 5 个真实角色；合成模式同样正常	不能只验接口，页面也得能打开	内置浏览器截图（发布版服务 5314）	页面渲染通过
+2026-10-22T02:05:00+03:00	browser	记下一个限制：内置浏览器的 DOM 查询读不到 Blazor 渲染的内容（截图能看到，inspect/query 返回空），所以点角色与点卡没有在浏览器里点过	不能把没验证的说成验证了	inspect 与 query(kind=text) 均返回 28 字符空白	角色本与卡面的点击路径只验到 HTTP 层
+2026-10-22T02:15:00+03:00	test	补 CI 覆盖：合成包走同一条路（准备清单 → 起服务 → 列目录、取卡面、认领角色取角色本与原稿页）	真实包的证据留在本机，仓库里要有一条不依赖真实材料的自动化	tests/LocalDm.Tests/TabletPackageModeTests.cs	1 条新测试通过

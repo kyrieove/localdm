@@ -1,7 +1,7 @@
 namespace LocalDm.Core.Tablet;
 
-/// <summary>合成角色：探针用，不含任何真实剧本内容。</summary>
-public sealed record TabletSpikeRole(string RoleId, string DisplayName);
+/// <summary>平板上的一个角色：只有标识与显示名，不含任何私密内容。</summary>
+public sealed record TabletRole(string RoleId, string DisplayName);
 
 /// <summary>合成卡片目录项：名称、分组与来源序号。</summary>
 public sealed record TabletSpikeCard(string CardId, string DisplayName, string GroupName, int SourceOrder);
@@ -12,7 +12,7 @@ public sealed record TabletSpikeCard(string CardId, string DisplayName, string G
 /// </summary>
 public sealed class TabletSpikeData
 {
-    public required IReadOnlyList<TabletSpikeRole> Roles { get; init; }
+    public required IReadOnlyList<TabletRole> Roles { get; init; }
 
     public required IReadOnlyList<TabletSpikeCard> Cards { get; init; }
 

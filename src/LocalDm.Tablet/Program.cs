@@ -11,62 +11,90 @@ if (args.Contains("--urls") is false && builder.Configuration["urls"] is not { L
     builder.WebHost.UseUrls("http://127.0.0.1:5099");
 }
 
-// 合成材料：6 个角色、6 张卡（含两张同名卡，用来验证同名不串图）。
-var assetRoot = Path.Combine(Path.GetTempPath(), "localdm-tablet-blazor-" + Guid.NewGuid().ToString("N"));
-Directory.CreateDirectory(assetRoot);
-var roles = Enumerable.Range(1, 6)
-    .Select(i => new TabletSpikeRole($"role-{i}", $"合成角色 {i}"))
-    .ToArray();
-var cards = new[]
+// 真实剧本包模式：给了包路径就服务那一本，没给就走合成探针。
+// 资产目录按包的清单指纹定位：换一版包不会取到旧版的图。
+var packagePath = Environment.GetEnvironmentVariable("LOCALDM_TABLET_PACKAGE");
+ITabletContent content;
+if (!string.IsNullOrWhiteSpace(packagePath) && File.Exists(packagePath))
 {
-    new TabletSpikeCard("card-1", "书房", "地点", 1),
-    new TabletSpikeCard("card-2", "书房", "地点", 2),
-    new TabletSpikeCard("card-3", "走廊", "地点", 3),
-    new TabletSpikeCard("card-4", "信箱", "地点", 4),
-    new TabletSpikeCard("card-5", "旧照片", "回忆", 5),
-    new TabletSpikeCard("card-6", "钥匙", "回忆", 6),
-};
-foreach (var card in cards)
-{
-    // 同名卡必须内容不同：用 cardId 而不是显示名做内容种子。
-    SyntheticAssets.WriteCard(Path.Combine(assetRoot, card.CardId + ".png"), card.CardId);
+    var package = System.Text.Json.JsonSerializer.Deserialize<LocalDm.Core.Domain.ScriptPackage>(
+        File.ReadAllText(packagePath))
+        ?? throw new InvalidOperationException("剧本包读不出来。");
+    var manifest = package.Tablet
+        ?? throw new InvalidOperationException("这个剧本包没有平板清单，要重新准备后才能上平板。");
+    var assetRoot = Path.Combine(
+        Path.GetDirectoryName(Path.GetFullPath(packagePath))!,
+        "..",
+        "assets",
+        manifest.AssetRootFingerprint);
+    content = new PackageTabletContent(package, Path.GetFullPath(assetRoot));
 }
-
-// 角色本主阅读方式是文字排版；这里仍给每角色生成一页原稿图，
-// 用来验证「查看原稿」入口与角色页隔离。真实产品里原稿页来自导入资产。
-foreach (var role in roles)
+else
 {
-    for (var page = 1; page <= 3; page++)
-    {
-        SyntheticAssets.WritePage(Path.Combine(assetRoot, $"{role.RoleId}-source-{page}.png"), $"{role.RoleId}-source-{page}");
-    }
+    content = new SpikeTabletContent(BuildSpikeData());
 }
-
-var book = SyntheticRoleBook.Create();
-var roleBooks = roles.ToDictionary(r => r.RoleId, r => book with
-{
-    RoleId = r.RoleId,
-    Chapters = book.Chapters.Select((chapter, index) => chapter with
-    {
-        Blocks = chapter.Blocks.Select(block => block with { SourcePageNumber = index + 1 }).ToArray(),
-    }).ToArray(),
-    SourcePageAssetIds = Enumerable.Range(1, 3).Select(page => $"{r.RoleId}-source-{page}").ToArray(),
-    Confidence = book.Confidence with { HasSourcePages = true },
-}, StringComparer.Ordinal);
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
-builder.Services.AddSingleton(new TabletSpikeData
-{
-    Roles = roles,
-    Cards = cards,
-    AssetRoot = assetRoot,
-    StoryTitle = SyntheticRoleBook.Title,
-    RoleBooks = roleBooks,
-});
+builder.Services.AddSingleton(content);
 builder.Services.AddSingleton<TabletSpikeState>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<IPublicFeedSource, SpikePublicFeedSource>();
+
+// 合成材料：6 个角色、6 张卡（含两张同名卡，用来验证同名不串图）。
+static TabletSpikeData BuildSpikeData()
+{
+    var assetRoot = Path.Combine(Path.GetTempPath(), "localdm-tablet-blazor-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(assetRoot);
+    var roles = Enumerable.Range(1, 6)
+        .Select(i => new TabletRole($"role-{i}", $"合成角色 {i}"))
+        .ToArray();
+    var cards = new[]
+    {
+        new TabletSpikeCard("card-1", "书房", "地点", 1),
+        new TabletSpikeCard("card-2", "书房", "地点", 2),
+        new TabletSpikeCard("card-3", "走廊", "地点", 3),
+        new TabletSpikeCard("card-4", "信箱", "地点", 4),
+        new TabletSpikeCard("card-5", "旧照片", "回忆", 5),
+        new TabletSpikeCard("card-6", "钥匙", "回忆", 6),
+    };
+    foreach (var card in cards)
+    {
+        // 同名卡必须内容不同：用 cardId 而不是显示名做内容种子。
+        SyntheticAssets.WriteCard(Path.Combine(assetRoot, card.CardId + ".png"), card.CardId);
+    }
+
+    // 角色本主阅读方式是文字排版；这里仍给每角色生成一页原稿图，
+    // 用来验证「查看原稿」入口与角色页隔离。真实产品里原稿页来自导入资产。
+    foreach (var role in roles)
+    {
+        for (var page = 1; page <= 3; page++)
+        {
+            SyntheticAssets.WritePage(Path.Combine(assetRoot, $"{role.RoleId}-source-{page}.png"), $"{role.RoleId}-source-{page}");
+        }
+    }
+
+    var book = SyntheticRoleBook.Create();
+    var roleBooks = roles.ToDictionary(r => r.RoleId, r => book with
+    {
+        RoleId = r.RoleId,
+        Chapters = book.Chapters.Select((chapter, index) => chapter with
+        {
+            Blocks = chapter.Blocks.Select(block => block with { SourcePageNumber = index + 1 }).ToArray(),
+        }).ToArray(),
+        SourcePageAssetIds = Enumerable.Range(1, 3).Select(page => $"{r.RoleId}-source-{page}").ToArray(),
+        Confidence = book.Confidence with { HasSourcePages = true },
+    }, StringComparer.Ordinal);
+
+    return new TabletSpikeData
+    {
+        Roles = roles,
+        Cards = cards,
+        AssetRoot = assetRoot,
+        StoryTitle = SyntheticRoleBook.Title,
+        RoleBooks = roleBooks,
+    };
+}
 
 var app = builder.Build();
 app.Use(async (context, next) =>
@@ -131,33 +159,36 @@ app.MapPost("/tablet/claim", (string? roleId, TabletSpikeState state, HttpContex
 
 // 图片走 HTTP 响应，不 Base64 进连接消息；按 ID 解析，不按名称拼路径。
 // 同时给出「已被认领的角色」清单：真实设备上要能看到别人占了哪个角色。
-app.MapGet("/tablet/catalog", (TabletSpikeData data, TabletSpikeState state) => Results.Json(new
+app.MapGet("/tablet/catalog", (ITabletContent content, TabletSpikeState state) => Results.Json(new
 {
-    storyTitle = data.StoryTitle,
-    roles = data.Roles,
-    cards = data.Cards,
+    storyTitle = content.StoryTitle,
+    roles = content.Roles,
+    cards = content.Cards,
     claimedRoles = state.ClaimedRoles,
 }));
 
-app.MapGet("/tablet/cards/{cardId}/front", (string cardId, TabletSpikeData data) =>
+// 卡面与卡背：按卡片 ID 取，取不到就 404，不拿整页图顶替。
+app.MapGet("/tablet/cards/{cardId}/front", (string cardId, ITabletContent content) =>
+    CardImage(cardId, TabletCardSide.Front, content));
+
+app.MapGet("/tablet/cards/{cardId}/back", (string cardId, ITabletContent content) =>
+    CardImage(cardId, TabletCardSide.Back, content));
+
+static IResult CardImage(string cardId, TabletCardSide side, ITabletContent content)
 {
     if (cardId.Contains('/') || cardId.Contains('\\') || cardId.Contains(".."))
     {
         return Results.NotFound();
     }
 
-    if (!data.Cards.Any(c => c.CardId == cardId))
-    {
-        return Results.NotFound();
-    }
-
-    var path = Path.Combine(data.AssetRoot, cardId + ".png");
-    return File.Exists(path) ? Results.File(path, "image/png") : Results.NotFound();
-});
+    return content.TryGetCardImage(cardId, side, out var bytes, out var contentType)
+        ? Results.File(bytes, contentType)
+        : Results.NotFound();
+}
 
 // 角色本：按认领角色返回章节与块的纯文本。
 // 客户端不能传别人的角色；没有会话或没认领就什么都不给。
-app.MapGet("/tablet/role/book", (TabletSpikeData data, TabletSpikeState state, HttpContext context) =>
+app.MapGet("/tablet/role/book", (ITabletContent content, TabletSpikeState state, HttpContext context) =>
 {
     var role = SessionRole(state, context);
     if (role is null)
@@ -168,8 +199,8 @@ app.MapGet("/tablet/role/book", (TabletSpikeData data, TabletSpikeState state, H
     return Results.Json(new
     {
         roleId = role.RoleId,
-        storyTitle = data.StoryTitle,
-        chapters = data.RoleBooks[role.RoleId].Chapters.Select(c => new
+        storyTitle = content.StoryTitle,
+        chapters = content.RoleBooks[role.RoleId].Chapters.Select(c => new
         {
             chapterId = c.ChapterId,
             title = c.Title,
@@ -185,9 +216,9 @@ app.MapGet("/tablet/role/book", (TabletSpikeData data, TabletSpikeState state, H
         }),
         confidence = new
         {
-            totalBlocks = data.RoleBooks[role.RoleId].Confidence.TotalBlocks,
-            suspectBlocks = data.RoleBooks[role.RoleId].Confidence.EmptyOrSuspectBlocks,
-            hasSourcePages = data.RoleBooks[role.RoleId].Confidence.HasSourcePages,
+            totalBlocks = content.RoleBooks[role.RoleId].Confidence.TotalBlocks,
+            suspectBlocks = content.RoleBooks[role.RoleId].Confidence.EmptyOrSuspectBlocks,
+            hasSourcePages = content.RoleBooks[role.RoleId].Confidence.HasSourcePages,
         },
     });
 });
@@ -238,28 +269,28 @@ app.MapPost("/tablet/role/progress", (
 });
 
 // 原稿页核对入口：返回本人角色的原稿图，不给别人的，也不给物理路径。
-app.MapGet("/tablet/role/source", (TabletSpikeData data, TabletSpikeState state, HttpContext context) =>
+app.MapGet("/tablet/role/source", (ITabletContent content, TabletSpikeState state, HttpContext context) =>
+    RoleSourcePage(content, state, context, 1));
+
+app.MapGet("/tablet/role/source/{page:int}", (int page, ITabletContent content, TabletSpikeState state, HttpContext context) =>
+    RoleSourcePage(content, state, context, page));
+
+static IResult RoleSourcePage(
+    ITabletContent content,
+    TabletSpikeState state,
+    HttpContext context,
+    int page)
 {
     var role = SessionRole(state, context);
-    if (role is null)
+    if (role is null || page < 1 || page > content.RoleBooks[role.RoleId].SourcePageAssetIds.Count)
     {
         return Results.NotFound();
     }
 
-    var path = Path.Combine(data.AssetRoot, $"{role.RoleId}-source-1.png");
-    return File.Exists(path) ? Results.File(path, "image/png") : Results.NotFound();
-});
-
-app.MapGet("/tablet/role/source/{page:int}", (int page, TabletSpikeData data, TabletSpikeState state, HttpContext context) =>
-{
-    var role = SessionRole(state, context);
-    if (role is null || page < 1 || page > data.RoleBooks[role.RoleId].SourcePageAssetIds.Count)
-    {
-        return Results.NotFound();
-    }
-    var path = Path.Combine(data.AssetRoot, $"{role.RoleId}-source-{page}.png");
-    return File.Exists(path) ? Results.File(path, "image/png") : Results.NotFound();
-});
+    return content.TryGetRoleSourcePage(role.RoleId, page, out var bytes, out var contentType)
+        ? Results.File(bytes, contentType)
+        : Results.NotFound();
+}
 
 // 公开消息：按序号取。断线重连时带着上次的序号来要，就只拿新的。
 // 没有浏览器会话就拒绝：平板必须先加入这一局，不能凭猜来读。
@@ -310,7 +341,7 @@ app.MapRazorComponents<App>()
 app.Run();
 
 /// <summary>从 Cookie 解析本人角色；没有会话或没有认领时返回 null。</summary>
-static TabletSpikeRole? SessionRole(TabletSpikeState state, HttpContext context)
+static TabletRole? SessionRole(TabletSpikeState state, HttpContext context)
 {
     var key = TabletSessions.KeyFor(context);
     if (key is null)

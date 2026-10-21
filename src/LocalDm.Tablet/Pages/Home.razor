@@ -139,7 +139,7 @@
 
     private string _sessionKey = string.Empty;
 
-    private RoleBookText Book => State.Data.RoleBooks[State.Session(_sessionKey).RoleId!];
+    private RoleBookText Book => State.Content.RoleBooks[State.Session(_sessionKey).RoleId!];
 
     private string RoleName => State.Roles.First(r => r.RoleId == State.Session(_sessionKey).RoleId).DisplayName;
 

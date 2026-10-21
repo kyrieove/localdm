@@ -14,13 +14,14 @@ public sealed class TabletSpikeState
     private readonly ConcurrentDictionary<string, SessionEntry> _sessions = new(StringComparer.Ordinal);
     private readonly object _claimGate = new();
 
-    public TabletSpikeState(TabletSpikeData data) => Data = data;
+    public TabletSpikeState(ITabletContent content) => Content = content;
 
-    public TabletSpikeData Data { get; }
+    /// <summary>内容来源：合成探针或真实剧本包。</summary>
+    public ITabletContent Content { get; }
 
-    public IReadOnlyList<TabletSpikeRole> Roles => Data.Roles;
+    public IReadOnlyList<TabletRole> Roles => Content.Roles;
 
-    public IReadOnlyList<TabletSpikeCard> Cards => Data.Cards;
+    public IReadOnlyList<TabletCatalogItem> Cards => Content.Cards;
 
     /// <summary>取一个会话；不存在时建一份空的。</summary>
     public SessionEntry Session(string key) =>

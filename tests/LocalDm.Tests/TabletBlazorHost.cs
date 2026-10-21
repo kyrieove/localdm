@@ -30,7 +30,7 @@ internal sealed class TabletBlazorHost : IDisposable
     public int Port => _port;
 
     /// <summary>发布并启动探针应用，返回就绪的宿主。</summary>
-    public static TabletBlazorHost Start(string projectPath)
+    public static TabletBlazorHost Start(string projectPath, IReadOnlyDictionary<string, string>? environment = null)
     {
         var directory = Path.Combine(Path.GetTempPath(), "localdm-tablet-host-" + Guid.NewGuid().ToString("N"));
         Publish(projectPath, directory);
@@ -46,6 +46,13 @@ internal sealed class TabletBlazorHost : IDisposable
         startInfo.ArgumentList.Add(Path.Combine(directory, "LocalDm.Tablet.dll"));
         startInfo.ArgumentList.Add("--urls");
         startInfo.ArgumentList.Add($"http://127.0.0.1:{port}");
+
+        // 服务可以按环境变量切到真实剧本包模式。
+        foreach (var (key, value) in environment ?? new Dictionary<string, string>())
+        {
+            startInfo.Environment[key] = value;
+        }
+
         var process = new Process { StartInfo = startInfo };
         process.Start();
         // 立即异步排空输出管道：管道满会让子进程挂住，测试永远等不到端口就绪。

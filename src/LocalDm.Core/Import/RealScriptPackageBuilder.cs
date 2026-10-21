@@ -295,6 +295,28 @@ public static class RealScriptPackageBuilder
     }
 
     /// <summary>
+    /// 给一个已经冻结的包补上平板清单，并按新清单重算内容身份。
+    ///
+    /// 重新准备会得到新版本：清单里的名称、切片与资产都算进内容指纹，
+    /// 旧存档不会静默接受新资产、新名字。
+    /// </summary>
+    public static ScriptPackage WithTabletManifest(ScriptPackage package, TabletManifest tablet)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+        ArgumentNullException.ThrowIfNull(tablet);
+
+        var contentHash = ContentHash(package.ManifestHash, package.PlayerCount, package.Phases, tablet);
+        return package with
+        {
+            // 包标识跟着内容指纹走：重新准备得到的是另一份包，
+            // 旧存档不会静默接受新资产、新名字。
+            PackageId = "pkg-" + contentHash[..12],
+            Tablet = tablet,
+            ContentHash = contentHash,
+        };
+    }
+
+    /// <summary>
     /// 规范化流程 → 内容指纹。用「生成的阶段」而不是声明原文来算，
     /// 是因为真正影响玩法的是阶段本身：两份声明只要产出的阶段一样，就是同一份剧本。
     ///
