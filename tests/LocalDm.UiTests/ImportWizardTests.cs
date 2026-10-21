@@ -25,6 +25,63 @@ public sealed class ImportWizardTests
     private const string ExtractionMarker = "识别得到的正文标记";
 
     [Fact]
+    public async Task Choosing_a_folder_enables_next_and_an_invalid_player_count_disables_it()
+    {
+        await WpfRunner.RunAsync(() =>
+        {
+            using var root = new TempRoot();
+            var wizard = NewWizard(root.Path);
+            var raised = 0;
+            wizard.NextCommand.CanExecuteChanged += (_, _) => raised++;
+
+            Assert.False(wizard.NextCommand.CanExecute(null));
+
+            // 按钮只在收到 CanExecuteChanged 时才重新问能不能点：只看 CanExecute 的返回值测不出「一直是灰的」。
+            wizard.SetFolder(NewStory(root.Path));
+            Assert.True(raised > 0, "选完文件夹后必须通知「下一步」重新判断。");
+            Assert.True(wizard.NextCommand.CanExecute(null));
+
+            raised = 0;
+            wizard.PlayerCount = 7;
+            Assert.True(raised > 0, "改玩家人数后必须通知「下一步」重新判断。");
+            Assert.False(wizard.NextCommand.CanExecute(null));
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Folder_page_text_boxes_are_tall_enough_for_their_text()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            var wizard = NewWizard(root.Path);
+            var view = WizardView(wizard);
+            var window = Show(view);
+            try
+            {
+                wizard.SetFolder(NewStory(root.Path));
+                await WaitForRenderAsync();
+
+                // 写死高度时，内边距一扣，正文只剩中间一条，字被上下裁掉。
+                foreach (var name in new[] { "FolderBox", "TitleBox", "PlayerCountBox" })
+                {
+                    var box = Assert.IsType<TextBox>(view.FindName(name));
+                    var needed = box.FontSize * box.FontFamily.LineSpacing
+                                 + box.Padding.Top + box.Padding.Bottom
+                                 + box.BorderThickness.Top + box.BorderThickness.Bottom;
+                    Assert.True(box.ActualHeight + 0.5 >= needed,
+                        $"{name} 高 {box.ActualHeight:F1}，放下一行字至少要 {needed:F1}。");
+                }
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
     public async Task Group_page_has_no_images_and_shows_no_recognised_text()
     {
         await WpfRunner.RunAsync(async () =>

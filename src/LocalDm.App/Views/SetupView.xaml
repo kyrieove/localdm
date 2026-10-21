@@ -137,7 +137,7 @@
                 </StackPanel>
                 <TextBox x:Name="ContextWindowBox" Grid.Column="1"
                          Text="{Binding ContextWindowTokens, UpdateSourceTrigger=PropertyChanged}"
-                         Width="260" Height="32" VerticalContentAlignment="Center" />
+                         Width="260" MinHeight="34" VerticalContentAlignment="Center" />
             </Grid>
 
             <!-- 界面缩放：与 Ctrl+加号 / Ctrl+减号 / Ctrl+滚轮是同一个值 -->

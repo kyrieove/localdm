@@ -31,7 +31,7 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBox x:Name="FolderBox" Grid.Column="0" Height="34" VerticalContentAlignment="Center"
+                    <TextBox x:Name="FolderBox" Grid.Column="0" MinHeight="34" VerticalContentAlignment="Center"
                              Text="{Binding FolderPath, UpdateSourceTrigger=PropertyChanged}" />
                     <Button x:Name="ChooseFolderButton" Grid.Column="1" Content="选择文件夹"
                             Click="OnChooseFolder" Style="{StaticResource QuietButton}"
@@ -39,11 +39,11 @@
                 </Grid>
 
                 <TextBlock Text="剧本名" Style="{StaticResource RailLabel}" Margin="0,16,0,6" />
-                <TextBox x:Name="TitleBox" Height="34" VerticalContentAlignment="Center"
+                <TextBox x:Name="TitleBox" MinHeight="34" VerticalContentAlignment="Center"
                          Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}" />
 
                 <TextBlock Text="玩家人数（4–6）" Style="{StaticResource RailLabel}" Margin="0,16,0,6" />
-                <TextBox x:Name="PlayerCountBox" Width="90" Height="34" HorizontalAlignment="Left"
+                <TextBox x:Name="PlayerCountBox" Width="90" MinHeight="34" HorizontalAlignment="Left"
                          VerticalContentAlignment="Center"
                          Text="{Binding PlayerCount, UpdateSourceTrigger=PropertyChanged}" />
             </StackPanel>

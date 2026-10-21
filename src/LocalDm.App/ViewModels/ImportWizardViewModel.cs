@@ -350,7 +350,10 @@ public sealed class ImportWizardViewModel : ObservableObject
         {
             if (SetProperty(ref _folderPath, value))
             {
+                // 「下一步」能不能点取决于文件夹是否存在：只刷新 ScanCommand 的话，
+                // 选完文件夹后「下一步」会一直是灰的。
                 ScanCommand.RaiseCanExecuteChanged();
+                NextCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -364,7 +367,13 @@ public sealed class ImportWizardViewModel : ObservableObject
     public int PlayerCount
     {
         get => _playerCount;
-        set => SetProperty(ref _playerCount, value);
+        set
+        {
+            if (SetProperty(ref _playerCount, value))
+            {
+                NextCommand.RaiseCanExecuteChanged();
+            }
+        }
     }
 
     public string Status
