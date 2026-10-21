@@ -955,9 +955,12 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         if (keepFromIndex == 0)
         {
             // 前面没有可整理的内容：不发请求，免得模型凭空生成一份备忘。
+            // 从没整理过的局是「对话还太短」；整理过的局才是「再之前都整理过了」。
             if (manual)
             {
-                Status = "最近 2 轮之前的对话都整理过了，这次没有需要整理的内容。";
+                Status = _conversation.CompactionCount == 0
+                    ? "对话还太短，暂时没有需要整理的内容。"
+                    : "最近 2 轮之前的对话都整理过了，这次没有需要整理的内容。";
                 return true;
             }
 
