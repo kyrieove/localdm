@@ -191,6 +191,7 @@ model-comparison.md 里 DeepSeek 那一列用的是旧记录，不是这次重�
   2. 回复正文里有没有 `<think>` 之类的思考内容，有就会被显示并朗读出来，可能直接说出真相。
 - **MinerU**：导入识别用本机 MinerU。DeepSeek 为过隐私预检会临时起服务，跑完要 `mineru server stop`，并清掉残留的 `doclib.lock`。
 - **`.gitignore`** 已排除 `/stories/`、`/.appdata/`（剧本包 JSON 含全文与真相）、`/.local/`（验收对话记录）、`/.archify/`、`/.playwright-mcp/`。
+- **新开的工作树缺少私有合成真值**（2026-10-22 补）：`fixtures/synthetic/.private/` 按约定不入库，所以每个新工作树里 `ImportCoverageTests` 那条「公开就绪视图不泄露秘密」会因为找不到 `expected.json` 而失败。那是环境缺件，不是代码坏了：跑 `pwsh -File scripts/sync-local-fixtures.ps1` 从另一份检出复制一份回来，**不要删这条测试，也不要给它加 Skip**。
 - **剧本**：
   - 《孽岛疑云》：5 人，全图片，组织者手册 12 页，真相页第 8–11 页。用户已经看过它的真相，验收时可以把原话贴给用户。
   - 《K7-星火号》：5 人，手册是 17 页 PDF，5 本角色本 PDF 各 18 页，线索卡 12 张图片。**用户还没玩过，任何汇报都不能出现剧情。** 它的完整验收记录在 `.local\dm-acceptance\` 下，提醒用户玩之前别打开。

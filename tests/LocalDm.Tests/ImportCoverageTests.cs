@@ -123,7 +123,7 @@ public sealed class ImportCoverageTests
     [Fact]
     public void Public_readiness_view_hides_secret_phrases_from_expected_file()
     {
-        var expected = File.ReadAllText(Path.Combine(FixtureRoot, ".private", "expected.json"));
+        var expected = ReadGroundTruth();
         var secrets = ExtractSecrets(expected);
         Assert.NotEmpty(secrets);
 
@@ -256,6 +256,28 @@ public sealed class ImportCoverageTests
         }
 
         return [.. spans];
+    }
+
+    /// <summary>
+    /// 读本机私有合成真值。
+    ///
+    /// 这份真值按约定不入库，新开的工作树里没有它。
+    /// 缺文件时要说清楚是环境缺件、不是代码坏了 ——
+    /// 否则下一个接手的人很容易去删这条测试或者给它加 Skip。
+    /// </summary>
+    private static string ReadGroundTruth()
+    {
+        var path = Path.Combine(FixtureRoot, ".private", "expected.json");
+        if (!File.Exists(path))
+        {
+            throw new FileNotFoundException(
+                "缺少本机合成真值 fixtures/synthetic/.private/expected.json（按约定不入库）。"
+                + "跑 scripts/sync-local-fixtures.ps1 从另一份检出复制一份回来。"
+                + "这是环境缺件，不是代码坏了：不要删这条测试，也不要给它加 Skip。",
+                path);
+        }
+
+        return File.ReadAllText(path);
     }
 
     private static string[] ExtractSecrets(string expectedJson)

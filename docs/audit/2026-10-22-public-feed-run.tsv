@@ -1,0 +1,6 @@
+ts	phase	decision	why	evidence	result
+2026-10-22T00:25:00+03:00	start	接手本轮工作：检查 D:\2\dev\dm 的潜在问题并修复，然后持续推进项目	用户授权自主推进，睡觉期间不打扰	docs/handoff/2026-10-21-session-handoff.md	范围已定
+2026-10-22T00:30:00+03:00	frame	先量清仓库现状再动手：D:\2\dev\dm 在 main 上干净且全绿，三个工作树各有未合并的分支	动手前先知道别人在改什么，免得撞车	git worktree list；git -C D:\2\dev\dm log	main 绿；deepseek 在做平板资产，gemini 在做 RelayCommand 与规范同步
+2026-10-22T00:35:00+03:00	frame	判据定为：分支上 build 0 警告 0 错误、两条测试命令 0 失败，且公开消息能从桌面出口落到存档并能被平板按序号读出	「做完」要能被否证，不能靠自述	docs/plans/2026-10-21-tablet-distribution.md 5.2 与 5.3	判据已写定
+2026-10-22T00:40:00+03:00	frame	发现并定位真问题：私有合成真值只在主检出里，三个工作树都没有，所以新工作树开箱第一条测试就是红的	新工作树开箱即红，下一个助手很可能去删测试或加 Skip	ImportCoverageTests.Public_readiness_view_hides_secret_phrases_from_expected_file 在 dm-minimax 失败、在 D:\2\dev\dm 通过	根因已确认
+2026-10-22T00:42:00+03:00	branch	把 agent/minimax 变基到 main，保留备份分支 agent/minimax-backup-2026-10-22	main 多了 372eec4（界面测试离屏显示），用户睡觉时跑界面测试不该弹窗；变基让分支保持线性	git rebase main 输出；备份分支指向 a3dfac8	两个提交重写为 4bb0bff、fdeae70
