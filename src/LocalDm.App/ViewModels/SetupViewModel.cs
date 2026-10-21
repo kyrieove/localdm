@@ -298,7 +298,10 @@ public sealed class SetupViewModel : ObservableObject
     private static string model_id_preferred(IEnumerable<string> models)
     {
         var list = models.ToArray();
-        return list.FirstOrDefault(m => m == "group/auto-deepseek-v4-1-flash") ?? list.FirstOrDefault() ?? string.Empty;
+        return list.FirstOrDefault(m => m == "codex/gpt-6.1-sol")
+            ?? list.FirstOrDefault(m => m == "group/auto-deepseek-v4-1-flash")
+            ?? list.FirstOrDefault()
+            ?? string.Empty;
     }
 
     private void RefreshVoices()
