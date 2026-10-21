@@ -94,6 +94,16 @@ public sealed class ImportFlowStepRow : ObservableObject
     private bool _isHidden;
     private string? _sourceRef;
 
+    /// <summary>
+    /// 这一行的来源环节：AI 起草出来的，或从流程文件读出来的。
+    ///
+    /// 以它为底，只覆盖界面上能改的字段（标题、类别、提示、条件、依据页），
+    /// 其余字段（步骤 ID、发放材料、按钮文字、是否提供「请主持人开场」）原样保留：
+    /// 界面上没有这些字段的编辑入口，确认一次就清空它们，等于把已有流程改坏了。
+    /// 确认页新增的行没有来源，为 null。
+    /// </summary>
+    public ScriptFlowStep? Source { get; init; }
+
     public string Title
     {
         get => _title;
@@ -186,21 +196,29 @@ public sealed class ImportFlowStepRow : ObservableObject
     public IReadOnlyList<string> Conditions =>
         ConditionsText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    public ScriptFlowStep ToStep(int index) => new()
+    /// <summary>
+    /// 这一行 → 流程里的一个环节。以来源环节为底，只用界面能改的字段覆盖；
+    /// 没有来源的新行按序号取 ID（重复时由 <see cref="ImportWizardViewModel.BuildFlow"/> 补后缀）。
+    /// </summary>
+    public ScriptFlowStep ToStep(int index)
     {
-        StepId = string.IsNullOrWhiteSpace(Title) ? $"step-{index + 1}" : SlugOf(Title, index),
-        Title = Title.Trim(),
-        Kind = Kind,
-        Hint = string.IsNullOrWhiteSpace(Hint) ? null : Hint.Trim(),
-        Conditions = Conditions,
-        SourceRef = string.IsNullOrWhiteSpace(SourceRef) ? null : SourceRef,
-    };
-
-    /// <summary>环节 ID 要稳定：优先用标题，取不到就用序号。</summary>
-    private static string SlugOf(string title, int index)
-    {
-        var trimmed = title.Trim();
-        return trimmed.Length == 0 ? $"step-{index + 1}" : $"step-{index + 1}-{Math.Abs(trimmed.GetHashCode() % 100000)}";
+        var source = Source;
+        return new ScriptFlowStep
+        {
+            StepId = string.IsNullOrWhiteSpace(source?.StepId) ? $"step-{index + 1}" : source!.StepId,
+            Title = Title.Trim(),
+            Kind = Kind,
+            Hint = string.IsNullOrWhiteSpace(Hint) ? null : Hint.Trim(),
+            Conditions = Conditions,
+            SourceRef = string.IsNullOrWhiteSpace(SourceRef) ? null : SourceRef,
+            AdvanceLabel = source?.AdvanceLabel,
+            RevealLabel = source?.RevealLabel,
+            MaterialIds = source?.MaterialIds ?? [],
+            RequiresAllMaterials = source?.RequiresAllMaterials ?? false,
+            PublicSegmentIds = source?.PublicSegmentIds ?? [],
+            PublicGroups = source?.PublicGroups ?? [],
+            OffersOpeningSpeech = source?.OffersOpeningSpeech ?? false,
+        };
     }
 }
 
@@ -704,6 +722,7 @@ public sealed class ImportWizardViewModel : ObservableObject
         {
             FlowSteps.Add(new ImportFlowStepRow
             {
+                Source = step,
                 Title = step.Title,
                 Kind = step.Kind,
                 Hint = step.Hint ?? string.Empty,
@@ -863,7 +882,7 @@ public sealed class ImportWizardViewModel : ObservableObject
     /// <summary>按界面上的环节与分层组装一份流程声明。</summary>
     public ScriptFlow BuildFlow()
     {
-        var steps = FlowSteps.Select((row, index) => row.ToStep(index)).ToArray();
+        var steps = MakeStepIdsUnique(FlowSteps.Select((row, index) => row.ToStep(index)));
         var truthPages = LayeringPages.Where(page => page.Layer == "真相").Select(page => page.PageNumber).ToArray();
         var ignoredPages = LayeringPages.Where(page => page.Layer == "不入包").Select(page => page.PageNumber).ToArray();
         return new ScriptFlow
@@ -877,6 +896,38 @@ public sealed class ImportWizardViewModel : ObservableObject
                 IgnoredPages = ignoredPages,
             },
         };
+    }
+
+    /// <summary>
+    /// 环节 ID 必须唯一（引擎按 ID 找下一环）。已有环节沿用原 ID，
+    /// 新加的按序号取名，撞上了就依次加 “-2”“-3”，直到唯一。
+    /// 不用哈希：同一份流程重建两次要得到同一个包标识。
+    /// </summary>
+    private static IReadOnlyList<ScriptFlowStep> MakeStepIdsUnique(IEnumerable<ScriptFlowStep> steps)
+    {
+        var used = new HashSet<string>(StringComparer.Ordinal);
+        var result = new List<ScriptFlowStep>();
+        foreach (var step in steps)
+        {
+            var id = step.StepId;
+            if (used.Add(id))
+            {
+                result.Add(step);
+                continue;
+            }
+
+            var suffix = 2;
+            string candidate;
+            do
+            {
+                candidate = $"{id}-{suffix++}";
+            }
+            while (!used.Add(candidate));
+
+            result.Add(step with { StepId = candidate });
+        }
+
+        return result;
     }
 
     /// <summary>建包：登记、写包文件与流程文件，然后到 ⑤。</summary>
@@ -1020,6 +1071,7 @@ public sealed class ImportWizardViewModel : ObservableObject
             {
                 FlowSteps.Add(new ImportFlowStepRow
                 {
+                    Source = step,
                     Title = step.Title,
                     Kind = step.Kind,
                     Hint = step.Hint ?? string.Empty,

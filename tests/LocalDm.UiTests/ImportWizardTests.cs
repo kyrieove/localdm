@@ -143,11 +143,215 @@ public sealed class ImportWizardTests
         });
     }
 
+    // ===== ④ 页确认后的流程字段 =====
+
+    [Fact]
+    public async Task Rebuilding_the_same_flow_twice_keeps_the_package_id()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            var story = NewStory(root.Path);
+            var (package, packagePath, _) = await BuildPackageAsync(root.Path, story, FlowWithEveryField());
+
+            // 「重新整理流程」重建两次：不改任何内容。
+            var first = await RebuildAsync(root.Path, package, packagePath);
+            var second = await RebuildAsync(root.Path, package, packagePath);
+
+            Assert.Equal(package.PackageId, first);
+            Assert.Equal(first, second);
+        });
+    }
+
+    [Fact]
+    public async Task Confirming_an_existing_flow_keeps_the_fields_the_page_does_not_edit()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            var story = NewStory(root.Path);
+            var flow = FlowWithEveryField();
+            var (package, packagePath, _) = await BuildPackageAsync(root.Path, story, flow);
+
+            var wizard = NewWizard(root.Path);
+            await wizard.OpenExistingFlowAsync(package, ImportWizardViewModel.LoadSavedFlow(packagePath));
+            Assert.True(wizard.IsFlowStep, wizard.Status);
+
+            // 不做修改直接确认：界面上没有编辑入口的字段必须原样带回去。
+            var confirmed = wizard.BuildFlow().Steps;
+            Assert.Equal(flow.Steps.Select(step => step.StepId), confirmed.Select(step => step.StepId));
+            Assert.Equal(flow.Steps[0].OffersOpeningSpeech, confirmed[0].OffersOpeningSpeech);
+            Assert.Equal(flow.Steps[0].PublicGroups, confirmed[0].PublicGroups);
+            Assert.Equal(flow.Steps[1].MaterialIds, confirmed[1].MaterialIds);
+            Assert.Equal(flow.Steps[1].RequiresAllMaterials, confirmed[1].RequiresAllMaterials);
+            Assert.Equal(flow.Steps[1].AdvanceLabel, confirmed[1].AdvanceLabel);
+            Assert.Equal(flow.Steps[2].RevealLabel, confirmed[2].RevealLabel);
+
+            // 真的建一次包：写出去的流程文件里这些字段也在。
+            await wizard.BuildAsync();
+            Assert.True(wizard.IsDoneStep, wizard.Status);
+            var saved = ImportWizardViewModel.LoadSavedFlow(NewestPackagePath(Path.Combine(root.Path, "data", "packages")))!;
+            Assert.True(saved.Steps[0].OffersOpeningSpeech);
+            Assert.Equal(["组织"], saved.Steps[0].PublicGroups);
+            Assert.Equal(["书房"], saved.Steps[1].MaterialIds);
+            Assert.True(saved.Steps[1].RequiresAllMaterials);
+            Assert.Equal("进入第二轮搜证", saved.Steps[1].AdvanceLabel);
+            Assert.Equal("公开结局", saved.Steps[2].RevealLabel);
+            Assert.Equal(flow.Steps.Select(step => step.StepId), saved.Steps.Select(step => step.StepId));
+        });
+    }
+
+    [Fact]
+    public async Task Changing_only_a_title_keeps_the_step_id_and_the_other_fields()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            var story = NewStory(root.Path);
+            var flow = FlowWithEveryField();
+            var (package, packagePath, _) = await BuildPackageAsync(root.Path, story, flow);
+
+            var wizard = NewWizard(root.Path);
+            await wizard.OpenExistingFlowAsync(package, ImportWizardViewModel.LoadSavedFlow(packagePath));
+            wizard.FlowSteps[1].Title = "第二轮阅本";
+
+            var confirmed = wizard.BuildFlow().Steps;
+            Assert.Equal(flow.Steps[1].StepId, confirmed[1].StepId);
+            Assert.Equal("第二轮阅本", confirmed[1].Title);
+            Assert.Equal(flow.Steps[1].MaterialIds, confirmed[1].MaterialIds);
+            Assert.Equal(flow.Steps[1].RequiresAllMaterials, confirmed[1].RequiresAllMaterials);
+            Assert.Equal(flow.Steps[1].AdvanceLabel, confirmed[1].AdvanceLabel);
+            Assert.Equal(flow.Steps[1].Kind, confirmed[1].Kind);
+        });
+    }
+
+    [Fact]
+    public async Task Added_rows_get_unique_step_ids_without_any_hash()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            var story = NewStory(root.Path);
+            // 已有的 ID 里有一个 step-4：第一行新环节在索引 3 上按序号取名正好撞上它。
+            var flow = FlowWithEveryField(stepIds: ["read", "step-3", "step-4"]);
+            var (package, packagePath, _) = await BuildPackageAsync(root.Path, story, flow);
+
+            var wizard = NewWizard(root.Path);
+            await wizard.OpenExistingFlowAsync(package, ImportWizardViewModel.LoadSavedFlow(packagePath));
+            wizard.AddStepCommand.Execute(null);
+            wizard.AddStepCommand.Execute(null);
+
+            var ids = wizard.BuildFlow().Steps.Select(step => step.StepId).ToArray();
+            Assert.Equal(5, ids.Length);
+            Assert.Equal(ids.Length, ids.Distinct(StringComparer.Ordinal).Count());
+            Assert.Equal(["read", "step-3", "step-4"], ids[..3]);
+            Assert.Equal("step-4-2", ids[3]);
+            Assert.Equal("step-5", ids[4]);
+            Assert.Empty(wizard.BuildFlow().ValidationIssues);
+        });
+    }
+
     // ===== 辅助 =====
 
     /// <summary>合成真相页里的一句话：起草结果照抄它就是剧透。</summary>
     private const string TruthSentence =
         "凶手在子夜换掉了走廊尽头那盏灯然后从侧门离开海砂馆";
+
+    /// <summary>
+    /// 一份每个字段都用上的流程：界面上只能改标题/类别/提示/条件/依据页，
+    /// 其余字段要在确认后原样保住。
+    /// </summary>
+    private static ScriptFlow FlowWithEveryField(IReadOnlyList<string>? stepIds = null)
+    {
+        stepIds ??= ["read", "search", "reveal"];
+        return new ScriptFlow
+        {
+            Layering = new ScriptLayering
+            {
+                OrganizerGroup = "组织",
+                PublicPages = [],
+                TruthPages = [2],
+                IgnoredPages = [],
+            },
+            Steps =
+            [
+                new ScriptFlowStep
+                {
+                    StepId = stepIds[0],
+                    Title = "阅本",
+                    Kind = ScriptStepKind.Read,
+                    Hint = "读自己的角色本。",
+                    Conditions = ["全员读完"],
+                    SourceRef = "组织者手册第 1 页",
+                    OffersOpeningSpeech = true,
+                    PublicGroups = ["组织"],
+                },
+                new ScriptFlowStep
+                {
+                    StepId = stepIds[1],
+                    Title = "搜证",
+                    Kind = ScriptStepKind.Search,
+                    Hint = "按编号发线索卡。",
+                    Conditions = ["材料发完"],
+                    SourceRef = "组织者手册第 1 页",
+                    MaterialIds = ["书房"],
+                    RequiresAllMaterials = true,
+                    AdvanceLabel = "进入第二轮搜证",
+                },
+                new ScriptFlowStep
+                {
+                    StepId = stepIds[2],
+                    Title = "揭秘",
+                    Kind = ScriptStepKind.Reveal,
+                    Hint = "公开真相。",
+                    Conditions = [],
+                    SourceRef = "组织者手册第 2 页",
+                    RevealLabel = "公开结局",
+                },
+            ],
+        };
+    }
+
+    /// <summary>直接用服务建一次包：拿来当「已有的包 + 已有的流程文件」。</summary>
+    private static async Task<(ScriptPackage Package, string PackagePath, ScriptFlow Flow)> BuildPackageAsync(
+        string root,
+        string story,
+        ScriptFlow flow)
+    {
+        var dataRoot = Path.Combine(root, "data");
+        Directory.CreateDirectory(dataRoot);
+        var service = new ScriptImportService(new ScriptImportOptions
+        {
+            DataRoot = dataRoot,
+            Extractor = new FakeExtractor(),
+        });
+        var extraction = await service.ExtractAsync(
+            story,
+            service.Scan(story).Groups,
+            progress: null,
+            TestContext.Current.CancellationToken);
+        var result = await service.BuildAsync(extraction, "合成字段剧本", 4, flow, TestContext.Current.CancellationToken);
+        return (result.Build.Package, result.PackagePath, flow);
+    }
+
+    /// <summary>走一次「重新整理流程」并把包重建出来，返回新包的标识。</summary>
+    private static async Task<string> RebuildAsync(string root, ScriptPackage package, string packagePath)
+    {
+        var wizard = NewWizard(root);
+        await wizard.OpenExistingFlowAsync(package, ImportWizardViewModel.LoadSavedFlow(packagePath));
+        Assert.True(wizard.IsFlowStep, wizard.Status);
+        await wizard.BuildAsync();
+        Assert.True(wizard.IsDoneStep, wizard.Status);
+        var rebuilt = System.Text.Json.JsonSerializer.Deserialize<ScriptPackage>(
+            File.ReadAllText(NewestPackagePath(Path.Combine(root, "data", "packages"))))!;
+        return rebuilt.PackageId;
+    }
+
+    private static string NewestPackagePath(string packagesDir) =>
+        Directory.GetFiles(packagesDir, "*.json")
+            .Where(path => !path.EndsWith(".flow.json", StringComparison.Ordinal))
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .First();
 
     private static ImportWizardViewModel NewWizard(string root)
     {
