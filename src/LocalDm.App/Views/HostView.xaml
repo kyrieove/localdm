@@ -41,13 +41,33 @@
             </Grid>
         </Border>
 
-        <!-- 暂停横幅：进度已保存，说话仍然可以 -->
-        <Border Grid.Row="1" Margin="34,14,34,0" Padding="14,10" CornerRadius="6"
-                Background="{StaticResource SealWash}" BorderBrush="#FFD8C8A7" BorderThickness="1"
-                Visibility="{Binding Session.IsPausedNow, Converter={StaticResource BoolToVisibility}}">
-            <TextBlock Text="本局已暂停，进度已保存。你仍然可以提问；准备继续时，点左侧「继续本局」。"
-                       Style="{StaticResource ChatMeta}" FontSize="12" Foreground="#FF6B5637" />
-        </Border>
+        <!-- 横幅区：暂停提示与同步异常 -->
+        <StackPanel Grid.Row="1">
+            <!-- 暂停横幅：进度已保存，说话仍然可以 -->
+            <Border Margin="34,14,34,0" Padding="14,10" CornerRadius="6"
+                    Background="{StaticResource SealWash}" BorderBrush="#FFD8C8A7" BorderThickness="1"
+                    Visibility="{Binding Session.IsPausedNow, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="本局已暂停，进度已保存。你仍然可以提问；准备继续时，点左侧「继续本局」。"
+                           Style="{StaticResource ChatMeta}" FontSize="12" Foreground="#FF6B5637" />
+            </Border>
+
+            <!-- 同步异常：公开消息没存进去。横幅带重试，不能一闪而过，也不能说「已同步」。 -->
+            <Border Margin="34,14,34,0" Padding="14,10" CornerRadius="6"
+                    Background="{StaticResource SealWash}" BorderBrush="#FFD8C8A7" BorderThickness="1"
+                    Visibility="{Binding HasPublicSyncError, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="{Binding PublicSyncErrorText}" TextWrapping="Wrap"
+                               Style="{StaticResource ChatMeta}" FontSize="12" Foreground="#FF6B5637" />
+                    <Button Grid.Column="1" Content="重试同步" Command="{Binding RetryPublicSyncCommand}"
+                            Style="{StaticResource TopBarButton}" Padding="8,2" Margin="10,0,0,0"
+                            VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+        </StackPanel>
 
         <!-- ===== 主区 1：对话 ===== -->
         <ScrollViewer x:Name="ChatScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto"

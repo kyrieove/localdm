@@ -1,4 +1,5 @@
 using LocalDm.Core.Domain;
+using LocalDm.Core.Tablet;
 
 namespace LocalDm.Core.Ports;
 
@@ -205,6 +206,31 @@ public interface ISessionStore
 
     /// <summary>读取本局 DM 对话记忆；没有记录返回 null。</summary>
     Task<DmConversationSnapshot?> LoadDmConversationAsync(string sessionId, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// 公开消息的读写契约：桌上公开说过的话按本局顺序落盘，再按序号交给平板同步。
+///
+/// 和 <see cref="ISessionStore"/> 的对话记忆分开：
+/// 这里没有备忘、没有角色本、没有真相，也不会从 AI 备忘里重建。
+/// </summary>
+public interface IPublicMessageFeed
+{
+    /// <summary>
+    /// 追加一条公开消息，返回入库后的那一条（带存储层分配的序号）。
+    /// 同一局内同一个消息 ID 只存一次：重试不会多出一条，也不会让序号跳号。
+    /// </summary>
+    Task<PublicMessage> AppendPublicMessageAsync(PublicMessage message, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// 按 after 序号分页读取本局的公开消息：只给序号大于 after 的，按序号升序。
+    /// 平板重连时用 after 补发；after 为 0 表示从头要。
+    /// </summary>
+    Task<IReadOnlyList<PublicMessage>> ReadPublicMessagesAsync(
+        string sessionId,
+        long after,
+        int limit,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>一个存档绑定了哪份冻结包。只有标识与进度，没有任何剧情文本。</summary>

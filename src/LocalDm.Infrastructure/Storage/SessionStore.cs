@@ -10,7 +10,7 @@ namespace LocalDm.Infrastructure.Storage;
 /// 单文件 SQLite 存档。event、receipt 与 session projection 在同一事务提交；
 /// 事务失败时三者均不改变。单进程串行处理写操作（同一 SemaphoreSlim）。
 /// </summary>
-public sealed class SessionStore : ISessionStore, IDisposable
+public sealed class SessionStore : ISessionStore, IPublicMessageFeed, IDisposable
 {
     private readonly string _databasePath;
     private readonly SemaphoreSlim _writeLock = new(1, 1);

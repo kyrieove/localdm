@@ -4,6 +4,7 @@ using LocalDm.Core.Domain;
 using LocalDm.Core.Game;
 using LocalDm.Core.Hosting;
 using LocalDm.Core.Ports;
+using LocalDm.Core.Tablet;
 using LocalDm.Infrastructure.Storage;
 
 namespace LocalDm.App.ViewModels;
@@ -146,6 +147,24 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         ShowMaterialsCommand = new RelayCommand(() => { ShowMaterials = true; return Task.CompletedTask; });
         ShowConversationCommand = new RelayCommand(() => { ShowMaterials = false; return Task.CompletedTask; });
         CompactCommand = new RelayCommand(() => ManualCompactAsync(), () => CanCompact);
+
+        // 公开消息：桌上每落一条消息就往存档写一条，平板按序号取。
+        // 存储不支持公开消息时（比如未接线）就完全不接这条线，不影响主持。
+        if (store is IPublicMessageFeed feed)
+        {
+            _publicFeed = new PublicMessagePublisher(feed);
+            _publicFeed.Failed += OnPublicFeedFailed;
+            _publicFeed.Recovered += OnPublicFeedRecovered;
+            _publicFeed.Committed += OnPublicFeedCommitted;
+        }
+
+        RetryPublicSyncCommand = new RelayCommand(
+            () =>
+            {
+                _publicFeed?.Retry();
+                return Task.CompletedTask;
+            },
+            () => HasPublicSyncError);
     }
 
     public ObservableCollection<VoiceOption> AvailableVoices { get; } = [];
@@ -1357,9 +1376,104 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         Messages.Add(message);
         OnPropertyChanged(nameof(HasConversation));
         OnPropertyChanged(nameof(ShowSuggestions));
+        // 先落成公开消息，再通知外面：网页要看到的是已经存下来的那条。
+        PublishPublicMessage(message);
         MessageAppended?.Invoke(this, message);
     }
 
+    /// <summary>
+    /// 把桌上的一条消息变成公开消息，排进写入队列。
+    ///
+    /// 只同步「桌上公开说过的话」：玩家发言、主持回复、公开流程事件。
+    /// 本机提示（不调用模型的那些引导语）不进公开消息 ——
+    /// 那是给操作者看的本机诊断，不是桌上说的话。
+    /// </summary>
+    private void PublishPublicMessage(ChatMessage message)
+    {
+        var publisher = _publicFeed;
+        var sessionId = _conversationSessionId;
+        if (publisher is null || string.IsNullOrEmpty(sessionId))
+        {
+            // 还没绑定到任何一局：没有「本局」可写，也就没有公开消息。
+            return;
+        }
+
+        PublicMessageKind kind;
+        PublicMessageAuthor author;
+        if (message.IsPlayer)
+        {
+            kind = PublicMessageKind.PlayerSpeech;
+            author = PublicMessageAuthor.Player;
+        }
+        else if (message.IsEvent)
+        {
+            kind = PublicMessageKind.FlowEvent;
+            author = PublicMessageAuthor.System;
+        }
+        else if (message.IsModelReply)
+        {
+            kind = PublicMessageKind.HostReply;
+            author = PublicMessageAuthor.Host;
+        }
+        else
+        {
+            // 本机提示（不调用模型的那些引导语）：不是桌上说的话，不同步。
+            return;
+        }
+
+        publisher.Publish(new PublicMessage
+        {
+            SessionId = sessionId,
+            MessageId = message.Id,
+            Author = author,
+            Text = message.Text,
+            CreatedAt = DateTimeOffset.UtcNow,
+            Kind = kind,
+        });
+    }
+
+    /// <summary>公开消息写入队列：桌上每落一条消息就往这里排一条。</summary>
+    private readonly PublicMessagePublisher? _publicFeed;
+
+    /// <summary>同步断了没有：断了就不能对外说「已同步」。</summary>
+    public bool HasPublicSyncError => _publicSyncError is not null;
+
+    /// <summary>同步异常的原因，直接展示给主持人。</summary>
+    public string PublicSyncErrorText =>
+        _publicSyncError is null ? string.Empty : "同步异常：" + _publicSyncError;
+
+    private string? _publicSyncError;
+
+    /// <summary>重试把没写成功的公开消息写回去。</summary>
+    public RelayCommand RetryPublicSyncCommand { get; }
+
+    /// <summary>一条公开消息真的落盘之后触发：网页据此通知平板刷新。</summary>
+    public event EventHandler<PublicMessage>? PublicMessageCommitted;
+
+    private void OnPublicFeedFailed(object? sender, string reason)
+    {
+        // 同步异常只报在本机状态行与横幅上，不进公共聊天区：
+        // 报到聊天区会再触发一次写入，形成自己喊自己。
+        _publicSyncError = reason;
+        OnPropertyChanged(nameof(HasPublicSyncError));
+        OnPropertyChanged(nameof(PublicSyncErrorText));
+        RetryPublicSyncCommand.RaiseCanExecuteChanged();
+        Status = "同步异常：" + reason;
+    }
+
+    private void OnPublicFeedRecovered(object? sender, EventArgs e)
+    {
+        _publicSyncError = null;
+        OnPropertyChanged(nameof(HasPublicSyncError));
+        OnPropertyChanged(nameof(PublicSyncErrorText));
+        RetryPublicSyncCommand.RaiseCanExecuteChanged();
+        Status = "公开消息已经补齐，平板可以继续同步。";
+    }
+
+    private void OnPublicFeedCommitted(object? sender, PublicMessage message)
+    {
+        PublicMessageCommitted?.Invoke(this, message);
+    }
 
     /// <summary>有新消息落地；视图据此把对话滚到底。</summary>
     public event EventHandler<ChatMessage>? MessageAppended;
