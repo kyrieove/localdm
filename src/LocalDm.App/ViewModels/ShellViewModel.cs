@@ -32,12 +32,15 @@ public sealed class RelayCommand : ICommand
 {
     private readonly Func<Task> _execute;
     private readonly Func<bool>? _canExecute;
+    private readonly bool _allowReentry;
     private EventHandler? _canExecuteChanged;
+    private bool _isExecuting;
 
-    public RelayCommand(Func<Task> execute, Func<bool>? canExecute = null)
+    public RelayCommand(Func<Task> execute, Func<bool>? canExecute = null, bool allowReentry = false)
     {
         _execute = execute;
         _canExecute = canExecute;
+        _allowReentry = allowReentry;
     }
 
     /// <summary>
@@ -59,10 +62,25 @@ public sealed class RelayCommand : ICommand
         }
     }
 
-    public bool CanExecute(object? parameter) => _canExecute?.Invoke() ?? true;
+    public bool CanExecute(object? parameter)
+    {
+        if (!_allowReentry && _isExecuting)
+        {
+            return false;
+        }
+
+        return _canExecute?.Invoke() ?? true;
+    }
 
     public async void Execute(object? parameter)
     {
+        if (!CanExecute(parameter))
+        {
+            return;
+        }
+
+        _isExecuting = true;
+        RaiseCanExecuteChanged();
         try
         {
             await _execute();
@@ -70,6 +88,11 @@ public sealed class RelayCommand : ICommand
         catch (Exception ex)
         {
             ExecutionFailed?.Invoke(this, ex);
+        }
+        finally
+        {
+            _isExecuting = false;
+            RaiseCanExecuteChanged();
         }
     }
 

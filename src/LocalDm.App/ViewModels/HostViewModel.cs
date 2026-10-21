@@ -133,7 +133,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         };
 
         SendCommand = new RelayCommand(SendAsync, () => !IsBusy);
-        StopCommand = new RelayCommand(StopAsync, () => IsBusy);
+        StopCommand = new RelayCommand(StopAsync, () => IsBusy, allowReentry: true);
         OpeningSpeechCommand = new RelayCommand(
             () => NarrateIntentAsync(HostNarrationIntent.OpenSession),
             () => !IsBusy && ShowOpeningSpeech);
