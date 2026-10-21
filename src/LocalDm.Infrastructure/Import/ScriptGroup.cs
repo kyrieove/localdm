@@ -31,8 +31,14 @@ public sealed record ScriptGroup
     /// <summary>已按页序排好的文件绝对路径。</summary>
     public required IReadOnlyList<string> Files { get; init; }
 
-    /// <summary>页数（含卡背页）。PDF 的真实页数要到识别阶段才知道，这里按文件数算。</summary>
-    public int PageCount => Files.Count;
+    /// <summary>
+    /// 页数：PDF 按文件内页数算，图片一张一页。
+    /// 这是 ② 页显示的数字，也是识别进度的分母，不能按文件个数算。
+    /// </summary>
+    public int PageCount => _pageCount ??= Files.Sum(
+        path => ScriptFileTypes.IsPdf(path) ? ScriptImportService.CountPdfPages(path) : 1);
+
+    private int? _pageCount;
 
     /// <summary>类别：扫描时猜的，导入的人可改。</summary>
     public ScriptGroupKind Kind { get; init; } = ScriptGroupKind.Role;

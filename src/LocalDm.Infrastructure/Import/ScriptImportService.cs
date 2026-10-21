@@ -25,12 +25,6 @@ public sealed partial class ScriptImportService
             options.MineruHome ?? Path.Combine(options.DataRoot, "mineru-home"),
             options.OcrPythonPath);
     }
-    /// <summary>图片页的扩展名（小写，含点）。</summary>
-    private static readonly string[] ImageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
-
-    /// <summary>不是材料的杂项文件。</summary>
-    private static readonly string[] JunkFiles = ["thumbs.db", ".ds_store", "desktop.ini"];
-
     /// <summary>组织者手册的关键词：命中任一即算候选。</summary>
     private static readonly string[] OrganizerKeywords = ["组织", "主持", "dm", "手册", "说明", "真相", "组织者"];
 
@@ -75,12 +69,29 @@ public sealed partial class ScriptImportService
     /// <summary>
     /// 递归找分组：直接包含图片的文件夹算一组，每个独立 PDF 各算一组。
     /// 只有子文件夹的中间层不算分组，只用来生成相对路径。
+    ///
+    /// 同一个文件夹里既有 PDF 又有图片时，PDF 的分组排在图片那组前面
+    /// （多个 PDF 按文件名排），这样页序是「先 PDF 后图片」，与人对文件夹的读法一致。
     /// </summary>
     private static void CollectGroups(string root, string current, List<ScriptGroup> groups)
     {
-        var files = MaterialFiles(current);
+        var files = ScriptFileTypes.MaterialFiles(current);
 
-        var images = files.Where(IsImage).OrderBy(f => PageOrderKey(Path.GetFileNameWithoutExtension(f)))
+        // 独立 PDF 各成一组：一本手册、一个角色本各是一个文件时，不该被并成一组。
+        foreach (var pdf in files.Where(ScriptFileTypes.IsPdf).OrderBy(f => f, StringComparer.Ordinal))
+        {
+            groups.Add(new ScriptGroup
+            {
+                Name = Path.GetFileNameWithoutExtension(pdf),
+                RelativePath = RelativeTo(root, current) is { Length: > 0 } dir
+                    ? $"{dir}/{Path.GetFileName(pdf)}"
+                    : Path.GetFileName(pdf),
+                Files = [pdf],
+            });
+        }
+
+        var images = files.Where(ScriptFileTypes.IsImage)
+            .OrderBy(f => PageOrderKey(Path.GetFileNameWithoutExtension(f)))
             .ThenBy(f => f, StringComparer.Ordinal)
             .ToArray();
         if (images.Length > 0)
@@ -90,19 +101,6 @@ public sealed partial class ScriptImportService
                 Name = Path.GetFileName(current),
                 RelativePath = RelativeTo(root, current),
                 Files = images,
-            });
-        }
-
-        // 独立 PDF 各成一组：一本手册、一个角色本各是一个文件时，不该被并成一组。
-        foreach (var pdf in files.Where(IsPdf).OrderBy(f => f, StringComparer.Ordinal))
-        {
-            groups.Add(new ScriptGroup
-            {
-                Name = Path.GetFileNameWithoutExtension(pdf),
-                RelativePath = RelativeTo(root, current) is { Length: > 0 } dir
-                    ? $"{dir}/{Path.GetFileName(pdf)}"
-                    : Path.GetFileName(pdf),
-                Files = [pdf],
             });
         }
 
@@ -116,20 +114,6 @@ public sealed partial class ScriptImportService
             CollectGroups(root, directory, groups);
         }
     }
-
-    /// <summary>当前目录下直接可用的文件（跳过隐藏文件与系统杂项）。</summary>
-    private static string[] MaterialFiles(string directory) =>
-        Directory.GetFiles(directory)
-            .Where(path => !IsHidden(path))
-            .Where(path => !JunkFiles.Contains(Path.GetFileName(path), StringComparer.OrdinalIgnoreCase))
-            .Where(path => IsImage(path) || IsPdf(path))
-            .ToArray();
-
-    private static bool IsImage(string path) =>
-        ImageExtensions.Contains(Path.GetExtension(path).ToLowerInvariant());
-
-    private static bool IsPdf(string path) =>
-        string.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsHidden(string path)
     {

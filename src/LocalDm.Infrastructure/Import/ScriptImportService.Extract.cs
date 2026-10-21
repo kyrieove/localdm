@@ -53,29 +53,38 @@ public sealed partial class ScriptImportService
             Scope = ConsentScope.LocalProcessingOnly,
         };
 
+        // 页数先算清：一份 N 页的 PDF 算 N 页，一张图片算 1 页。进度分母与「共几页」都用它。
+        var jobs = files
+            .Select(file => new ImportJob(
+                file.Group,
+                file.Path,
+                ScriptFileTypes.IsPdf(file.Path) ? DocumentKind.ScanPdf : DocumentKind.Image,
+                ScriptFileTypes.IsPdf(file.Path) ? CountPdfPages(file.Path) : 1))
+            .ToArray();
+        var totalPages = jobs.Sum(job => job.PageCount);
+
         var pages = new List<RealScriptPackageBuilder.ExtractedPage>();
         var sources = new List<SourceFile>();
         var failed = new List<string>();
         var stopwatch = Stopwatch.StartNew();
         var completed = 0;
 
-        foreach (var (group, path) in files)
+        foreach (var job in jobs)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var label = System.IO.Path.GetFileNameWithoutExtension(path);
-            var fileId = $"{group.Name}-{label}";
-            var kind = IsPdf(path) ? DocumentKind.ScanPdf : DocumentKind.Image;
-            var pageCount = kind == DocumentKind.Image ? 1 : CountPdfPages(path);
+            var label = System.IO.Path.GetFileNameWithoutExtension(job.Path);
+            var fileId = $"{job.Group.Name}-{label}";
 
-            var extracted = await ExtractOneAsync(fileId, path, kind, pageCount, identity, consent, cancellationToken);
+            var extracted = await ExtractOneAsync(fileId, job.Path, job.Kind, job.PageCount, identity, consent, cancellationToken);
             if (extracted.Blocked is { } blocked)
             {
                 // 预检或授权没过：整批停下，界面显示脱敏原因，不再继续上送别的页。
                 return ScriptExtraction.Blocked(blocked.Code, blocked.Reason);
             }
 
-            completed++;
+            // 进度按页走：一个文件识别完，把它那几页一次算上。
+            completed += job.PageCount;
             if (extracted.Source is null || extracted.Spans.Count == 0)
             {
                 failed.Add(label);
@@ -83,29 +92,65 @@ public sealed partial class ScriptImportService
             else
             {
                 sources.Add(extracted.Source);
-                pages.Add(new RealScriptPackageBuilder.ExtractedPage
-                {
-                    Group = group.Name,
-                    GroupKind = ToExtractedKind(group.Kind),
-                    PageNumber = int.TryParse(label, out var page) ? page : 0,
-                    PageLabel = label,
-                    Text = string.Join("\n", extracted.Spans.Select(span => span.OriginalText)),
-                    FileId = extracted.Source.FileId,
-                    SpanId = extracted.Spans[0].SpanId,
-                });
+                AddPages(pages, job.Group, job.Kind, label, extracted.Spans);
             }
 
             progress?.Report(new ImportProgress
             {
                 Completed = completed,
-                Total = files.Length,
+                Total = totalPages,
                 PageLabel = label,
                 FailedCount = failed.Count,
-                EstimatedRemaining = EstimateRemaining(stopwatch.Elapsed, completed, files.Length),
+                EstimatedRemaining = EstimateRemaining(stopwatch.Elapsed, completed, totalPages),
             });
         }
 
         return new ScriptExtraction { Pages = pages, Sources = sources, FailedPages = failed };
+    }
+
+    /// <summary>
+    /// 一份文件的识别结果 → 包里的页。
+    ///
+    /// 图片一页一条；PDF 按 span 的页号分组，同一页的 span 按原顺序拼成一条，
+    /// 页号用 PDF 内的页号（从 1 开始），页标签写成 <c>p{页号}</c> 保证段 ID 唯一。
+    /// </summary>
+    private static void AddPages(
+        List<RealScriptPackageBuilder.ExtractedPage> pages,
+        ScriptGroup group,
+        DocumentKind kind,
+        string label,
+        IReadOnlyList<SourceSpan> spans)
+    {
+        if (kind == DocumentKind.Image)
+        {
+            pages.Add(new RealScriptPackageBuilder.ExtractedPage
+            {
+                Group = group.Name,
+                GroupKind = ToExtractedKind(group.Kind),
+                PageNumber = int.TryParse(label, out var page) ? page : 0,
+                PageLabel = label,
+                SourcePageNumber = 1,
+                Text = string.Join("\n", spans.Select(span => span.OriginalText)),
+                FileId = spans[0].FileId,
+                SpanId = spans[0].SpanId,
+            });
+            return;
+        }
+
+        foreach (var pageSpans in spans.GroupBy(span => span.PageNumber).OrderBy(group => group.Key))
+        {
+            pages.Add(new RealScriptPackageBuilder.ExtractedPage
+            {
+                Group = group.Name,
+                GroupKind = ToExtractedKind(group.Kind),
+                PageNumber = pageSpans.Key,
+                PageLabel = $"p{pageSpans.Key}",
+                SourcePageNumber = pageSpans.Key,
+                Text = string.Join("\n", pageSpans.Select(span => span.OriginalText)),
+                FileId = pageSpans.First().FileId,
+                SpanId = pageSpans.First().SpanId,
+            });
+        }
     }
 
     /// <summary>
@@ -296,12 +341,12 @@ public sealed partial class ScriptImportService
 
     /// <summary>
     /// PDF 的页数：数页对象。<c>SourceSpan</c> 的页号要落在页数以内，
-    /// 所以建来源时必须先知道这本 PDF 有几页。
+    /// 所以建来源时必须先知道这本 PDF 有几页。扫描（② 页显示页数）、识别与命令行探针共用这一个实现。
     ///
     /// 只认未压缩的对象头（<c>/Type /Page</c>）；交叉引用流压缩过的 PDF 可能数不准，
     /// 数少了的页在识别时会被判成源失配并记入失败页数，不会静默当成读完。
     /// </summary>
-    internal static int CountPdfPages(string path)
+    public static int CountPdfPages(string path)
     {
         string text;
         try
@@ -337,6 +382,9 @@ public sealed partial class ScriptImportService
 
         return Math.Max(1, count);
     }
+
+    /// <summary>一个待识别的文件：分组、路径、文档类型与页数。</summary>
+    private sealed record ImportJob(ScriptGroup Group, string Path, DocumentKind Kind, int PageCount);
 
     private sealed record ExtractedOne(
         SourceFile? Source,

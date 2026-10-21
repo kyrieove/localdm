@@ -38,13 +38,19 @@ public static class RealScriptPackageBuilder
         /// </summary>
         public ExtractedGroupKind GroupKind { get; init; } = ExtractedGroupKind.Unknown;
 
-        /// <summary>原文件名里的页号；卡背等非数字页记为 0。</summary>
+        /// <summary>
+        /// 页号：PDF 是文件内的页号；图片取自文件名，卡背等非数字页记为 0。
+        /// 分层规则按它判断真相页，所以 PDF 必须给真实页号。
+        /// </summary>
         public required int PageNumber { get; init; }
 
-        /// <summary>原文件名（不含扩展名），用于区分正面与卡背，避免段 ID 冲突。</summary>
+        /// <summary>原文件名（不含扩展名）或 <c>p{页号}</c>，用于区分正面与卡背、避免段 ID 冲突。</summary>
         public string PageLabel { get; init; } = string.Empty;
 
         public required string Text { get; init; }
+
+        /// <summary>这一页在源文件里的页号；图片固定 1，PDF 用文件内的页号。</summary>
+        public int SourcePageNumber { get; init; } = 1;
 
         public required string FileId { get; init; }
 
@@ -102,10 +108,10 @@ public static class RealScriptPackageBuilder
         {
             SpanId = p.SpanId,
             FileId = p.FileId,
-            // 每张图片是独立文件，图片的页号固定为 1；真实页序由 manifest 的 order 指定。
-            PageNumber = 1,
+            // 页码必须用源文件里的真实页号：校验要拿它逐页核对覆盖，写死 1 会让多页 PDF 永远覆盖不全。
+            PageNumber = p.SourcePageNumber,
             BlockNumber = 0,
-            ToolLocator = $"doc:{p.FileId}/tier:flash/page:1/block:0",
+            ToolLocator = $"doc:{p.FileId}/tier:flash/page:{p.SourcePageNumber}/block:0",
             TextHash = Sha256Text(p.Text),
             OriginalText = p.Text,
         }).ToArray();

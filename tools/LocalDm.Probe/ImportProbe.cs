@@ -53,7 +53,7 @@ public static class ImportProbe
             PrivacyAllowed = check.Allowed,
             PrivacyCode = check.ErrorCode,
             Telemetry = telemetry,
-            TotalPages = allFiles.Length,
+            TotalPages = allFiles.Sum(PageCountOf),
             Groups = [.. groups.Select(g => g.Name)],
         };
 
@@ -82,6 +82,7 @@ public static class ImportProbe
             foreach (var file in group.Files)
             {
                 var fileId = $"{group.Name}/{Path.GetFileNameWithoutExtension(file)}";
+                var isPdf = ScriptFileTypes.IsPdf(file);
                 var sw = Stopwatch.StartNew();
                 ImportFileResult imported;
                 try
@@ -89,8 +90,8 @@ public static class ImportProbe
                     imported = await pipeline.ImportFileAsync(
                         fileId,
                         Path.GetFullPath(file),
-                        DocumentKind.Image,
-                        pdfPageCount: null,
+                        isPdf ? DocumentKind.ScanPdf : DocumentKind.Image,
+                        pdfPageCount: isPdf ? ScriptImportService.CountPdfPages(file) : null,
                         consent: consent,
                         CancellationToken.None,
                         manifestHash: manifestHash,
@@ -110,6 +111,7 @@ public static class ImportProbe
                     ToolComplete = imported.ToolComplete,
                     ElapsedMs = sw.ElapsedMilliseconds,
                     SpanCount = imported.Spans.Count,
+                    ExpectedPages = PageCountOf(file),
                     Pages = imported.Spans.Select(s => s.PageNumber).Distinct().OrderBy(p => p).ToArray(),
                     HasLocator = imported.Spans.All(s => !string.IsNullOrWhiteSpace(s.ToolLocator)),
                     SampleChars = imported.Spans.Sum(s => s.OriginalText.Length),
@@ -128,14 +130,15 @@ public static class ImportProbe
         rollup.Stop();
         result.TotalElapsedMs = rollup.ElapsedMilliseconds;
         result.FilesProcessed = result.Files.Count;
-        result.AllComplete = result.Files.All(f => f.ToolComplete);
-        result.SourceCoveragePercent = result.Files.Count == 0
+        result.AllComplete = result.Files.All(f => f.ToolComplete && f.Pages.Length >= f.ExpectedPages);
+        var expectedPages = result.Files.Sum(f => f.ExpectedPages);
+        result.SourceCoveragePercent = expectedPages == 0
             ? 0
-            : Math.Round(100.0 * result.Files.Count(f => f.ToolComplete && f.SpanCount > 0) / result.Files.Count, 1);
+            : Math.Round(100.0 * result.Files.Sum(f => Math.Min(f.Pages.Length, f.ExpectedPages)) / expectedPages, 1);
         result.GroupSummaries = [.. groups.Select(g => new ProbeGroup
         {
             Name = g.Name,
-            Pages = g.Files.Length,
+            Pages = g.Files.Sum(PageCountOf),
             Complete = result.Files.Count(f => f.Group == g.Name && f.ToolComplete),
             Chars = result.Files.Where(f => f.Group == g.Name).Sum(f => f.SampleChars),
             ElapsedMs = result.Files.Where(f => f.Group == g.Name).Sum(f => f.ElapsedMs),
@@ -156,9 +159,11 @@ public static class ImportProbe
 
     private static List<(string Name, string[] Files)> CollectGroups(string root, bool recursive, int maxPerFolder)
     {
+        // 图片与 PDF 都认，和导入向导用的是同一份判断（ScriptFileTypes）。
         IEnumerable<string> Enumerate(string dir) =>
-            Directory.GetFiles(dir, "*.jpg")
-                .OrderBy(p => PaddedName(Path.GetFileNameWithoutExtension(p)), StringComparer.Ordinal);
+            ScriptFileTypes.MaterialFiles(dir)
+                .OrderBy(p => ScriptFileTypes.IsPdf(p) ? 0 : 1)
+                .ThenBy(p => PaddedName(Path.GetFileNameWithoutExtension(p)), StringComparer.Ordinal);
 
         var groups = new List<(string Name, string[] Files)>();
         var direct = Enumerate(root).ToArray();
@@ -201,6 +206,10 @@ public static class ImportProbe
 
     private static string PaddedName(string name) =>
         int.TryParse(name, out var n) ? n.ToString("D4") : name;
+
+    /// <summary>一个文件的页数：PDF 按文件内页数，图片一张一页。</summary>
+    private static int PageCountOf(string path) =>
+        ScriptFileTypes.IsPdf(path) ? ScriptImportService.CountPdfPages(path) : 1;
 
     /// <summary>整批材料的清单 hash：由每个文件的相对标识与内容 hash 决定，绑定一次授权。</summary>
     private static string ManifestHashFor(IEnumerable<string> files)
@@ -281,6 +290,7 @@ public static class ImportProbe
         public bool ToolComplete { get; set; }
         public long ElapsedMs { get; set; }
         public int SpanCount { get; set; }
+        public int ExpectedPages { get; set; }
         public int[] Pages { get; set; } = [];
         public bool HasLocator { get; set; }
         public int SampleChars { get; set; }

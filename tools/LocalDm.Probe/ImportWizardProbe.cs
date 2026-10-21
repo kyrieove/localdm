@@ -77,6 +77,12 @@ public static class ImportWizardProbe
             new FlowDrafter(gateway),
             () => modelId);
 
+        // 回归核对：用已有的流程文件跟新代码重建一次，不重新起草（模型每次文字不同，包标识没法比）。
+        if (ArgumentValue(args, "--reuse") is { } reusePath)
+        {
+            return await RunReuseAsync(reusePath, wizard, packagesDir, report, outFile);
+        }
+
         // ===== ① + ② 扫描 =====
         wizard.SetFolder(storyRoot);
         wizard.Title = titleOverride ?? Path.GetFileName(storyRoot.TrimEnd(Path.DirectorySeparatorChar));
@@ -273,6 +279,87 @@ public static class ImportWizardProbe
         Console.WriteLine("记录：" + (outFile ?? "（未指定 --out）"));
         return wizard.IsDoneStep ? 0 : 5;
     }
+
+    /// <summary>
+    /// 用已有的包与流程文件重建一次，不重新起草：改代码后核对段数、段 ID 与包标识有没有变。
+    /// 重新起草会拿到不同的文字，包标识跟着变，那样的对比说明不了回归。
+    /// </summary>
+    private static async Task<int> RunReuseAsync(
+        string packagePath,
+        ImportWizardViewModel wizard,
+        string packagesDir,
+        StringBuilder report,
+        string? outFile)
+    {
+        var flowPath = Path.ChangeExtension(packagePath, ".flow.json");
+        if (!File.Exists(flowPath))
+        {
+            Console.WriteLine("! 找不到流程文件：" + flowPath);
+            return 6;
+        }
+
+        var package = JsonSerializer.Deserialize<ScriptPackage>(File.ReadAllText(packagePath))!;
+        var flow = JsonSerializer.Deserialize<ScriptFlow>(
+            File.ReadAllText(flowPath),
+            new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
+            })!;
+
+        Console.WriteLine($"复用包：{package.PackageId}（{Path.GetFileName(packagePath)}）");
+        report.AppendLine("## 复用已有流程重建（回归核对）");
+        report.AppendLine();
+        report.AppendLine($"- 原包：`{package.PackageId}`，段 {package.Segments.Count}");
+        report.AppendLine();
+
+        await wizard.OpenExistingFlowAsync(package, flow);
+        Console.WriteLine($"  状态：{wizard.Status}");
+        if (!wizard.IsFlowStep)
+        {
+            Console.WriteLine("! 没走到 ④，停止。");
+            WriteReport(report, outFile);
+            return 7;
+        }
+
+        await wizard.BuildAsync();
+        Console.WriteLine($"  就绪：{wizard.ReadinessText}");
+
+        var built = Directory.GetFiles(packagesDir, "*.json")
+            .Where(path => !path.EndsWith(".flow.json", StringComparison.Ordinal))
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault();
+        if (built is null)
+        {
+            Console.WriteLine("! 没有写出包文件。");
+            WriteReport(report, outFile);
+            return 8;
+        }
+
+        var rebuilt = JsonSerializer.Deserialize<ScriptPackage>(File.ReadAllText(built))!;
+        var beforeIds = package.Segments.Select(segment => segment.SegmentId).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+        var afterIds = rebuilt.Segments.Select(segment => segment.SegmentId).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+        var sameIds = beforeIds.SequenceEqual(afterIds, StringComparer.Ordinal);
+        var samePackageId = string.Equals(package.PackageId, rebuilt.PackageId, StringComparison.Ordinal);
+
+        Console.WriteLine($"  新包：{rebuilt.PackageId} 段={rebuilt.Segments.Count}；段 ID 一致={sameIds}；包标识一致={samePackageId}");
+        report.AppendLine($"- 重建后的包：`{rebuilt.PackageId}`，段 {rebuilt.Segments.Count}");
+        report.AppendLine($"- 段 ID 逐条一致：{(sameIds ? "是" : "否")}");
+        report.AppendLine($"- 包标识一致：{(samePackageId ? "是" : "否")}");
+        report.AppendLine();
+
+        if (!sameIds || !samePackageId)
+        {
+            var missing = beforeIds.Except(afterIds, StringComparer.Ordinal).Take(10).ToArray();
+            var added = afterIds.Except(beforeIds, StringComparer.Ordinal).Take(10).ToArray();
+            Console.WriteLine($"  只在这一版里有的段 ID：{string.Join("、", missing)}");
+            Console.WriteLine($"  只在新包里有的段 ID：{string.Join("、", added)}");
+        }
+
+        WriteReport(report, outFile);
+        return sameIds && samePackageId ? 0 : 9;
+    }
+
 
     /// <summary>诊断：按 MineruRunner 的方式起子进程取两份状态 JSON，只打印关键字与错误码。</summary>
     private static async Task DiagnoseMineruAsync(string? executable, string? home)
