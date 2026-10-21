@@ -3,9 +3,19 @@
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <RootNamespace>LocalDm.Infrastructure</RootNamespace>
+    <!-- 切片要解码 JPEG/PNG：用 Windows 自带的 WIC（System.Windows.Media.Imaging），不引第三方图片库。 -->
+    <UseWPF>true</UseWPF>
+    <!-- 启用 WPF 后 ProtectedData 由框架自带，原有的包引用变成可裁剪项；包引用本身留着不动。 -->
+    <NoWarn>$(NoWarn);NU1510</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- UseWPF 会关掉隐式 using：只补回本工程原本依赖的那几项，不改变其他工程的编译行为。 -->
+    <Using Include="System.IO" />
+    <Using Include="System.Linq" />
+    <Using Include="System.Net.Http" />
+    <Using Include="System.Threading" />
+    <Using Include="System.Threading.Tasks" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" />
     <PackageReference Include="System.Speech" />
