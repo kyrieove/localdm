@@ -32,6 +32,7 @@ public static class ImportWizardProbe
         var modelOverride = ArgumentValue(args, "--model");
         var mineruHome = ArgumentValue(args, "--home");
         var players = int.Parse(ArgumentValue(args, "--players") ?? "5");
+        var titleOverride = ArgumentValue(args, "--title");
         var outFile = ArgumentValue(args, "--out");
 
         var dataRoot = Path.Combine(workRoot, "data");
@@ -78,7 +79,7 @@ public static class ImportWizardProbe
 
         // ===== ① + ② 扫描 =====
         wizard.SetFolder(storyRoot);
-        wizard.Title = Path.GetFileName(storyRoot.TrimEnd(Path.DirectorySeparatorChar));
+        wizard.Title = titleOverride ?? Path.GetFileName(storyRoot.TrimEnd(Path.DirectorySeparatorChar));
         wizard.PlayerCount = players;
         await wizard.ScanAsync();
 
