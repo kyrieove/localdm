@@ -27,30 +27,6 @@ public sealed record ToolSettings
     /// <summary>System.Speech 声音名称；为空表示跟随系统默认中文音色。</summary>
     public string? VoiceId { get; init; }
 
-    /// <summary>
-    /// 本机 VoxCPM 音色设计用的描述。为空表示没有配置 VoxCPM 音色。
-    /// 例：<c>沉稳的中年男声</c>。
-    /// </summary>
-    public string? VoxCpmVoiceDesign { get; init; }
-
-    /// <summary>
-    /// VoxCPM 音色克隆用的参考音频绝对路径。为空表示不启用克隆音色。
-    /// 参考音频是用户自己的素材，只存路径，不进安装目录也不外发。
-    /// </summary>
-    public string? VoxCpmReferenceAudio { get; init; }
-
-    /// <summary>
-    /// VoxCPM 模型目录或 HuggingFace 仓库名。为空表示不启用 VoxCPM。
-    /// 不能写死：不同机器的显存与内存不同，档位要能换。
-    /// </summary>
-    public string? VoxCpmModelPath { get; init; }
-
-    /// <summary>
-    /// 跑 VoxCPM 的 Python 解释器。为空时依次退回环境变量
-    /// <c>LOCALDM_VOXCPM_PYTHON</c> 与 <c>python</c>。
-    /// </summary>
-    public string? VoxCpmPythonPath { get; init; }
-
     /// <summary>主持台输入框提示（OpenLess 焦点提示）。</summary>
     public string InputHint { get; init; } = DefaultInputHint;
 

@@ -7,7 +7,7 @@ namespace LocalDm.Infrastructure.Voice;
 /// <summary>
 /// 微软 Edge-TTS 客户端与原生音频播放器。
 ///
-/// 当环境里有 python 与 edge-tts 时，调用 edge_speak.py（经 sounddevice/PortAudio 播放
+/// 当环境里有 python 与 edge-tts 时，调用 edge_speak.py（经 Windows MCI 播放
 /// 微软神经音色，默认 zh-CN-YunxiNeural 沉稳男声）；若环境不可用、网络波动或超时，
 /// 自动优雅降级，允许上层退回 Windows 本地 SAPI。
 ///
@@ -212,8 +212,7 @@ public static class EdgeTtsEngine
 
     /// <summary>
     /// 探测 python 与脚本真正需要的依赖。
-    /// 只验 <c>python -m edge_tts</c> 是不够的：soundfile / sounddevice（PortAudio）
-    /// 缺失时探测会通过，之后每次播音都起进程再失败。
+    /// 播放使用 Windows 自带的 MCI，不要求安装 sounddevice / PortAudio。
     /// </summary>
     private static bool Probe()
     {
@@ -227,15 +226,17 @@ public static class EdgeTtsEngine
         Process? proc = null;
         try
         {
-            proc = Process.Start(new ProcessStartInfo
+            var startInfo = new ProcessStartInfo
             {
                 FileName = python,
-                Arguments = "-c \"import edge_tts, soundfile, sounddevice\"",
                 CreateNoWindow = true,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-            });
+            };
+            startInfo.ArgumentList.Add("-c");
+            startInfo.ArgumentList.Add("import edge_tts, soundfile");
+            proc = Process.Start(startInfo);
 
             if (proc is null)
             {

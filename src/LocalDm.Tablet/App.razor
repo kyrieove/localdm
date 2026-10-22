@@ -7,11 +7,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <base href="/" />
     <link rel="stylesheet" href="reader.css" />
+    <link rel="stylesheet" href="custom.css" />
     <HeadOutlet />
 </head>
 
 <body>
-    <Router AppAssembly="typeof(Program).Assembly">
+    <Router AppAssembly="typeof(TabletWebHost).Assembly">
         <Found Context="routeData">
             <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
             <FocusOnNavigate RouteData="routeData" Selector="h1" />

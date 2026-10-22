@@ -18,6 +18,43 @@
 
             <Border Height="1" Background="{StaticResource Rule}" Margin="0,22,0,0" />
 
+            <Border x:Name="TabletConnectionSection" DataContext="{Binding Tablet}" Padding="18" Margin="0,22,0,0"
+                    Background="{StaticResource PaperDeep}" BorderBrush="{StaticResource Rule}" BorderThickness="1" CornerRadius="8">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,20,0">
+                            <TextBlock Text="平板连接" FontSize="17" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding StoryTitle}" Style="{StaticResource ChatMeta}" Margin="0,6,0,0" />
+                        </StackPanel>
+                        <Button x:Name="TabletConnectionToggle" Grid.Column="1" Content="{Binding ToggleLabel}"
+                                Command="{Binding ToggleCommand}" Style="{StaticResource QuietButton}" Padding="16,8" />
+                    </Grid>
+                    <TextBlock x:Name="TabletConnectionStatus" Text="{Binding Status}" TextWrapping="Wrap"
+                               Style="{StaticResource ChatMeta}" Margin="0,12,0,0" />
+                    <Grid Margin="0,16,0,0" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Image x:Name="TabletQrCode" Source="{Binding QrCode}" Width="180" Height="180"
+                               RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                        <StackPanel Grid.Column="1" Margin="20,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="电脑和平板连同一个 Wi-Fi 后，扫码或打开下面的网址。" TextWrapping="Wrap" />
+                            <ComboBox x:Name="TabletAddressSelector" ItemsSource="{Binding Addresses}"
+                                      SelectedItem="{Binding SelectedAddress}" Margin="0,12,0,12" />
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="电脑打开" Command="{Binding OpenCommand}" Style="{StaticResource QuietButton}" Padding="12,6" Margin="0,0,8,0" />
+                                <Button Content="复制网址" Command="{Binding CopyCommand}" Style="{StaticResource QuietButton}" Padding="12,6" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
             <!-- ===== 声音 ===== -->
             <TextBlock Text="声音" Style="{StaticResource RailLabel}" Margin="0,26,0,4" />
 
@@ -78,38 +115,6 @@
                 <TextBlock Grid.Column="1" Text="使用系统设置" Style="{StaticResource ChatMeta}"
                            VerticalAlignment="Center" />
             </Grid>
-
-            <!-- 本机 VoxCPM 音色：完全在本机合成，口播内容不出本机 -->
-            <Expander Margin="0,16,0,0" Foreground="{StaticResource InkSoft}">
-                <Expander.Header>
-                    <TextBlock Text="本机音色（VoxCPM）" FontSize="13" Foreground="{StaticResource Muted}" />
-                </Expander.Header>
-                <StackPanel Margin="0,14,0,0">
-                    <TextBlock Text="模型目录或仓库名" Style="{StaticResource RailLabel}" Margin="0,0,0,6" />
-                    <TextBox x:Name="VoxCpmModelBox"
-                             Text="{Binding VoxCpmModelPath, UpdateSourceTrigger=PropertyChanged}" />
-                    <TextBlock Text="留空表示不启用。可以填本机已下载的模型目录，也可以填 openbmb/VoxCPM2 这样的仓库名（首次使用会下载权重）。"
-                               Style="{StaticResource ChatMeta}" Margin="0,8,0,0" TextWrapping="Wrap" />
-
-                    <TextBlock Text="音色描述" Style="{StaticResource RailLabel}" Margin="0,14,0,6" />
-                    <TextBox x:Name="VoxCpmDesignBox"
-                             Text="{Binding VoxCpmVoiceDesign, UpdateSourceTrigger=PropertyChanged}" />
-                    <TextBlock Text="用一句话描述想要的声音，例如「沉稳的中年男声」。留空表示不启用音色设计。"
-                               Style="{StaticResource ChatMeta}" Margin="0,8,0,0" TextWrapping="Wrap" />
-
-                    <TextBlock Text="克隆用的参考音频" Style="{StaticResource RailLabel}" Margin="0,14,0,6" />
-                    <TextBox x:Name="VoxCpmReferenceBox"
-                             Text="{Binding VoxCpmReferenceAudio, UpdateSourceTrigger=PropertyChanged}" />
-                    <TextBlock Text="填一段本机音频的完整路径，用它的音色朗读。音频是你自己的素材，只在本机使用。"
-                               Style="{StaticResource ChatMeta}" Margin="0,8,0,0" TextWrapping="Wrap" />
-
-                    <TextBlock Text="Python 解释器" Style="{StaticResource RailLabel}" Margin="0,14,0,6" />
-                    <TextBox x:Name="VoxCpmPythonBox"
-                             Text="{Binding VoxCpmPythonPath, UpdateSourceTrigger=PropertyChanged}" />
-                    <TextBlock Text="留空时依次使用环境变量 LOCALDM_VOXCPM_PYTHON 与 python。需要装好 voxcpm 依赖才能用。"
-                               Style="{StaticResource ChatMeta}" Margin="0,8,0,0" TextWrapping="Wrap" />
-                </StackPanel>
-            </Expander>
 
             <Border Height="1" Background="{StaticResource Rule}" Margin="0,20,0,0" />
 

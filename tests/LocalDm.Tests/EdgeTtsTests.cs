@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.IO;
 using LocalDm.Core.Domain;
 using LocalDm.Infrastructure.Voice;
 
@@ -67,6 +69,45 @@ public sealed class EdgeTtsTests
         var second = EdgeTtsEngine.IsAvailable();
 
         Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public void Edge_engine_probe_checks_only_python_packages_used_by_the_player()
+    {
+        var python = Environment.GetEnvironmentVariable("LOCALDM_PYTHON_PATH");
+        if (string.IsNullOrWhiteSpace(python) || !File.Exists(python))
+        {
+            python = "python";
+        }
+
+        var imports = false;
+        try
+        {
+            using var proc = Process.Start(new ProcessStartInfo
+            {
+                FileName = python,
+                ArgumentList = { "-c", "import edge_tts, soundfile" },
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            });
+            imports = proc is not null && proc.WaitForExit(5000) && proc.ExitCode == 0;
+            if (proc is { HasExited: false })
+            {
+                proc.Kill(entireProcessTree: true);
+            }
+        }
+        catch
+        {
+            imports = false;
+        }
+
+        var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        var scriptExists = File.Exists(Path.Combine(baseDir, "edge_speak.py"))
+            || File.Exists(Path.Combine(baseDir, "Voice", "edge_speak.py"));
+
+        Assert.Equal(scriptExists && imports, EdgeTtsEngine.IsAvailable());
     }
 
     /// <summary>
@@ -183,6 +224,22 @@ public sealed class EdgeTtsTests
 
         // 没有 Edge 依赖时，列表里不应有神经音色。
         Assert.DoesNotContain(voices, v => v.Name.StartsWith("zh-CN-", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Edge_voice_list_keeps_existing_voice_ids_when_available()
+    {
+        var edge = new FakeEdgeTtsEngine(available: true, succeeds: true);
+        using var tts = new TtsService(edge);
+
+        var edgeVoices = tts.GetChineseVoices()
+            .Where(v => v.Name.StartsWith("zh-CN-", StringComparison.OrdinalIgnoreCase))
+            .Select(v => v.Name)
+            .ToArray();
+
+        Assert.Equal(
+            ["zh-CN-YunxiNeural", "zh-CN-YunjianNeural", "zh-CN-XiaoxiaoNeural"],
+            edgeVoices);
     }
 
     [Fact]

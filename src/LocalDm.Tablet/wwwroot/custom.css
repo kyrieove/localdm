@@ -1,0 +1,3 @@
+/* 可编辑的平板样式。保存后在平板刷新网页生效，不需要重新编译 EXE。
+   示例：:root { --paper: #fffaf0; }
+   原有 reader.css / reader-pagination.js / tablet-shell.js 也保留为外部文件。 */

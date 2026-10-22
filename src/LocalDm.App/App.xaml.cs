@@ -43,6 +43,19 @@ public partial class App : Application
             };
 
             MainWindow = window;
+            var closing = false;
+            var stopping = false;
+            window.Closing += async (_, args) =>
+            {
+                if (closing) { return; }
+                args.Cancel = true;
+                if (stopping) { return; }
+                stopping = true;
+                window.IsEnabled = false;
+                try { await _composition.StopTabletAsync(); }
+                catch (Exception ex) { LogCrash("TabletShutdown", ex.GetType().Name); }
+                finally { closing = true; window.Close(); }
+            };
             window.Closed += (_, _) =>
             {
                 // 正常关闭不是崩溃，不写 crash.log：那份日志只放异常，

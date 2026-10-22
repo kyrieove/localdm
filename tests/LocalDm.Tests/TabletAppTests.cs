@@ -18,6 +18,24 @@ public sealed class TabletAppTests : IDisposable
 {
     private readonly List<HttpClient> _clients = [];
 
+    [Fact]
+    public async Task Css_and_javascript_assets_are_revalidated_after_changes()
+    {
+        using var host = TabletBlazorHost.Start(RepoRoot("LocalDm.Tablet.csproj"));
+        using var client = new HttpClient
+        {
+            BaseAddress = new Uri($"http://127.0.0.1:{host.Port}"),
+        };
+
+        foreach (var path in new[] { "/reader.css", "/reader-pagination.js" })
+        {
+            using var response = await client.GetAsync(path, TestContext.Current.CancellationToken);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("no-cache", response.Headers.CacheControl?.ToString());
+        }
+    }
+
     public void Dispose()
     {
         foreach (var client in _clients)
@@ -235,15 +253,21 @@ public sealed class TabletAppTests : IDisposable
         // 起始进度是位置 0：第一页开头，不是「没有进度」。
         var initial = await client.GetStringAsync("/tablet/role/progress", ct);
         Assert.Contains("\"characterOffset\":0", initial, StringComparison.Ordinal);
+        Assert.Contains("\"preferText\":false", initial, StringComparison.Ordinal);
+        Assert.Contains("\"sourcePageNumber\":1", initial, StringComparison.Ordinal);
+        Assert.Contains("\"columns\":2", initial, StringComparison.Ordinal);
 
         // 读了一段之后保存：偏移量与设置都要原样回来。
         var saved = await client.PostAsync(
             "/tablet/role/progress",
-            JsonContent.Create(new { characterOffset = 480L, fontSize = 22, lineSpacing = "2.2", focusMode = true }),
+            JsonContent.Create(new { characterOffset = 480L, fontSize = 22, lineSpacing = "2.2", focusMode = true, preferText = true, sourcePageNumber = 2, columns = 1 }),
             ct);
         Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
 
         var reloaded = await client.GetStringAsync("/tablet/role/progress", ct);
+        Assert.Contains("\"preferText\":true", reloaded, StringComparison.Ordinal);
+        Assert.Contains("\"sourcePageNumber\":2", reloaded, StringComparison.Ordinal);
+        Assert.Contains("\"columns\":1", reloaded, StringComparison.Ordinal);
         Assert.Contains("\"characterOffset\":480", reloaded, StringComparison.Ordinal);
         Assert.Contains("\"fontSize\":22", reloaded, StringComparison.Ordinal);
         Assert.Contains("\"lineSpacing\":\"2.2\"", reloaded, StringComparison.Ordinal);

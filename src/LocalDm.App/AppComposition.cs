@@ -23,6 +23,7 @@ public sealed class AppComposition : IDisposable
     private readonly SessionContext _context;
     private readonly Task _ttsWarmup;
     private HostViewModel? _host;
+    private TabletJoinViewModel? _tablet;
 
     private AppComposition(
         SessionContext context,
@@ -78,8 +79,7 @@ public sealed class AppComposition : IDisposable
             BaseUri = settings.MagpieBaseUri,
             CallerKey = context.Settings.LoadCallerKey(settings.CallerKeyRef),
         };
-        var tts = new TtsService(new SystemEdgeTtsEngine(), new VoxCpmEngine(
-            () => VoxCpmOptions.FromSettings(context.Settings.Load())));
+        var tts = new TtsService();
         var director = new HostDirector(magpie, tts);
         var input = new HostInputController(new HostIntentRouter());
 
@@ -126,6 +126,24 @@ public sealed class AppComposition : IDisposable
             });
         var library = new LibraryViewModel(Path.Combine(_context.DataRoot, "packages"));
         _host = host;
+        var tablet = new TabletJoinViewModel(new CurrentSessionPublicFeedSource(
+            (LocalDm.Core.Ports.IPublicMessageFeed)_context.Store, () => host.Session));
+        setup.Tablet = tablet;
+        _tablet = tablet;
+
+        async Task LoadCurrentPackageAsync(ScriptPackage package)
+        {
+            // 先关旧局的网页，再换桌面会话，避免旧卡目录读到新局的消息。
+            var row = library.Packages.FirstOrDefault(p => p.PackageId == package.PackageId);
+            await tablet.SetPackageAsync(package, row?.FilePath, async () =>
+            {
+                await host.LoadPackageAsync(package);
+                if (!ReferenceEquals(host.Session.Package, package))
+                {
+                    throw new InvalidOperationException("桌面剧本未装载完成，平板服务保持关闭。");
+                }
+            });
+        }
 
         // 导入向导：识别与建包走同一份服务，起草流程用同一个模型。
         // 服务每次现造：设置页刚改的 MinerU / OCR 路径立刻生效。
@@ -166,8 +184,8 @@ public sealed class AppComposition : IDisposable
         {
             try
             {
-                await host.LoadPackageAsync(package);
                 await library.LoadAsync(CancellationToken.None);
+                await LoadCurrentPackageAsync(package);
                 shell.ShowHostCommand.Execute(null);
             }
             catch (Exception ex)
@@ -180,7 +198,7 @@ public sealed class AppComposition : IDisposable
         {
             try
             {
-                await host.LoadPackageAsync(package);
+                await LoadCurrentPackageAsync(package);
             }
             catch (Exception ex)
             {
@@ -211,7 +229,7 @@ public sealed class AppComposition : IDisposable
         {
             try
             {
-                await host.LoadPackageAsync(package);
+                await LoadCurrentPackageAsync(package);
                 shell.ShowHostCommand.Execute(null);
                 // 这一局已经接上了，首页那张卡片不再有代表性。
                 library.ClearResumable();
@@ -242,7 +260,7 @@ public sealed class AppComposition : IDisposable
         {
             try
             {
-                await host.LoadDemoAsync();
+                await tablet.SetPackageAsync(null, null, () => host.LoadDemoAsync());
                 shell.ShowHostCommand.Execute(null);
             }
             catch (Exception ex)
@@ -320,8 +338,14 @@ public sealed class AppComposition : IDisposable
 
     private ToolSettings? _currentSettings;
 
+    public Task StopTabletAsync() => _tablet?.DisposeAsync().AsTask() ?? Task.CompletedTask;
+
     public void Dispose()
     {
+        if (_tablet is not null)
+        {
+            Task.Run(async () => await _tablet.DisposeAsync()).GetAwaiter().GetResult();
+        }
         _host?.Dispose();
         Tts.Dispose();
         Magpie.Dispose();

@@ -138,10 +138,6 @@ public sealed class SettingsStore
             MineruExecutable = dto.MineruExecutable,
             OcrPythonPath = dto.OcrPythonPath,
             VoiceId = dto.VoiceId,
-            VoxCpmVoiceDesign = dto.VoxCpmVoiceDesign,
-            VoxCpmReferenceAudio = dto.VoxCpmReferenceAudio,
-            VoxCpmModelPath = dto.VoxCpmModelPath,
-            VoxCpmPythonPath = dto.VoxCpmPythonPath,
             InputHint = dto.InputHint ?? ToolSettings.Default.InputHint,
             // 旧设置文件没有这一项：默认自动朗读，与旧行为一致。
             AutoRead = dto.AutoRead ?? true,
@@ -197,10 +193,6 @@ public sealed class SettingsStore
         MineruExecutable = settings.MineruExecutable,
         OcrPythonPath = settings.OcrPythonPath,
         VoiceId = settings.VoiceId,
-        VoxCpmVoiceDesign = settings.VoxCpmVoiceDesign,
-        VoxCpmReferenceAudio = settings.VoxCpmReferenceAudio,
-        VoxCpmModelPath = settings.VoxCpmModelPath,
-        VoxCpmPythonPath = settings.VoxCpmPythonPath,
         InputHint = settings.InputHint,
         AutoRead = settings.AutoRead,
         ContextWindowTokens = settings.ContextWindowTokens,
@@ -328,18 +320,6 @@ public sealed class SettingsStore
         public string? OcrPythonPath { get; set; }
 
         public string? VoiceId { get; set; }
-
-        /// <summary>可空：旧设置文件没有这一项时没有 VoxCPM 音色。</summary>
-        public string? VoxCpmVoiceDesign { get; set; }
-
-        /// <summary>可空：旧设置文件没有这一项时不启用克隆音色。</summary>
-        public string? VoxCpmReferenceAudio { get; set; }
-
-        /// <summary>可空：旧设置文件没有这一项时不启用 VoxCPM。</summary>
-        public string? VoxCpmModelPath { get; set; }
-
-        /// <summary>可空：旧设置文件没有这一项时退回环境变量与 python。</summary>
-        public string? VoxCpmPythonPath { get; set; }
 
         public string? InputHint { get; set; }
 

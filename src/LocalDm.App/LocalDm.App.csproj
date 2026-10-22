@@ -14,11 +14,31 @@
 
   <ItemGroup>
     <PackageReference Include="System.Speech" />
+    <PackageReference Include="QRCoder" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\LocalDm.Core\LocalDm.Core.csproj" />
     <ProjectReference Include="..\LocalDm.Infrastructure\LocalDm.Infrastructure.csproj" />
+    <ProjectReference Include="..\LocalDm.Tablet\LocalDm.Tablet.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\LocalDm.Tablet\wwwroot\**\*" Link="wwwroot\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\prepare\editable-release.md" Link="使用说明.md"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\packaging\windows\THIRD-PARTY-NOTICES.txt" Link="THIRD-PARTY-NOTICES.txt"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="PublishTabletHostScript" AfterTargets="Publish">
+    <MSBuild Projects="..\LocalDm.Tablet\LocalDm.Tablet.csproj" Targets="GetBlazorHostScript"
+             Properties="Configuration=$(Configuration);RuntimeIdentifier=$(RuntimeIdentifier)">
+      <Output TaskParameter="TargetOutputs" ItemName="TabletHostScript" />
+    </MSBuild>
+    <Copy SourceFiles="@(TabletHostScript)" DestinationFolder="$(PublishDir)wwwroot\_framework" />
+  </Target>
 
 </Project>

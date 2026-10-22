@@ -11,4 +11,22 @@
     <ProjectReference Include="..\LocalDm.Core\LocalDm.Core.csproj" />
   </ItemGroup>
 
+  <!-- WPF 宿主没有 Web SDK 的静态资产发布步骤，显式传递框架脚本。 -->
+  <Target Name="IncludeBlazorHostScript" AfterTargets="AssignTargetPaths"
+          Condition="Exists('$(BlazorFrameworkStaticWebAssetRoot)\blazor.web.js')">
+    <ItemGroup>
+      <ContentWithTargetPath Include="$(BlazorFrameworkStaticWebAssetRoot)\blazor.web.js"
+               Link="wwwroot\_framework\blazor.web.js" TargetPath="wwwroot\_framework\blazor.web.js"
+               CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="GetBlazorHostScript" Returns="@(BlazorHostScript)">
+    <Error Condition="!Exists('$(BlazorFrameworkStaticWebAssetRoot)\blazor.web.js')"
+           Text="找不到 Blazor 浏览器脚本，请先还原 Tablet 项目依赖。" />
+    <ItemGroup>
+      <BlazorHostScript Include="$(BlazorFrameworkStaticWebAssetRoot)\blazor.web.js" />
+    </ItemGroup>
+  </Target>
+
 </Project>

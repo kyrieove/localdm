@@ -51,9 +51,18 @@ public sealed record ReadingSettings
     /// <summary>专注模式：隐藏目录与页脚，只留正文。</summary>
     public bool FocusMode { get; init; }
 
+    /// <summary>原稿可用时默认直接阅读原稿；识别文字重排由玩家主动选择。</summary>
+    public bool PreferText { get; init; }
+
+    public int SourcePageNumber { get; init; } = 1;
+
+    public int Columns { get; init; } = 2;
+
     public static ReadingSettings Clamp(ReadingSettings settings) => settings with
     {
         FontSize = Math.Clamp(settings.FontSize, MinFontSteps, MaxFontSteps),
+        SourcePageNumber = Math.Max(1, settings.SourcePageNumber),
+        Columns = Math.Clamp(settings.Columns, 1, 2),
         LineSpacing = settings.LineSpacing switch
         {
             SpacingCompact => SpacingCompact,

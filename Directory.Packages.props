@@ -12,6 +12,7 @@
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.13" />
     <PackageVersion Include="System.Speech" Version="10.0.13" />
+    <PackageVersion Include="QRCoder" Version="1.7.0" />
     <PackageVersion Include="MinVer" Version="8.0.0" />
     <PackageVersion Include="xunit.v3" Version="4.0.2" />
     <PackageVersion Include="Microsoft.Testing.Platform.MSBuild" Version="2.5.1" />

@@ -28,10 +28,6 @@ public sealed class SetupViewModel : ObservableObject
     private string _callerKeyState = "未配置 caller key（本机 Magpie 通常不需要）。";
     private string _mineruExecutable = string.Empty;
     private string _ocrPythonPath = string.Empty;
-    private string _voxcpmModelPath = string.Empty;
-    private string _voxcpmVoiceDesign = string.Empty;
-    private string _voxcpmReferenceAudio = string.Empty;
-    private string _voxcpmPythonPath = string.Empty;
     private bool _autoRead = true;
     private int _contextWindowTokens = ToolSettings.DefaultContextWindowTokens;
     private double _uiScale = ToolSettings.DefaultUiScale;
@@ -58,6 +54,8 @@ public sealed class SetupViewModel : ObservableObject
     public ObservableCollection<string> AvailableModels { get; } = [];
 
     public ObservableCollection<VoiceOption> AvailableVoices { get; } = [];
+
+    public TabletJoinViewModel? Tablet { get; set; }
 
     public string Status
     {
@@ -193,34 +191,6 @@ public sealed class SetupViewModel : ObservableObject
         set => SetProperty(ref _ocrPythonPath, value);
     }
 
-    /// <summary>VoxCPM 模型目录或 HuggingFace 仓库名；留空表示不启用 VoxCPM。</summary>
-    public string VoxCpmModelPath
-    {
-        get => _voxcpmModelPath;
-        set => SetProperty(ref _voxcpmModelPath, value);
-    }
-
-    /// <summary>VoxCPM 音色设计的自然语言描述；留空表示不启用音色设计。</summary>
-    public string VoxCpmVoiceDesign
-    {
-        get => _voxcpmVoiceDesign;
-        set => SetProperty(ref _voxcpmVoiceDesign, value);
-    }
-
-    /// <summary>VoxCPM 克隆音色的参考音频路径；留空表示不启用克隆。</summary>
-    public string VoxCpmReferenceAudio
-    {
-        get => _voxcpmReferenceAudio;
-        set => SetProperty(ref _voxcpmReferenceAudio, value);
-    }
-
-    /// <summary>跑 VoxCPM 的 Python 解释器；留空则依次退回环境变量与 python。</summary>
-    public string VoxCpmPythonPath
-    {
-        get => _voxcpmPythonPath;
-        set => SetProperty(ref _voxcpmPythonPath, value);
-    }
-
     public bool Busy
     {
         get => _busy;
@@ -262,14 +232,17 @@ public sealed class SetupViewModel : ObservableObject
         _loadedVoiceId = VoiceId;
         MineruExecutable = _settings.MineruExecutable ?? string.Empty;
         OcrPythonPath = _settings.OcrPythonPath ?? string.Empty;
-        VoxCpmModelPath = _settings.VoxCpmModelPath ?? string.Empty;
-        VoxCpmVoiceDesign = _settings.VoxCpmVoiceDesign ?? string.Empty;
-        VoxCpmReferenceAudio = _settings.VoxCpmReferenceAudio ?? string.Empty;
-        VoxCpmPythonPath = _settings.VoxCpmPythonPath ?? string.Empty;
         CallerKeyState = string.IsNullOrWhiteSpace(_settings.CallerKeyRef)
             ? "未配置 caller key（本机 Magpie 通常不需要）。"
             : "已配置 caller key（DPAPI 加密，不显示明文）。";
         RefreshVoices();
+
+        // 空设置表示跟随默认音色（优先 Edge）；RefreshVoices 选出的本地兜底只是当前可用项，
+        // 不能当成主持人明确选择并写回设置。
+        if (string.IsNullOrWhiteSpace(_settings.VoiceId))
+        {
+            _loadedVoiceId = VoiceId;
+        }
     }
 
     private async Task CheckConnectionAsync()
@@ -315,10 +288,6 @@ public sealed class SetupViewModel : ObservableObject
                 ContextWindowTokens = ContextWindowTokens,
                 UiScale = UiScale,
                 ChatWidthMode = ChatWidthMode,
-                VoxCpmModelPath = VoxCpmModelPath,
-                VoxCpmVoiceDesign = VoxCpmVoiceDesign,
-                VoxCpmReferenceAudio = VoxCpmReferenceAudio,
-                VoxCpmPythonPath = VoxCpmPythonPath,
             };
             await _settingsStore.SaveAsync(_settings, CancellationToken.None);
             SettingsSaved?.Invoke(this, _settings);
@@ -363,7 +332,7 @@ public sealed class SetupViewModel : ObservableObject
             AvailableVoices.Add(new VoiceOption(voice));
         }
 
-        if (string.IsNullOrWhiteSpace(VoiceId) && AvailableVoices.Count > 0)
+        if (AvailableVoices.Count > 0 && !AvailableVoices.Any(v => v.Name == VoiceId))
         {
             VoiceId = AvailableVoices[0].Name;
         }
@@ -440,10 +409,6 @@ public sealed class SetupViewModel : ObservableObject
                 ContextWindowTokens = ContextWindowTokens,
                 UiScale = UiScale,
                 ChatWidthMode = ChatWidthMode,
-                VoxCpmModelPath = string.IsNullOrWhiteSpace(VoxCpmModelPath) ? null : VoxCpmModelPath.Trim(),
-                VoxCpmVoiceDesign = string.IsNullOrWhiteSpace(VoxCpmVoiceDesign) ? null : VoxCpmVoiceDesign.Trim(),
-                VoxCpmReferenceAudio = string.IsNullOrWhiteSpace(VoxCpmReferenceAudio) ? null : VoxCpmReferenceAudio.Trim(),
-                VoxCpmPythonPath = string.IsNullOrWhiteSpace(VoxCpmPythonPath) ? null : VoxCpmPythonPath.Trim(),
             };
             _settings.Validate();
             await _settingsStore.SaveAsync(_settings, CancellationToken.None);

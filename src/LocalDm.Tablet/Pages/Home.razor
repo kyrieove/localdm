@@ -5,7 +5,7 @@
 @inject NavigationManager Nav
 @inject IJSRuntime Js
 @inject IPublicFeedSource Feed
-@implements IDisposable
+@implements IAsyncDisposable
 @* 交互渲染模式必须显式声明：只注册 AddInteractiveServerComponents 不会让按钮生效。 *@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 
@@ -129,7 +129,11 @@
                     <p class="lead">只读。提问、推进、投票和揭秘都在电脑上完成。</p>
                     @if (PublicFeed.Count == 0)
                     {
-                        <p class="lead">还没有公开消息：电脑那边还没把这一局的对话接过来。</p>
+                        <p class="lead">@(_publicSessionId.Length == 0 ? "电脑尚未接入本局公开对话。" : "本局还没有公开消息，电脑上的公开发言会自动显示在这里。")</p>
+                    }
+                    @if (_feedFailed)
+                    {
+                        <p class="lead">公开对话暂时未同步，正在重试。</p>
                     }
                     <ol class="feed">
                         @foreach (var line in PublicFeed)
@@ -160,7 +164,12 @@
     private string RoleName => State.Roles.First(r => r.RoleId == State.Session(_sessionKey).RoleId).DisplayName;
 
     /// <summary>公开对话：来自服务端给的公开消息来源，跟电脑那边说的是同一份。</summary>
-    private IReadOnlyList<(string Kind, string Text)> PublicFeed { get; set; } = [];
+    private List<(string Kind, string Text)> PublicFeed { get; } = [];
+    private readonly CancellationTokenSource _feedCancellation = new();
+    private Task? _feedPolling;
+    private string _publicSessionId = string.Empty;
+    private long _publicSequence;
+    private bool _feedFailed;
 
     protected override async Task OnInitializedAsync()
     {
@@ -168,16 +177,43 @@
         _sessionKey = TabletSessions.KeyFor(Http.HttpContext) ?? string.Empty;
         TabletSessions.Changed += OnAnySessionChanged;
         await LoadPublicFeedAsync();
+        _feedPolling = PollPublicFeedAsync();
     }
 
     /// <summary>读公开消息。空的一段就说实话：还没有公开消息。</summary>
     private async Task LoadPublicFeedAsync()
     {
-        var snapshot = await Feed.ReadAsync(0, CancellationToken.None);
-        PublicFeed = snapshot.Messages
-            .Select(m => (Kind: KindOf(m.Kind), Text: m.Text))
-            .ToArray();
-        StateHasChanged();
+        try
+        {
+            var snapshot = await Feed.ReadAsync(_publicSequence, _feedCancellation.Token);
+            if (snapshot.SessionId != _publicSessionId)
+            {
+                _publicSessionId = snapshot.SessionId;
+                _publicSequence = 0;
+                PublicFeed.Clear();
+                snapshot = await Feed.ReadAsync(0, _feedCancellation.Token);
+            }
+            PublicFeed.AddRange(snapshot.Messages.Where(m => m.Sequence > _publicSequence)
+                .Select(m => (Kind: KindOf(m.Kind), Text: m.Text)));
+            _publicSequence = snapshot.NextSequence;
+            _feedFailed = false;
+        }
+        catch (OperationCanceledException) when (_feedCancellation.IsCancellationRequested) { }
+        catch (Exception) { _feedFailed = true; }
+        if (_tab == TabPublic) { StateHasChanged(); }
+    }
+
+    private async Task PollPublicFeedAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_feedCancellation.Token))
+            {
+                await InvokeAsync(LoadPublicFeedAsync);
+            }
+        }
+        catch (OperationCanceledException) when (_feedCancellation.IsCancellationRequested) { }
     }
 
     private static string KindOf(PublicMessageKind kind) => kind switch
@@ -187,7 +223,13 @@
         _ => "event",
     };
 
-    void IDisposable.Dispose() => TabletSessions.Changed -= OnAnySessionChanged;
+    public async ValueTask DisposeAsync()
+    {
+        TabletSessions.Changed -= OnAnySessionChanged;
+        _feedCancellation.Cancel();
+        if (_feedPolling is not null) { await _feedPolling; }
+        _feedCancellation.Dispose();
+    }
 
     /// <summary>任何会话变化都重画：别的设备认领后，这里的「已被认领」要立刻更新。</summary>
     private void OnAnySessionChanged() => InvokeAsync(StateHasChanged);

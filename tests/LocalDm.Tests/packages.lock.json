@@ -204,6 +204,8 @@
         "dependencies": {
           "LocalDm.Core": "[1.0.0, )",
           "LocalDm.Infrastructure": "[1.0.0, )",
+          "LocalDm.Tablet": "[1.0.0, )",
+          "QRCoder": "[1.7.0, )",
           "System.Speech": "[10.0.13, )"
         }
       },
@@ -242,6 +244,12 @@
           "SQLitePCLRaw.bundle_e_sqlite3": "2.1.13",
           "SQLitePCLRaw.core": "2.1.13"
         }
+      },
+      "QRCoder": {
+        "type": "CentralTransitive",
+        "requested": "[1.7.0, )",
+        "resolved": "1.7.0",
+        "contentHash": "6R3hQkayihGIDjp3F1nLRDBWG+nqahGyOY2+fH4Rll16Vad67oaUUfHkOiMWKiJFnGh+PIGDfUos+0R9m54O1g=="
       },
       "System.Speech": {
         "type": "CentralTransitive",

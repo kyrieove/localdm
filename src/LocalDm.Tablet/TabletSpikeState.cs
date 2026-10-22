@@ -65,6 +65,7 @@ public sealed class TabletSpikeState
             session.RoleId = roleId;
             session.SelectedCardId = null;
             session.ReadingOffset = 0;
+            session.Settings = session.Settings with { SourcePageNumber = 1 };
             return true;
         }
     }
@@ -77,6 +78,7 @@ public sealed class TabletSpikeState
             session.RoleId = null;
             session.SelectedCardId = null;
             session.ReadingOffset = 0;
+            session.Settings = session.Settings with { SourcePageNumber = 1 };
         }
     }
 

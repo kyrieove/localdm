@@ -13,6 +13,71 @@ namespace LocalDm.UiTests;
 public sealed class SetupViewTests
 {
     [Fact]
+    public async Task Load_replaces_unavailable_saved_voice_with_first_available_voice()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            var settingsPath = Path.Combine(root.Path, "settings.json");
+            var secretsDir = Path.Combine(root.Path, "secrets");
+            var store = new SettingsStore(settingsPath, secretsDir);
+            await store.SaveAsync(ToolSettings.Default with { VoiceId = "retired-voice-id" }, CancellationToken.None);
+
+            var gateway = new StubGateway();
+            var tts = new SilentTts();
+            var director = new HostDirector(gateway, tts);
+            var setup = new SetupViewModel(store, gateway, tts, director);
+            await setup.LoadAsync(CancellationToken.None);
+
+            Assert.Equal("测试音色", setup.VoiceId);
+        });
+    }
+
+    [Fact]
+    public async Task Setup_defaults_to_edge_and_only_persists_an_explicit_local_voice_choice()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            var settingsPath = Path.Combine(root.Path, "settings.json");
+            var secretsDir = Path.Combine(root.Path, "secrets");
+            var store = new SettingsStore(settingsPath, secretsDir);
+            var gateway = new StubGateway();
+            var director = new HostDirector(gateway, new SilentTts());
+            const string localVoice = "Microsoft Kangkang";
+
+            var withoutEdge = new SilentTts(new TtsVoice { Name = localVoice, Culture = "zh-CN" });
+            var firstSetup = new SetupViewModel(store, gateway, withoutEdge, director);
+            await firstSetup.LoadAsync(CancellationToken.None);
+            Assert.Equal(localVoice, firstSetup.VoiceId);
+
+            var firstSave = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            firstSetup.SettingsSaved += (_, _) => firstSave.TrySetResult();
+            firstSetup.SaveCommand.Execute(null);
+            await firstSave.Task;
+            Assert.Null(store.Load().VoiceId);
+
+            var withEdge = new SilentTts(
+                new TtsVoice { Name = "zh-CN-YunxiNeural", Culture = "zh-CN" },
+                new TtsVoice { Name = localVoice, Culture = "zh-CN" });
+            var secondSetup = new SetupViewModel(store, gateway, withEdge, director);
+            await secondSetup.LoadAsync(CancellationToken.None);
+            Assert.Equal("zh-CN-YunxiNeural", secondSetup.VoiceId);
+
+            secondSetup.VoiceId = localVoice;
+            var secondSave = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            secondSetup.SettingsSaved += (_, _) => secondSave.TrySetResult();
+            secondSetup.SaveCommand.Execute(null);
+            await secondSave.Task;
+            Assert.Equal(localVoice, store.Load().VoiceId);
+
+            var thirdSetup = new SetupViewModel(store, gateway, withEdge, director);
+            await thirdSetup.LoadAsync(CancellationToken.None);
+            Assert.Equal(localVoice, thirdSetup.VoiceId);
+        });
+    }
+
+    [Fact]
     public async Task Busy_transition_raises_save_and_check_voices_can_execute_changed()
     {
         await WpfRunner.RunAsync(async () =>
@@ -71,10 +136,15 @@ public sealed class SetupViewTests
 
     private sealed class SilentTts : ITtsService
     {
+        private readonly IReadOnlyList<TtsVoice> _voices;
+
+        public SilentTts(params TtsVoice[] voices) => _voices = voices.Length == 0
+            ? [new TtsVoice { Name = "测试音色", Culture = "zh-CN" }]
+            : voices;
+
         public bool IsSpeaking => false;
 
-        public IReadOnlyList<TtsVoice> GetChineseVoices() =>
-            [new TtsVoice { Name = "测试音色", Culture = "zh-CN" }];
+        public IReadOnlyList<TtsVoice> GetChineseVoices() => _voices;
 
         public Task SpeakAsync(SpeechItem item, string? voiceId, CancellationToken cancellationToken) =>
             Task.CompletedTask;

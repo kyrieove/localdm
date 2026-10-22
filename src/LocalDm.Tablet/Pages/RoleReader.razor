@@ -2,21 +2,32 @@
 @implements IAsyncDisposable
 @inject IJSRuntime Js
 
-<div class="reader @(_activeSettings.FocusMode ? "focus" : "")" style="--body-size:@(_activeSettings.FontSize)px;--leading:@_activeSettings.LineSpacing">
+<div class="reader @(IsSourceMode ? "source-mode" : "text-mode") @(_activeSettings.FocusMode ? "focus" : "")" style="--body-size:@(_activeSettings.FontSize)px;--leading:@_activeSettings.LineSpacing;--reader-columns:@_activeSettings.Columns">
     <div class="reader-bar">
         <span class="crumb">@RoleName</span>
         <div class="reader-tools">
-            <span class="page-read">第 @(_index + 1) / @_total 页</span>
-            <button class="tool" @onclick="ToggleSettings" aria-expanded="@_settingsOpen">Aa</button>
-            <button class="tool" @onclick="ToggleFocus">@(_activeSettings.FocusMode ? "退出专注" : "专注")</button>
-            @if (Book?.SourcePageAssetIds.Count > 0)
+            <span class="page-read">第 @(IsSourceMode ? SourcePageLabel : (_index + 1).ToString()) / @(IsSourceMode ? SourcePageCount : _total) 页</span>
+            @if (SourcePageCount > 0)
             {
-                <button class="tool" @onclick="() => _showSource = !_showSource">@(_showSource ? "收起原稿" : "查看原稿")</button>
+                <button class="tool" aria-pressed="@IsSourceMode" @onclick="() => SetModeAsync(false)">原稿</button>
             }
+            <button class="tool" aria-pressed="@(!IsSourceMode)" @onclick="() => SetModeAsync(true)">文字重排</button>
+            <button class="tool" @onclick="ToggleColumnsAsync">@(_activeSettings.Columns == 1 ? "双栏" : "单栏")</button>
+            @if (IsSourceMode)
+            {
+                <button class="tool" @onclick="() => { _fitPage = !_fitPage; _sourceZoom = 1; }">@(_fitPage ? "适合宽度" : "整页")</button>
+                <button class="tool" aria-label="缩小原稿" disabled="@(_sourceZoom <= 0.5)" @onclick="() => ZoomSource(-0.25)">−</button>
+                <button class="tool" aria-label="放大原稿" disabled="@(_sourceZoom >= 3)" @onclick="() => ZoomSource(0.25)">＋</button>
+            }
+            else
+            {
+                <button class="tool" @onclick="ToggleSettings" aria-expanded="@_settingsOpen">Aa</button>
+            }
+            <button class="tool" @onclick="ToggleFocus">@(_activeSettings.FocusMode ? "退出专注" : "专注")</button>
         </div>
     </div>
 
-    @if (_settingsOpen)
+    @if (_settingsOpen && !IsSourceMode)
     {
         <div class="settings">
             <h2>按你的习惯阅读</h2>
@@ -40,13 +51,20 @@
     }
 
     <div class="reader-body">
-        @if (_showSource)
+        @if (IsSourceMode)
         {
-            <figure class="source-shot">
-                <img src="/tablet/role/source/@_sourcePage" alt="本人角色本原稿第 @_sourcePage 页" />
-                <figcaption>原稿第 @_sourcePage 页，仅用于核对识别文字。</figcaption>
+            <figure @key="SourcePage" class="source-shot @(_fitPage ? "fit-page" : "fit-width")" style="--source-zoom:@_sourceZoom.ToString(System.Globalization.CultureInfo.InvariantCulture)">
+                <div class="source-pages">
+                    @for (var pg = SourcePage; pg <= SourcePageEnd; pg++)
+                    {
+                        <img src="/tablet/role/source/@pg" alt="本人角色本原稿第 @pg 页" />
+                    }
+                </div>
+                <figcaption>原稿第 @SourcePageLabel 页，保留原文文字、颜色与排版。</figcaption>
             </figure>
         }
+        else
+        {
         <header class="chapter-head">
             <div class="chapter-meta"><span class="line"></span><span>@_chapterLabel</span></div>
             @if (Book is not null)
@@ -64,12 +82,13 @@
             <article class="page-body measure" aria-hidden="true" @ref="_measure"></article>
             <article class="page-body" tabindex="0" aria-label="当前页正文" @ref="_body"></article>
         </div>
+        }
     </div>
     <footer class="reader-foot">
-        <div class="foot-left"><span>@_chapterLabel · @_chapterTitle</span><span class="muted">按文本位置记录进度</span></div>
+        <div class="foot-left"><span>@(IsSourceMode ? $"原稿 · 第 {SourcePageLabel} / {SourcePageCount} 页" : $"{_chapterLabel} · {_chapterTitle}")</span><span class="muted">@(IsSourceMode ? "可缩放查看" : "识别文字可能有误，以原稿为准")</span></div>
         <div class="page-controls">
-            <button class="arrow" @onclick="() => Turn(-1)" disabled="@(_index <= 0)" aria-label="上一页">‹</button>
-            <button class="arrow" @onclick="() => Turn(1)" disabled="@(_index >= _total - 1)" aria-label="下一页">›</button>
+            <button class="arrow" @onclick="() => Turn(-1)" disabled="@(IsSourceMode ? SourcePage <= 1 : _index <= 0)" aria-label="上一页">‹</button>
+            <button class="arrow" @onclick="() => Turn(1)" disabled="@(IsSourceMode ? SourcePageEnd >= SourcePageCount : _index >= _total - 1)" aria-label="下一页">›</button>
         </div>
     </footer>
 </div>
@@ -86,7 +105,8 @@
     private bool _needsPagination;
     private bool _disposed;
     private bool _settingsOpen;
-    private bool _showSource;
+    private bool _fitPage;
+    private double _sourceZoom = 1;
     private long _offset;
     private int _index;
     private int _total;
@@ -100,6 +120,12 @@
     [Parameter] public ReadingSettings Settings { get; set; } = new();
     [Parameter] public long Offset { get; set; }
     [Parameter] public EventCallback<ReadingProgressUpdate> OnProgress { get; set; }
+
+    private int SourcePageCount => Book?.SourcePageAssetIds.Count ?? 0;
+    private int SourcePage => Math.Clamp(_activeSettings.SourcePageNumber, 1, Math.Max(1, SourcePageCount));
+    private int SourcePageEnd => Math.Min(SourcePage + _activeSettings.Columns - 1, SourcePageCount);
+    private string SourcePageLabel => SourcePage == SourcePageEnd ? SourcePage.ToString() : $"{SourcePage}～{SourcePageEnd}";
+    private bool IsSourceMode => SourcePageCount > 0 && !_activeSettings.PreferText;
 
     protected override void OnParametersSet()
     {
@@ -121,6 +147,7 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (IsSourceMode || _disposed) return;
         if (_disposed || Book is null || (!_needsMount && !_needsPagination)) return;
         if (_needsMount)
         {
@@ -157,6 +184,12 @@
 
     private async Task Turn(int delta)
     {
+        if (IsSourceMode)
+        {
+            _activeSettings = _activeSettings with { SourcePageNumber = Math.Clamp(SourcePage + delta * _activeSettings.Columns, 1, SourcePageCount) };
+            await OnProgress.InvokeAsync(new ReadingProgressUpdate(_offset, _activeSettings));
+            return;
+        }
         if (!_mounted) return;
         await Js.InvokeVoidAsync("tabletReader.turn", delta);
         await SyncStateAsync();
@@ -195,6 +228,32 @@
     }
 
     private void ToggleSettings() => _settingsOpen = !_settingsOpen;
+    private void ZoomSource(double delta)
+    {
+        _fitPage = false;
+        _sourceZoom = Math.Clamp(_sourceZoom + delta, 0.5, 3);
+    }
+
+    private async Task ToggleColumnsAsync()
+    {
+        _activeSettings = _activeSettings with { Columns = _activeSettings.Columns == 1 ? 2 : 1 };
+        _needsPagination = true;
+        await OnProgress.InvokeAsync(new ReadingProgressUpdate(_offset, _activeSettings));
+    }
+
+    private async Task SetModeAsync(bool preferText)
+    {
+        var sourcePage = !preferText && _mounted ? _sourcePage : SourcePage;
+        if (_mounted)
+        {
+            await Js.InvokeVoidAsync("tabletReader.reset");
+            _mounted = false;
+        }
+        _activeSettings = _activeSettings with { PreferText = preferText, SourcePageNumber = sourcePage };
+        _needsMount = preferText;
+        _settingsOpen = false;
+        await OnProgress.InvokeAsync(new ReadingProgressUpdate(_offset, _activeSettings));
+    }
     private void ToggleFocus() => SetSettings(_activeSettings with { FocusMode = !_activeSettings.FocusMode });
     private void ChangeFont(int delta) => SetSettings(_activeSettings with { FontSize = _activeSettings.FontSize + delta });
     private void OnSpacingChanged(ChangeEventArgs args) => SetSettings(_activeSettings with { LineSpacing = args.Value?.ToString() ?? ReadingSettings.SpacingRelaxed });
