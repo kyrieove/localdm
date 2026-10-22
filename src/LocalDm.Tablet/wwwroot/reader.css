@@ -286,3 +286,100 @@ button:focus-visible, select:focus-visible, input:focus-visible {
 @media (min-width: 835px) {
     .page-window { height: min(66vh, 720px); height: min(66svh, 720px); }
 }
+
+/* ===== 第二版视觉：大触控目标、卡片化、暗光房间 =====
+   只改外观，不改页面结构与分页脚本。可在 custom.css 里继续覆盖。 */
+html, body { font-size: 16px; -webkit-text-size-adjust: 100%; }
+.shell-bar { position: sticky; top: 0; z-index: 5; padding: 12px 24px; }
+.shell-title { font-size: 15px; }
+.shell-role { font-size: 14px; color: var(--ink-soft); padding: 4px 12px; background: var(--paper-deep); border-radius: 999px; }
+.shell-right { display: flex; align-items: center; gap: 10px; }
+
+.join { max-width: 880px; padding: 40px 24px; margin: 0 auto; }
+.join h1 { font-size: 32px; }
+.lead { font-size: 15px; max-width: 38em; }
+.address { border-radius: 10px; padding: 18px; }
+.address label { font-size: 12px; }
+.address-row input { border-radius: 8px; font-size: 15px; min-height: 48px; }
+.address-row button { border-radius: 8px; min-height: 48px; padding: 0 22px; font-size: 15px; }
+.hint { font-size: 13px; }
+
+.role-list, .card-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+}
+.role-list li, .card-list li { border: 0; }
+.role-list button, .card-list button {
+    min-height: 76px;
+    padding: 14px 18px;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 4px;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    background: var(--paper);
+    transition: border-color .15s, background-color .15s, transform .1s;
+}
+.role-list button:hover:not(:disabled), .card-list button:hover:not(:disabled) { background: var(--paper); border-color: var(--seal); }
+.role-list button:active:not(:disabled), .card-list button:active:not(:disabled) { transform: scale(.985); }
+.role-list button:disabled { opacity: 1; background: var(--paper-deep); color: var(--muted); border-style: dashed; }
+.role-name, .card-name { font: 500 18px/1.4 var(--serif); }
+.role-sub, .card-sub { font-size: 13px; color: var(--muted); }
+.role-list button:not(:disabled) .role-sub { color: var(--seal); }
+.card-list button.active { border-color: var(--seal); background: var(--paper); box-shadow: inset 3px 0 0 var(--seal); }
+.card-list button.unavailable { opacity: 1; background: var(--paper-deep); border-style: dashed; }
+.warn { font-size: 15px; }
+.ok { font-size: 15px; }
+
+.tabs { position: sticky; top: 55px; z-index: 4; padding: 0 24px; }
+.tabs button { font-size: 15px; padding: 14px 20px; min-height: 52px; }
+.tabs button.active { font-weight: 600; border-bottom-width: 3px; }
+
+.cards, .public { max-width: 880px; margin: 0 auto; padding: 28px 24px; }
+.cards h2, .public h2 { font-size: 26px; }
+.shot img { border-radius: 8px; box-shadow: 0 6px 24px rgba(41, 40, 35, .12); }
+
+.public .feed { display: flex; flex-direction: column; gap: 10px; }
+.public .feed li { border: 0; padding: 12px 16px; border-radius: 14px; font-size: 16px; max-width: 80%; background: var(--paper); border: 1px solid var(--rule); }
+.public .feed li.host { align-self: flex-start; border-top-left-radius: 4px; }
+.public .feed li.player { align-self: flex-end; border-top-right-radius: 4px; background: var(--paper-deep); }
+.public .feed li.event { align-self: center; max-width: 100%; background: none; border: 0; font-size: 13px; }
+
+.reader { border-radius: 10px; }
+.tool { font-size: 15px; border-radius: 8px; }
+.tool[aria-pressed="true"] { background: var(--paper-deep); color: var(--ink); font-weight: 600; }
+.page-read, .crumb { font-size: 14px; }
+.arrow { border-radius: 10px; width: 52px; height: 52px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+@media (max-width: 640px) {
+    .join { padding: 24px 14px; }
+    .join h1 { font-size: 26px; }
+    .role-list, .card-list { grid-template-columns: 1fr 1fr; }
+    .role-name, .card-name { font-size: 16px; }
+    .tabs button { padding: 12px 12px; font-size: 14px; }
+    .public .feed li { max-width: 92%; }
+}
+
+/* 房间偏暗：跟随系统深色。纸变墨、墨变纸，印章红提亮以保持对比。 */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --paper: #23221e;
+        --paper-deep: #1a1916;
+        --ink: #ece8de;
+        --ink-soft: #b9b3a5;
+        --rule: #3a382f;
+        --seal: #d6806f;
+        --muted: #988f7e;
+        color-scheme: dark;
+    }
+    .address-row button { background: var(--ink); color: var(--paper-deep); border-color: var(--ink); }
+    .address-row button:hover { color: #fff; }
+    .shot img, .source-shot img { background: #fff; box-shadow: none; }
+}
+.foot-left { font-size: 14px; }
+.foot-left .muted { font-size: 12px; }
+.reader-chapters .tool { font-size: 14px; }

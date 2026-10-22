@@ -10,7 +10,7 @@
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="34,34,34,30" MaxWidth="880" HorizontalAlignment="Left">
+        <StackPanel Margin="34,34,34,30" MaxWidth="880" HorizontalAlignment="Stretch">
             <!-- 扉页 -->
             <TextBlock Text="剧本库" Style="{StaticResource Display}" FontSize="26" />
             <TextBlock Text="选一本准备完成的剧本，或接着上次的进度继续。"

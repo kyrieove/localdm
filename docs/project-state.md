@@ -156,3 +156,9 @@ tasks.md 的完成状态见其末尾「实施状态」表（59 已完成 / 5 部
 `.specify/extensions.yml` 不存在，因此 before/after implement 钩子无注册项可执行。
 设计验证命令仍是 `scripts/validate-planning.ps1`（校验设计文件、任务格式/编号/故事、12 条约束及活动功能），本轮实际运行通过。
 真实剧本 `stories/`、运行数据与密钥由 `.gitignore` 排除（含 `fixtures/synthetic/.private/` 的合成真值）。
+
+## 2026-10-23 收拢与视觉打磨
+
+- 把工作区里别的助手留下的未提交改动收拢提交（移除 VoxCPM、平板服务接入 WPF 同进程、可编辑发布目录），并修复 `RoleReader.razor` 里循环变量 `page` 与 Razor `@page` 指令冲突导致的构建失败。
+- 平板网页视觉第二版（仅 CSS，`reader.css` 末尾）：角色与线索卡改大触控卡片网格、公共对话气泡化、页签吸顶、字号整体上调、跟随系统深色模式；桌面剧本库内容列改为居中。
+- 实测：构建 0 警告 0 错误；`LocalDm.Tests` 401 项（395 通过 / 6 项人工授权跳过 / 0 失败）；`LocalDm.UiTests` 40 项通过。`Edge_engine_probe_checks_only_python_packages_used_by_the_player` 在整套并行运行时偶发失败（探测 5 秒超时，单跑通过），属环境负载问题，未改动。
