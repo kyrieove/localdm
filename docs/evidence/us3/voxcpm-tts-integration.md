@@ -122,8 +122,31 @@ Of the allocated memory 1.36 GiB is allocated by PyTorch
 1. **模型档位必须可配置**，不能写死 VoxCPM2。换一台显存或内存更充裕的机器、或先关掉几个占内存的程序，档位就该能换。因此 `VoxCpmModelPath` 是设置项。
 2. **本机当前无法完成端到端朗读验收。** 这一点必须如实标注，不能用「编译通过」「单元测试通过」冒充「声音读出来了」。
 
-## 5. 上游 API 核实（已读源码，非凭 README）
+## 5. 引擎运行时行为（已执行，通过）
 
+`.local/voxcpm-probe/probe3.py` 实测：
+
+```
+=== 1. python 侧依赖探测 ===
+  voxcpm 可导入: C:\Users\ASUS\AppData\Roaming\Python\Python310\site-packages\voxcpm\__init__.py
+  torch=2.6.0+cu124 cuda=True
+=== 2. worker 握手（用假模型目录验证失败路径）===
+  worker 存在: True
+  退出码: 1
+  stdout 首行: {"ok": false, "error": "模型加载失败：Repo id must use alphanumeric chars, ..."}
+  是合法 JSON: True, ok=False
+```
+
+确认了三点：
+
+1. 依赖探测在装有 voxcpm 的机器上返回可用。
+2. 模型缺失时 worker 回**一行合法 JSON**（`ok=false` + 干净的诊断文本），不是崩溃、不是 traceback。
+   这正是 `.NET` 侧 `TrySpeakAsync` 判定失败并降级所依赖的信号。
+3. worker 的用法校验（缺模型目录参数）退出码为 2，符合脚本约定。
+
+worker 语法检查用 `ast.parse` 通过。
+
+## 6. 上游 API 核实（已读源码，非凭 README）
 核对 `src/voxcpm/core.py` 与 `src/voxcpm/model/voxcpm2.py` 确认：
 
 - `VoxCPM.from_pretrained(hf_model_id, load_denoiser=True, optimize=True, device=None, cache_dir=None, local_files_only=False)`；`hf_model_id` 可为本地目录或 HF 仓库名，内部经 `resolve_model_path` 处理。
@@ -133,7 +156,7 @@ Of the allocated memory 1.36 GiB is allocated by PyTorch
 - `prompt_wav_path` 与 `prompt_text` 必须同时提供或同时为 None。
 - 采样率取 `model.tts_model.sample_rate`。
 
-## 6. 本次实现（代码层面，已完成）
+## 7. 本次实现（代码层面，已完成）
 
 | 项 | 状态 |
 |---|---|
@@ -149,7 +172,7 @@ Of the allocated memory 1.36 GiB is allocated by PyTorch
 
 降级链固定为：**所选引擎 → Edge 神经音色 → Windows 内置音色**。任何一级失败都不会丢掉口播文字。
 
-## 7. 未执行与受阻
+## 8. 未执行与受阻
 
 | 项 | 状态 | 原因 |
 |---|---|---|
