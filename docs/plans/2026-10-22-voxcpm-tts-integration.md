@@ -174,15 +174,16 @@ VoxCPM 的标识带参数（描述或参考音频路径），因为上游 `gener
 
 ## 5. 实施范围
 
-### 做
+### 做（已实施）
 
-1. `src/LocalDm.Core/Ports/ExternalPorts.cs`：`TtsVoice` 加 `Engine` 字段；新增 `TtsEngineKind` 枚举。
-2. `src/LocalDm.Infrastructure/Voice/ITtsEngine.cs`：泛化后的引擎契约（`IEdgeTtsEngine` 迁过来）。
-3. `src/LocalDm.Infrastructure/Voice/VoxCpmEngine.cs`：探测依赖、拉起常驻 python 进程、发 JSON 行、收结果。
-4. `src/LocalDm.Infrastructure/Voice/voxcpm_worker.py`：常驻 worker。stdin 收 `{"text": ..., "design": ..., "reference_wav": ...}`，产出 wav 到 stdout 或临时文件，播放后回一行状态。
-5. `src/LocalDm.Infrastructure/Voice/TtsService.cs`：按 `voice.Engine` 分派，三级降级链。
-6. 设置页：VoxCPM 相关配置（python 路径、模型目录、启用与否），与现有 `SetupViewModel` 一致。
-7. 测试：引擎分派、降级链、标识解析，全部不依赖本机是否装了 python。
+1. `src/LocalDm.Core/Ports/ExternalPorts.cs`：`TtsVoice` 加 `Engine` 字段；新增 `TtsEngineKind` 枚举。✓
+2. `src/LocalDm.Infrastructure/Voice/ITtsEngine.cs`：泛化后的引擎契约。✓
+   另加 `EdgeTtsVoiceEngine.cs`（Edge 的新实现）与 `TtsVoiceId.cs`（VoxCPM 标识解析）。✓
+3. `src/LocalDm.Infrastructure/Voice/VoxCpmEngine.cs`：探测依赖、拉起常驻 python 进程、发 JSON 行、收结果。✓
+4. `src/LocalDm.Infrastructure/Voice/voxcpm_worker.py`：常驻 worker。stdin 收 `{"text": ..., "design": ..., "reference_wav": ...}`，播放后回一行状态。✓
+5. `src/LocalDm.Infrastructure/Voice/TtsService.cs`：按 `voice.Engine` 分派，三级降级链。✓
+6. 设置项：`ToolSettings` 四个字段、`SettingsStore` 序列化、`SetupViewModel`、`SetupView.xaml`、`AppComposition` 装配。✓
+7. 测试：`TtsEngineRoutingTests`、`VoxCpmVoiceTests`，不依赖本机是否装了 python。✓
 
 ### 不做
 
@@ -192,21 +193,24 @@ VoxCPM 的标识带参数（描述或参考音频路径），因为上游 `gener
 
 ## 6. 探针结果
 
-见 `docs/evidence/us3/voxcpm-tts-integration.md`。
+见 `docs/evidence/us3/voxcpm-tts-integration.md`。三档模型推理全部失败，
+根因是本机系统提交额度耗尽而非显存不足；引擎运行时行为（依赖探测、
+worker 握手失败回合法 JSON 即降级信号）已实测通过。
 
 ## 7. 风险
 
 | 风险 | 应对 |
 |---|---|
-| 6GB 显存跑不动 VoxCPM2 | 探针实测；不行则退 VoxCPM1.5（0.75GB 权重，且不支持隔离克隆），或让模型目录可配置 |
-| 首次加载慢（几十秒） | 提示里明说；后台预热（仿 `EdgeTtsEngine.WarmUpAsync`） |
+| 本机提交额度不足，跑不动任何档位 | 已定位根因（页面文件固定 32GB 且已占 16GB，其余被 qemu 与 22 个 claude 进程占掉）。释放内存或扩大页面文件后可重跑探针。**这条是环境问题，不是代码问题** |
+| 显存不够跑 VoxCPM2 | 模型目录可配置：换机器或换档位即可，不用改代码 |
+| 首次加载慢（几十秒） | worker 握手有 5 分钟上限；探测不加载模型，不拖慢界面 |
 | Windows 依赖必须 `--no-deps` 手工装 | 写清安装步骤；探测不到就报「未安装」并降级，不假装可用 |
 | 参考音频是用户私有素材 | 只存路径，不拷进仓库、不外发 |
 | 推理时 GPU 占用影响其它程序 | 属用户机器上的正常占用，不额外隔离 |
 
 ## 8. 验收口径
 
-- `dotnet build LocalDm.slnx`、`dotnet test tests/LocalDm.Tests`、`dotnet test tests/LocalDm.UiTests` 全通过。
-- 未装 VoxCPM 的机器上，音色列表与朗读行为与现在一致（降级链不回归）。
-- 装了 VoxCPM 的机器上，能用设计音色与克隆音色各读出一句中文，且音频时长与文本长度相符。
-- 不在本机装 VoxCPM 的测试环境不因此变红：引擎探测与降级路径用替身测。
+- `dotnet build LocalDm.slnx`、`dotnet test tests/LocalDm.Tests`、`dotnet test tests/LocalDm.UiTests` 全通过。**已达成**（单元 386 通过 / 0 失败 / 7 跳过，界面 34 通过 / 0 失败）。
+- 未装 VoxCPM 的机器上，音色列表与朗读行为与现在一致（降级链不回归）。**已达成**（用替身测）。
+- 不在本机装 VoxCPM 的测试环境不因此变红。**已达成**。
+- 装了 VoxCPM 的机器上，能用设计音色与克隆音色各读出一句中文，且音频时长与文本长度相符。**未达成**：本机提交额度不足，见证据文档的「未执行与受阻」。
