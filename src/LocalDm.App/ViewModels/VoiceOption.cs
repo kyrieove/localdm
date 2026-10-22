@@ -1,4 +1,5 @@
 using LocalDm.Core.Ports;
+using LocalDm.Infrastructure.Voice;
 
 namespace LocalDm.App.ViewModels;
 
@@ -14,10 +15,10 @@ public sealed record VoiceOption(TtsVoice Voice)
     public string Name => Voice.Name;
 
     /// <summary>下拉框里显示的中文名。</summary>
-    public string DisplayName => TtsVoiceDisplay.For(Voice.Name);
+    public string DisplayName => TtsVoiceDisplay.For(Voice);
 
     /// <summary>完整说明，给悬停提示用。</summary>
-    public string Description => TtsVoiceDisplay.Describe(Voice.Name);
+    public string Description => TtsVoiceDisplay.Describe(Voice);
 }
 
 /// <summary>音色标识 → 面向用户的中文名。</summary>
@@ -26,6 +27,18 @@ public static class TtsVoiceDisplay
     /// <summary>
     /// 下拉框里显示的名字。要短：下拉框宽度有限，名字太长会被截断成「云希（微软神经 · 悬疑叙事」。
     /// </summary>
+    public static string For(TtsVoice voice)
+    {
+        if (voice.Engine == TtsEngineKind.VoxCpm)
+        {
+            var spec = TtsVoiceId.ParseVoxCpm(voice.Name);
+            return spec is null ? voice.Name : VoxCpmVoices.DisplayName(spec);
+        }
+
+        return For(voice.Name);
+    }
+
+    /// <summary>按标识显示的中文名。保留给不认识引擎的调用方。</summary>
     public static string For(string name) => name switch
     {
         "zh-CN-YunxiNeural" => "云希 · 微软神经男声",
@@ -42,6 +55,18 @@ public static class TtsVoiceDisplay
     /// 完整说明（含气质描述），给悬停提示用。
     /// 气质描述对主持人选音色有用，但不该占下拉框的宽度。
     /// </summary>
+    public static string Describe(TtsVoice voice)
+    {
+        if (voice.Engine == TtsEngineKind.VoxCpm)
+        {
+            var spec = TtsVoiceId.ParseVoxCpm(voice.Name);
+            return spec is null ? voice.Name : VoxCpmVoices.Describe(spec);
+        }
+
+        return Describe(voice.Name);
+    }
+
+    /// <summary>按标识显示的完整说明。保留给不认识引擎的调用方。</summary>
     public static string Describe(string name) => name switch
     {
         "zh-CN-YunxiNeural" => "云希（微软神经 · 悬疑叙事男声）",

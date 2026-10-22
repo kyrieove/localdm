@@ -78,7 +78,8 @@ public sealed class AppComposition : IDisposable
             BaseUri = settings.MagpieBaseUri,
             CallerKey = context.Settings.LoadCallerKey(settings.CallerKeyRef),
         };
-        var tts = new TtsService();
+        var tts = new TtsService(new SystemEdgeTtsEngine(), new VoxCpmEngine(
+            () => VoxCpmOptions.FromSettings(context.Settings.Load())));
         var director = new HostDirector(magpie, tts);
         var input = new HostInputController(new HostIntentRouter());
 

@@ -9,11 +9,14 @@
 
 ## 0. 接手时先做的三件事
 
-**当前接续点，2026-10-22 三方工作合并与验收修复**：Gemini、DeepSeek、MiniMax 三条分支
-（`agent/gemini`、`agent/deepseek`、`codex/luna-acceptance-fixes`）已全部合进 `main`
-（`f845191` 修九项验收问题、`3eb94df` 合 deepseek、`bc82c7f` 合 gemini、`fdce55a` 修用例），
-已推送 `origin/main`。独立验收报告见 `docs/reviews/2026-10-22-three-agent-acceptance.md`，
-那九项问题的修复要点如下（详见报告与 `f845191` 的提交说明）：
+**当前接续点，2026-10-22 三方工作合并、验收修复与 VoxCPM 音色**：本轮把四条分支
+（`agent/gemini`、`agent/deepseek`、`codex/luna-acceptance-fixes`、`agent/voxcpm`）
+全部合进 `main` 并推送 `origin/main`。
+
+**三方工作与九项验收修复**（`f845191` 修九项验收问题、`3eb94df` 合 deepseek、
+`bc82c7f` 合 gemini、`fdce55a` 修用例）：独立验收报告见
+`docs/reviews/2026-10-22-three-agent-acceptance.md`，九项问题的修复要点如下
+（详见报告与 `f845191` 的提交说明）：
 
 - 单卡版式要人确认：未确认的整版多卡图不再当 Ready 单卡发出去，改为暂停该组。
 - 资产文件名按内容指纹命名，分组名净化后不再互相覆盖；取图按清单核对冻结 hash，
@@ -29,10 +32,32 @@
 平板服务与开关、正式二维码入口、真实局的公共消息接进网页、真实 iPad/安卓平板验收。
 目前「单卡确认」只有命令行 `--prepare-tablet` 一条路。
 
-**注意 `D:\2\dev\dm-minimax` 工作树**：另一个助手正在那里做 VoxCPM TTS（未提交、未合并，
-与本轮平板工作无关）。那个工作树的分支 `codex/luna-acceptance-fixes` 现在落后于 `main`
-（`main` 已含它的全部提交并追加了上面的修复）；它完工后先把 `main` 合进那个工作树再提交，
-不要用旧基线直接推 `main`。
+**2026-10-22 VoxCPM 本机音色（分支 `agent/voxcpm`，独立 worktree `D:\2\dev\dm-voxcpm`，现已合进 `main`）**：
+接入第三条朗读路径，完全本机的神经音色，口播内容不出本机。提交 `5119730`。
+方案见 `docs/plans/2026-10-22-voxcpm-tts-integration.md`，实测见
+`docs/evidence/us3/voxcpm-tts-integration.md`。
+
+**这条线还没跑通声音**：本机三档模型（VoxCPM2 / 1.5 / 0.5B）推理全部失败，
+根因是**系统提交额度耗尽**（本机只剩 7.46 GB，页面文件固定 32 GB 且已占 16 GB），
+不是显存不足。要在本机验收，先释放内存或扩大页面文件，再跑
+`.local/voxcpm-probe/probe2.py cuda openbmb/VoxCPM2` 拿实测数字。
+**不要**把「编译通过」「单元测试通过」当成「声音能读出来」。
+
+架构上两处不是照抄 Edge：`TtsVoice.Engine` 表达引擎归属（不再靠音色名前缀判断），
+VoxCPM 走常驻 python 进程（加载一次模型，每句只付推理成本）。
+降级链：所选引擎 → Edge → Windows 内置；主持人明确选了 Windows 音色时不退回 Edge。
+Windows 上装 voxcpm 必须 `--no-deps`（`pynini`/`wetext` 全版本无 Windows wheel），
+安装说明按证据文档里实测的那条写。
+
+**并行推进的规矩**：仓库里同时有多个会话在改同一个仓库，**各用各的 worktree**
+（`git worktree add D:\2\dev\dm-<名字> -b agent/<名字> <基线提交>`）。
+共用一个工作目录会互相覆盖——本轮就撞上过，正在写的新文件被别的会话的
+`git checkout` 冲掉。已有 worktree：`dm`（main）、`dm-deepseek`、`dm-gemini`、
+`dm-minimax`、`dm-voxcpm`。
+
+**`D:\2\dev\dm-minimax` 工作树里的残留**：那里面还留着平板修复的旧改动
+（已进 `main`）和 VoxCPM 的早期文件副本（已在 `dm-voxcpm` 提交并合进 `main`）；
+可以直接丢弃，但别在别的会话还在用那个工作树时动它。
 
 **2026-10-22 本机代理补充（分支 `agent/minimax`，现已合进 `main`）**：新增公开消息记录
 （桌面出口 → `public_messages` 表 ✓；平板端点 `GET /tablet/public?after=N` 的契约 ✓），
