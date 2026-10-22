@@ -488,6 +488,59 @@ public sealed class DmConversationTests : IDisposable
         Assert.DoesNotContain("玩家：第 2 问", dialogue, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Manual_compaction_on_a_short_session_says_the_conversation_is_still_too_short()
+    {
+        // 只聊了一轮，从没整理过：这时候点「压缩上下文」，要说清是对话太短，
+        // 不能说她「最近 2 轮之前的对话都整理过了」—— 那一次都没发生过。
+        var gateway = new ScriptedGateway();
+        var host = await NewHostAsync(gateway);
+        await host.LoadDemoAsync();
+
+        await SendAsync(host, "第一问");
+        Assert.Equal(0, host.Conversation.CompactionCount);
+        var requestsBeforeCompact = gateway.Requests.Count;
+
+        // 按钮此时是灰的，所以直接走整句输入这条路
+        await SendAsync(host, "/compact");
+        await WaitUntilAsync(() => host.Status.Contains("暂时没有需要整理", StringComparison.Ordinal));
+
+        Assert.Equal("对话还太短，暂时没有需要整理的内容。", host.Status);
+        Assert.Equal(0, host.Conversation.CompactionCount);
+        Assert.Null(host.Conversation.Memo);
+        Assert.Equal(requestsBeforeCompact, gateway.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Manual_compaction_with_nothing_new_keeps_the_original_hint()
+    {
+        // 先真整理一次，再聊到「最近 2 轮之前又没有新内容」时再点一次：
+        // 这种情况才该说「之前的对话都整理过了」，而且同样不发请求。
+        var gateway = new ScriptedGateway();
+        var host = await NewHostAsync(gateway);
+        await host.LoadDemoAsync();
+
+        for (var i = 0; i < 3; i++)
+        {
+            await SendAsync(host, $"第 {i} 问");
+        }
+
+        host.CompactCommand.Execute(null);
+        await WaitUntilAsync(() => host.Conversation.CompactionCount == 1);
+        Assert.Equal(1, host.Conversation.CompactionCount);
+
+        // 整理后只剩最近 2 轮原话：这时候再整理，前面已经没有可整理的内容
+        Assert.False(ContextBudget.CanCompact(host.Conversation));
+        var requestsAfterFirst = gateway.Requests.Count;
+
+        host.CompactCommand.Execute(null);
+        await WaitUntilAsync(() => host.Status.Contains("都整理过了", StringComparison.Ordinal));
+
+        Assert.Equal("最近 2 轮之前的对话都整理过了，这次没有需要整理的内容。", host.Status);
+        Assert.Equal(1, host.Conversation.CompactionCount);
+        Assert.Equal(requestsAfterFirst, gateway.Requests.Count);
+    }
+
     // ===== 窗口本身就装不下 =====
 
     [Fact]
