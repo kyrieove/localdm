@@ -24,9 +24,17 @@ public interface ITabletContent
 
     /// <summary>
     /// 取一张卡的图片字节。
-    /// 取不到就返回 false：不拿别的图顶替，也不返回整页图。
+    ///
+    /// 取不到就返回 false，并给出失败原因：「这一组暂停分发」和「没有这张卡」
+    /// 是两回事 —— 前者是 409（换组别的卡），后者是 404。
+    /// 不拿别的图顶替，也不返回整页图。
     /// </summary>
-    bool TryGetCardImage(string cardId, TabletCardSide side, out byte[] bytes, out string contentType);
+    bool TryGetCardImage(
+        string cardId,
+        TabletCardSide side,
+        out byte[] bytes,
+        out string contentType,
+        out TabletQueryFailure failure);
 
     /// <summary>取角色本的原稿页图片（只给本人）。</summary>
     bool TryGetRoleSourcePage(string roleId, int pageNumber, out byte[] bytes, out string contentType);
@@ -57,12 +65,24 @@ public sealed class SpikeTabletContent : ITabletContent
 
     public IReadOnlyDictionary<string, RoleBookText> RoleBooks => _data.RoleBooks;
 
-    public bool TryGetCardImage(string cardId, TabletCardSide side, out byte[] bytes, out string contentType)
+    public bool TryGetCardImage(
+        string cardId,
+        TabletCardSide side,
+        out byte[] bytes,
+        out string contentType,
+        out TabletQueryFailure failure)
     {
         bytes = [];
         contentType = "application/octet-stream";
+        failure = TabletQueryFailure.NotFound;
 
         if (side != TabletCardSide.Front)
+        {
+            failure = TabletQueryFailure.NoBackSide;
+            return false;
+        }
+
+        if (!_data.Cards.Any(c => c.CardId == cardId))
         {
             return false;
         }
@@ -70,11 +90,13 @@ public sealed class SpikeTabletContent : ITabletContent
         var path = Path.Combine(_data.AssetRoot, cardId + ".png");
         if (!File.Exists(path))
         {
+            failure = TabletQueryFailure.AssetMissing;
             return false;
         }
 
         bytes = File.ReadAllBytes(path);
         contentType = "image/png";
+        failure = TabletQueryFailure.None;
         return true;
     }
 

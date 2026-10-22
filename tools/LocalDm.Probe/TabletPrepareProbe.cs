@@ -86,6 +86,17 @@ internal static class TabletPrepareProbe
         Console.WriteLine($"内容指纹：{prepared.ContentHash}");
         Console.WriteLine($"清单：卡 {manifest.Cards.Count} 张，组 {manifest.Groups.Count} 个，准备好 {readyGroups} 组");
         Console.WriteLine($"资产：{manifest.Assets.Count} 个，目录 {manifest.AssetRootFingerprint}");
+
+        // 逐组报账：每组多少张卡、多少张没准备好。只报数字与分组名。
+        foreach (var group in manifest.Groups.Values.OrderBy(g => g.GroupName, StringComparer.Ordinal))
+        {
+            var cards = manifest.Cards.Values.Where(c => c.GroupName == group.GroupName).ToArray();
+            var ready = cards.Count(c => c.PreparationState == TabletCardPreparationState.Ready);
+            Console.WriteLine(
+                $"  组 {group.GroupName}：卡 {cards.Length}，可用 {ready}，未就绪 {group.NotReadyCardCount}"
+                + (group.IsReady ? string.Empty : $"（原因 {group.Reason}）"));
+        }
+
         Console.WriteLine($"写入：{target}");
         return 0;
     }

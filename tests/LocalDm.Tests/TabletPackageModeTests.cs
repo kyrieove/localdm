@@ -89,13 +89,81 @@ public sealed class TabletPackageModeTests : IDisposable
         Assert.Equal(0x89, source[0]);
     }
 
+    [Fact]
+    public async Task A_paused_group_is_listed_but_not_openable()
+    {
+        var (packagePath, _) = PrepareSyntheticPackage(includeBrokenGroup: true);
+
+        using var host = TabletBlazorHost.Start(
+            Project("LocalDm.Tablet.csproj"),
+            new Dictionary<string, string> { ["LOCALDM_TABLET_PACKAGE"] = packagePath });
+        using var handler = new HttpClientHandler { UseCookies = true, CookieContainer = new CookieContainer() };
+        using var client = new HttpClient(handler)
+        {
+            BaseAddress = new Uri($"http://127.0.0.1:{host.Port}"),
+            Timeout = TimeSpan.FromSeconds(30),
+        };
+        var ct = TestContext.Current.CancellationToken;
+
+        var catalog = await client.GetStringAsync("/tablet/catalog", ct);
+        using var catalogDocument = JsonDocument.Parse(catalog);
+        var cards = catalogDocument.RootElement.GetProperty("cards");
+
+        // 配不唯一的那一组：卡要在目录里（让人知道缺哪组），但标成不可用
+        var paused = cards.EnumerateArray()
+            .Where(c => c.GetProperty("groupName").GetString() == "clue-broken")
+            .ToArray();
+        Assert.NotEmpty(paused);
+        Assert.All(paused, card => Assert.False(card.GetProperty("isAvailable").GetBoolean()));
+
+        // 点它要 409（这一组暂停分发），不是 404（没有这张卡）
+        var cardId = Uri.EscapeDataString(paused[0].GetProperty("cardId").GetString()!);
+        var response = await client.GetAsync($"/tablet/cards/{cardId}/front", ct);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        // 好着的组照常能取图
+        var ready = cards.EnumerateArray()
+            .Where(c => c.GetProperty("groupName").GetString() == "clue-1")
+            .ToArray();
+        Assert.NotEmpty(ready);
+        var readyId = Uri.EscapeDataString(ready[0].GetProperty("cardId").GetString()!);
+        var readyImage = await client.GetByteArrayAsync($"/tablet/cards/{readyId}/front", ct);
+        Assert.NotEmpty(readyImage);
+    }
+
+    [Fact]
+    public async Task Package_mode_does_not_fake_the_public_dialogue()
+    {
+        var (packagePath, _) = PrepareSyntheticPackage();
+
+        using var host = TabletBlazorHost.Start(
+            Project("LocalDm.Tablet.csproj"),
+            new Dictionary<string, string> { ["LOCALDM_TABLET_PACKAGE"] = packagePath });
+        using var handler = new HttpClientHandler { UseCookies = true, CookieContainer = new CookieContainer() };
+        using var client = new HttpClient(handler)
+        {
+            BaseAddress = new Uri($"http://127.0.0.1:{host.Port}"),
+            Timeout = TimeSpan.FromSeconds(30),
+        };
+        var ct = TestContext.Current.CancellationToken;
+        await client.GetStringAsync("/", ct);
+
+        // 独立运行的服务看不到桌面那一局的对话存档：宁可空着，也不拿合成对话冒充真实本局。
+        var feed = await client.GetStringAsync("/tablet/public", ct);
+        using var feedDocument = JsonDocument.Parse(feed);
+        Assert.Equal(0, feedDocument.RootElement.GetProperty("messages").GetArrayLength());
+    }
+
     private const string SyntheticRoleBookPageText = "这是合成角色本第一页的文字。";
 
     /// <summary>
     /// 造一份合成冻结包：1 个角色（2 页）、1 组线索卡（1 张卡，正反面各一个文件），
     /// 然后按真实流程准备平板清单并写回一个新包。
     /// </summary>
-    private (string PackagePath, string CardId) PrepareSyntheticPackage()
+    /// <param name="includeBrokenGroup">
+    /// 加一组配不唯一的卡（同一个编号两张正面）：这一组必须整组暂停分发。
+    /// </param>
+    private (string PackagePath, string CardId) PrepareSyntheticPackage(bool includeBrokenGroup = false)
     {
         var sourcesDir = Path.Combine(_root, "sources");
         Directory.CreateDirectory(sourcesDir);
@@ -126,6 +194,37 @@ public sealed class TabletPackageModeTests : IDisposable
         spans.Add(Span("card-span-back", "card-7-back", 1));
         segments.Add(Segment("card-seg-front", "合成卡面文字。", SegmentVisibility.Private, "card-span-front"));
         segments.Add(Segment("card-seg-back", "合成卡背文字。", SegmentVisibility.Private, "card-span-back"));
+
+        var materials = new List<Material>
+        {
+            new()
+            {
+                MaterialId = "clue-1",
+                Label = "合成线索组",
+                SourceSpanIds = ["card-span-front", "card-span-back"],
+            },
+        };
+
+        if (includeBrokenGroup)
+        {
+            // 同一个编号两张正面：配不唯一，这一组必须整组暂停。
+            var brokenFront = Path.Combine(sourcesDir, "9.png");
+            var brokenOther = Path.Combine(sourcesDir, "9另一个.png");
+            WritePng(brokenFront, 9);
+            WritePng(brokenOther, 10);
+            files.Add(SourceFileOf("card-9", brokenFront));
+            files.Add(SourceFileOf("card-9-other", brokenOther));
+            spans.Add(Span("card-span-9", "card-9", 1));
+            spans.Add(Span("card-span-9-other", "card-9-other", 1));
+            segments.Add(Segment("card-seg-9", "合成卡面文字。", SegmentVisibility.Private, "card-span-9"));
+            segments.Add(Segment("card-seg-9-other", "合成另一张卡面。", SegmentVisibility.Private, "card-span-9-other"));
+            materials.Add(new Material
+            {
+                MaterialId = "clue-broken",
+                Label = "合成线索组：配不唯一",
+                SourceSpanIds = ["card-span-9", "card-span-9-other"],
+            });
+        }
 
         var package = new ScriptPackage
         {
@@ -158,12 +257,7 @@ public sealed class TabletPackageModeTests : IDisposable
                 IsVotePhase = false,
                 IsRevealPhase = false,
             }],
-            Materials = [new Material
-            {
-                MaterialId = "clue-1",
-                Label = "合成线索组",
-                SourceSpanIds = ["card-span-front", "card-span-back"],
-            }],
+            Materials = materials,
             Truth = new TruthSection
             {
                 RevealedSegmentIds = [],
@@ -184,7 +278,7 @@ public sealed class TabletPackageModeTests : IDisposable
             packagePath,
             JsonSerializer.Serialize(prepared, new JsonSerializerOptions { WriteIndented = true }));
 
-        var cardId = manifest.Cards.Keys.Single();
+        var cardId = manifest.Cards.Keys.First();
         return (packagePath, cardId);
     }
 
@@ -192,7 +286,8 @@ public sealed class TabletPackageModeTests : IDisposable
     {
         FileId = fileId,
         PrivatePath = path,
-        ContentHash = new string('c', 64),
+        // 真实的文件 hash：准备清单时会拿它核对源文件有没有被换过。
+        ContentHash = TabletAssetBuilder.ComputeFileHash(path),
         PageCount = 1,
         Origin = SourceOrder.PageOrder,
         ToolIdentity = "合成",

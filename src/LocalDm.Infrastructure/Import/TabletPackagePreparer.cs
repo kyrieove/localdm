@@ -55,9 +55,26 @@ public static class TabletPackagePreparer
                 if (!candidate.IsConsistent || candidate.FrontPath is null)
                 {
                     notReady++;
-                    firstReason ??= candidate.Conflicts.Count > 0
+                    var reason = candidate.Conflicts.Count > 0
                         ? candidate.Conflicts[0]
                         : TabletNotReadyReason.MissingFront;
+                    firstReason ??= reason;
+
+                    // 配不出来的卡也要进清单：目录里要让人看得到「这一组有问题」，
+                    // 只是标成不可用、点不开。少了它，这一组在平板上就像根本不存在。
+                    cards[cardId] = new TabletCard
+                    {
+                        CardId = cardId,
+                        DisplayName = DisplayName(candidate.FrontPath ?? candidate.BackPath ?? cardId),
+                        GroupName = material.MaterialId,
+                        SourceOrder = candidate.SourceOrder,
+                        FrontAssetId = cardId + "-front",
+                        BackAssetId = candidate.BackPath is null ? null : cardId + "-back",
+                        PreparationState = TabletCardPreparationState.NotReady,
+                        NotReadyReason = reason,
+                        SourceFileName = Path.GetFileNameWithoutExtension(
+                            candidate.FrontPath ?? candidate.BackPath ?? cardId),
+                    };
                     continue;
                 }
 
@@ -67,20 +84,32 @@ public static class TabletPackagePreparer
                 {
                     notReady++;
                     firstReason ??= TabletNotReadyReason.AssetMissing;
+                    cards[cardId] = UnavailableCard(cardId, material.MaterialId, candidate, TabletNotReadyReason.AssetMissing);
+                    continue;
+                }
+
+                // 源文件被换过就不能分发：包里记的是旧 hash，对不上说明这份材料已经变了。
+                var frontHash = TabletAssetBuilder.ComputeFileHash(frontFile.PrivatePath);
+                if (!string.Equals(frontHash, frontFile.ContentHash, StringComparison.OrdinalIgnoreCase))
+                {
+                    notReady++;
+                    firstReason ??= TabletNotReadyReason.AssetMissing;
+                    cards[cardId] = UnavailableCard(cardId, material.MaterialId, candidate, TabletNotReadyReason.AssetMissing);
                     continue;
                 }
 
                 var frontAssetId = cardId + "-front";
-                var frontHash = TabletAssetBuilder.ComputeFileHash(frontFile.PrivatePath);
                 var frontExtension = Path.GetExtension(frontFile.PrivatePath).TrimStart('.').ToLowerInvariant();
                 var frontRelative = $"cards/{Sanitize(frontAssetId)}.{frontExtension}";
 
                 var plan = new CardPlan
                 {
                     CardId = cardId,
-                    GroupName = material.Label,
+                    // 分组名用 MaterialId：Label 是给人看的装饰（带「线索卡牌：」与页数），
+                    // 拿它当分组名会在平板目录里套出一层括号。
+                    GroupName = material.MaterialId,
                     SourceOrder = candidate.SourceOrder,
-                    DisplayName = DisplayName(candidate.FrontPath, material.Label),
+                    DisplayName = DisplayName(candidate.FrontPath),
                     SourceFileId = frontFile.FileId,
                     SourceFileName = Path.GetFileNameWithoutExtension(candidate.FrontPath),
                     FrontAssetId = frontAssetId,
@@ -95,19 +124,25 @@ public static class TabletPackagePreparer
                     : files.Values.FirstOrDefault(f => string.Equals(f.PrivatePath, candidate.BackPath, StringComparison.Ordinal));
                 if (backFile is not null && File.Exists(backFile.PrivatePath))
                 {
-                    plan.BackAssetId = cardId + "-back";
-                    plan.BackPath = backFile.PrivatePath;
-                    plan.BackHash = TabletAssetBuilder.ComputeFileHash(backFile.PrivatePath);
-                    plan.BackExtension = Path.GetExtension(backFile.PrivatePath).TrimStart('.').ToLowerInvariant();
-                    plan.BackRelativePath = $"cards/{Sanitize(plan.BackAssetId)}.{plan.BackExtension}";
+                    var backHash = TabletAssetBuilder.ComputeFileHash(backFile.PrivatePath);
+                    if (string.Equals(backHash, backFile.ContentHash, StringComparison.OrdinalIgnoreCase))
+                    {
+                        plan.BackAssetId = cardId + "-back";
+                        plan.BackPath = backFile.PrivatePath;
+                        plan.BackHash = backHash;
+                        plan.BackExtension = Path.GetExtension(backFile.PrivatePath).TrimStart('.').ToLowerInvariant();
+                        plan.BackRelativePath = $"cards/{Sanitize(plan.BackAssetId)}.{plan.BackExtension}";
+                    }
                 }
 
                 plans.Add(plan);
             }
 
-            groups[material.Label] = new TabletGroupPreparationState
+            // 分组状态与卡用同一个分组名（MaterialId）：两边对不上，
+            // 查组就会查不到，整组会被当成没准备好。
+            groups[material.MaterialId] = new TabletGroupPreparationState
             {
-                GroupName = material.Label,
+                GroupName = material.MaterialId,
                 Readiness = notReady == 0 ? TabletGroupReadiness.Ready : TabletGroupReadiness.NotReady,
                 Reason = notReady == 0 ? null : firstReason,
                 NotReadyCardCount = notReady,
@@ -191,10 +226,31 @@ public static class TabletPackagePreparer
     private static string CardId(string materialId, int sourceOrder) => $"{materialId}-{sourceOrder}";
 
     /// <summary>
+    /// 不可用的卡：进目录、点不开，但玩家看得到「这一组有问题」。
+    /// </summary>
+    private static TabletCard UnavailableCard(
+        string cardId,
+        string groupName,
+        SingleCardCandidate candidate,
+        TabletNotReadyReason reason) => new()
+        {
+            CardId = cardId,
+            DisplayName = DisplayName(candidate.FrontPath ?? candidate.BackPath ?? cardId),
+            GroupName = groupName,
+            SourceOrder = candidate.SourceOrder,
+            FrontAssetId = cardId + "-front",
+            BackAssetId = candidate.BackPath is null ? null : cardId + "-back",
+            PreparationState = TabletCardPreparationState.NotReady,
+            NotReadyReason = reason,
+            SourceFileName = Path.GetFileNameWithoutExtension(
+                candidate.FrontPath ?? candidate.BackPath ?? cardId),
+        };
+
+    /// <summary>
     /// 公开名称：卡面自己印的编号优先（文件名里的数字部分），
     /// 没有编号就用原文件名。分组名另外给，目录里同名卡靠它区分。
     /// </summary>
-    private static string DisplayName(string frontPath, string groupName)
+    private static string DisplayName(string frontPath)
     {
         var name = Path.GetFileNameWithoutExtension(frontPath);
         var digits = new string([.. name.Where(char.IsAsciiDigit)]);

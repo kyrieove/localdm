@@ -51,25 +51,35 @@ public sealed class PackageTabletContent : ITabletContent
 
     public IReadOnlyDictionary<string, RoleBookText> RoleBooks { get; }
 
-    public bool TryGetCardImage(string cardId, TabletCardSide side, out byte[] bytes, out string contentType)
+    public bool TryGetCardImage(
+        string cardId,
+        TabletCardSide side,
+        out byte[] bytes,
+        out string contentType,
+        out TabletQueryFailure failure)
     {
         bytes = [];
         contentType = "application/octet-stream";
+        failure = TabletQueryFailure.NotFound;
 
         var lookup = TabletQueries.TryResolve(_package.Tablet!, cardId, side);
         if (!lookup.IsAvailable || lookup.RelativePath is null)
         {
+            // 组没准备好与卡不存在要分开报：网页据此给 409 或 404。
+            failure = lookup.Failure;
             return false;
         }
 
         var path = Path.Combine(_assetRoot, lookup.RelativePath.Replace('/', Path.DirectorySeparatorChar));
         if (!File.Exists(path))
         {
+            failure = TabletQueryFailure.AssetMissing;
             return false;
         }
 
         bytes = File.ReadAllBytes(path);
         contentType = ContentTypeFor(path);
+        failure = TabletQueryFailure.None;
         return true;
     }
 

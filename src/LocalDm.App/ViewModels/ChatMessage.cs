@@ -68,6 +68,13 @@ public sealed class ChatMessage : ObservableObject
     /// <summary>由模型生成的回复，才作为后续模型对话历史；界面引导文字不冒充模型回答。</summary>
     public bool IsModelReply { get; internal init; }
 
+    /// <summary>
+    /// 只给操作者看的本机提示（上下文满了、整理失败、已停止……）。
+    /// 它出现在电脑的聊天区里，但**不进公开消息记录**：平板那边只同步桌上说过的话，
+    /// 不该看到这台机器在忙什么。
+    /// </summary>
+    public bool IsLocalOnly { get; internal init; }
+
     public bool IsPlayer => Author == ChatAuthor.Player;
 
     public bool IsEvent => Author == ChatAuthor.Event;

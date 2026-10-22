@@ -7,7 +7,7 @@ ts	phase	decision	why	evidence	result
 2026-10-22T00:55:00+03:00	fixture	修工作树卫生：加 scripts/sync-local-fixtures.ps1，测试缺文件时给能照做的提示（本机四份检出已补齐）	让下一个接手的人不必删测试或加 Skip就能把套件跑绿	提交 21a7e4d；脚本输出「已从 D:\2\dev\dm 复制私有合成真值」	336 条 0 失败
 2026-10-22T01:05:00+03:00	outlet	公开消息接桌面出口：AddMessage 里复制成不可变公开消息，排进单写者队列；失败显「同步异常」并停住，重试后序号连续	方案 5.3 要求写失败不能吞掉也不能报告已同步；序号由存储层在事务里分配，所以重试不会跳号	提交 681fd8e；tests/LocalDm.Tests/HostPublicFeedTests.cs	4 条新测试通过
 2026-10-22T01:15:00+03:00	feed	平板公开消息端点 GET /tablet/public?after=N：401 无会话、400 after 带错、按序号补发、下一序号不变	断线重连要能只拿新的；序号跳号会让平板漏消息	提交 9213c7e；测试真起服务发请求	10 条新测试通过
-2026-10-22T01:20:00+03:00	real-script	用户补充要求：网站测试要用真实剧本《孽岛疑云》	用户明确要求，先查真实包还在不在	.appdata/localdm-data/packages/pkg-2d4a70531111-1.json 是 Ready 包：7 环节、55 张卡、5 角色、180 图	真实包可用，不用重新导入
+2026-10-22T01:20:00+03:00	real-script	用户补充要求：网站测试要用真实剧本《孽岛疑云》	用户明确要求，先查真实包还在不在	本机已有一个 Ready 包：pkg-2d4a70531111，7 环节、55 张卡、5 角色、180 图	真实包可用，不用重新导入
 2026-10-22T01:30:00+03:00	real-script	核对真实包：180 个源文件全部在位且 SHA-256 与包里记录一致；每张线索卡独占一个图片文件（正反面各一张）	能不能拿到剧本和线索卡，取决于源文件在不在、绑不绑得住	python 探针输出：180/180 hash 相符、55 张卡、5 角色 × 12 页	这本剧本不需要网格切图
 2026-10-22T01:35:00+03:00	step2	引入 deepseek 已提交的平板第二步（6019cb1），用 cherry-pick 而不是合并整条分支	他们那条分支与 main 在界面测试上有等效但不同的提交，合并会冲突；只取做平板资产那一笔	git cherry-pick 6019cb1	清单、资产索引、切图就位
 2026-10-22T01:45:00+03:00	prepare	新增 TabletPackagePreparer 与命令行 --prepare-tablet：按通用编号规则配正反面、冻结资产、写出新版本包	清单是平板准备的产品路径，不能另造一套；重新准备必须得到新版本与新内容指纹	--prepare-tablet 输出：新包 pkg-14761fe2c052 版本 2、53 张卡、9/10 组可用、106 资产	孽岛疑云已可上平板
@@ -21,3 +21,10 @@ ts	phase	decision	why	evidence	result
 2026-10-22T02:50:00+03:00	fork	不另造一套「自己从包里推目录」的设计：清单、资产索引、网格切图按 deepseek 已提交的 TabletManifest/TabletQueries 来，我的活限定在服务侧	方案第 5.1 节写死「旧包没有清单就纸质模式」，另造一套等于把那条决定绕过去	提交 6019cb1 引入其模型；src/LocalDm.Tablet/PackageTabletContent.cs 只消费清单	避免了平行设计
 2026-10-22T02:52:00+03:00	fork	「继续一局」退回演示剧本这件事没有自己改，只修记忆存档	那是产品口径，不是 bug	提交 4bb0bff 只动记忆绑定；QUESTIONS-minimax.md 第 1 条	等用户一句话结论
 2026-10-22T03:00:00+03:00	verify	最终核验：build 0 警告 0 错误；LocalDm.Tests 368 条（362 通过 / 6 跳过 / 0 失败）；LocalDm.UiTests 34 条全通过	对着 Phase A 的判据核验真实产物，不是靠自述	dotnet build LocalDm.slnx；dotnet test tests/LocalDm.Tests；dotnet test tests/LocalDm.UiTests	三条命令全绿
+2026-10-22T03:10:00+03:00	review	请了一个独立审阅（verifier）看这一轮的轨迹、证据与代码	自己的自审不算审阅；审阅者读了方案第 5.2/5.3/6/7 节逐条比对	审阅结论 FAIL：工程纪律全过，但公开消息链路三截未接、方案明写要求的过滤本机诊断/409/hash 核对三条都没实现	7 条真问题列出来了
+2026-10-22T03:20:00+03:00	fix	修「本机诊断进公开消息」：给 ChatMessage 加 IsLocalOnly，AppendLocalHint 走本机通道，公开消息只放行玩家发言、主持回复与流程事件	方案 5.3 明写「过滤本机诊断」；上下文窗口满了、整理失败、已停止、装载失败这些是给操作者看的	src/LocalDm.App/ViewModels/ChatMessage.cs；HostViewModel.cs 的 AppendLocalHint；HostPublicFeedTests 新增一条	本地诊断不再进公开消息
+2026-10-22T03:25:00+03:00	fix	修「暂停分组的卡点开是裂图」：取图接口带出失败原因，组没准备好返回 409，目录里标成不可用、页面置灰并写明原因	方案第 7 节要求该组请求 409、目录明确不可用	ITabletContent.TryGetCardImage 带失败原因；Program.cs 的 CardImage 映射 409/404；Home.razor 按 IsAvailable 分支	暂停分组的卡返回 409
+2026-10-22T03:28:00+03:00	fix	修「配不出来的卡整组从目录里消失」：preparer 把配不出来的卡也写进清单，标成不可用	目录里要让人知道缺哪组，缺了就静默消失等于没准备	TabletPackagePreparer 写 UnavailableCard；逐组账由 --prepare-tablet 打印	54 张卡全部出现在目录里，49 张能打开
+2026-10-22T03:30:00+03:00	fix	修三处口径与隐患：分组名改用 MaterialId（Label 是装饰）、准备清单核对源文件 hash、给错包路径直接报错不再退回合成	平板目录不该出现「线索卡牌：××（10 页） · 3」这种套娃；材料被换过不能照发；静默退回合成模式会让人以为服务的是真剧本	TabletPackagePreparer；TabletAssetRoot 抽出共用规则；Program.cs 找不到包就抛	三处都补上测试
+2026-10-22T03:35:00+03:00	fix	修「公开对话是写死的」：页面改成真读 IPublicFeedSource；包模式下给空的一段并明说「还没接过来」，不拿合成对话冒充真实本局	独立运行的服务看不到桌面那一局的存档，编内容就是骗人	Home.razor 读来源；EmptyPublicFeedSource；TabletPackageModeTests 新增一条	公开消息链路的三截在文档里写清楚了
+2026-10-22T03:45:00+03:00	verify	按审阅意见修完后再核验：三条命令全绿；真实剧本重新准备并重测（54 卡、49 可开、暂停组 409、角色本 12 章、原稿页 722KB）	审阅提的问题要逐条对着真实产物再验一遍，不是只看测试绿	docs/evidence/tablet/2026-10-22-real-script-tablet.md 已按新数字与新行为更新	审阅的 7 条都已处理或写清

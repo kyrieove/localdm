@@ -874,7 +874,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         {
             // 不静默吞掉：主持人得知道这一段没有播，而且进度与文字都还在。
             Status = "上一段播报还没结束，这一段没有播。";
-            AppendEvent("上一段播报还没结束，这一段的播报跳过了；文字与进度都已保留。");
+            AppendLocalHint("上一段播报还没结束，这一段的播报跳过了；文字与进度都已保留。");
             return;
         }
 
@@ -1001,7 +1001,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             // 整段对话都在预算内，却已经占满窗口：压缩帮不上忙，只能提示换更大的窗口。
             if (ContextBudget.UsageRatio(_conversation, system, nextUserMessage, contextWindowTokens) >= 1.0)
             {
-                AppendEvent("主持资料和最近的对话已经占满上下文窗口，压缩帮不上忙。请在设置里调大模型上下文长度，或换一个上下文更长的模型。");
+                AppendLocalHint("主持资料和最近的对话已经占满上下文窗口，压缩帮不上忙。请在设置里调大模型上下文长度，或换一个上下文更长的模型。");
             }
 
             // 这一轮照常发送，不丢任何轮次。
@@ -1027,11 +1027,11 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             var dropped = DropOldestUntilSendable(system, nextUserMessage, contextWindowTokens);
             if (dropped > 0)
             {
-                AppendEvent($"整理失败，已丢弃最早的 {dropped} 轮对话以继续主持。");
+                AppendLocalHint($"整理失败，已丢弃最早的 {dropped} 轮对话以继续主持。");
             }
             else
             {
-                AppendEvent("整理较早的对话失败，这一轮照常发送。");
+                AppendLocalHint("整理较早的对话失败，这一轮照常发送。");
             }
 
             return true;
@@ -1042,13 +1042,13 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         var unsupported = DmMemoCheck.UnsupportedTerms(memo, _conversation, package);
         if (unsupported.Count > 0)
         {
-            AppendEvent($"整理较早的对话失败：整理结果里有 {unsupported.Count} 处对话中没出现过的内容，这份备忘没有采用，这一轮照常发送。");
+            AppendLocalHint($"整理较早的对话失败：整理结果里有 {unsupported.Count} 处对话中没出现过的内容，这份备忘没有采用，这一轮照常发送。");
             return true;
         }
 
         _conversation.ApplyCompaction(memo, keepFromIndex);
         var kept = (_conversation.Turns.Count + 1) / 2;
-        AppendEvent($"已整理较早的对话（第 {_conversation.CompactionCount} 次），保留了最近 {kept} 轮原话。");
+        AppendLocalHint($"已整理较早的对话（第 {_conversation.CompactionCount} 次），保留了最近 {kept} 轮原话。");
         OnPropertyChanged(nameof(Memo));
         OnPropertyChanged(nameof(HasMemo));
         OnPropertyChanged(nameof(CompactionCountText));
@@ -1201,7 +1201,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         SpeechState = SpeechState.Cancelled;
         Activity.Reset("就绪", PhaseDetail());
         Status = "已停止本次回应。本局进度没有变化。";
-        AppendEvent("已停止本次回应。本局进度没有变化。");
+        AppendLocalHint("已停止本次回应。本局进度没有变化。");
         return Task.CompletedTask;
     }
 
@@ -1371,6 +1371,14 @@ public sealed class HostViewModel : ObservableObject, IDisposable
 
     private void AppendEvent(string text) => AddMessage(new ChatMessage(ChatAuthor.Event, text));
 
+    /// <summary>
+    /// 本机提示：出现在电脑的聊天区，但不进公开消息记录。
+    /// 上下文满了、整理失败、已停止、装载失败这类话是给操作者看的，
+    /// 平板那边只该看到桌上说过的话。
+    /// </summary>
+    private void AppendLocalHint(string text) =>
+        AddMessage(new ChatMessage(ChatAuthor.Event, text) { IsLocalOnly = true });
+
     private void AddMessage(ChatMessage message)
     {
         Messages.Add(message);
@@ -1395,6 +1403,12 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         if (publisher is null || string.IsNullOrEmpty(sessionId))
         {
             // 还没绑定到任何一局：没有「本局」可写，也就没有公开消息。
+            return;
+        }
+
+        if (message.IsLocalOnly)
+        {
+            // 本机提示：给操作者看的，不进公开消息记录。
             return;
         }
 
@@ -1537,7 +1551,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
     public void ReportProblem(string message)
     {
         Status = message;
-        AppendEvent(message);
+        AppendLocalHint(message);
     }
 
     /// <summary>

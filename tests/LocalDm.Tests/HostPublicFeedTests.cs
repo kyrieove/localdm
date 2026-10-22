@@ -148,6 +148,25 @@ public sealed class HostPublicFeedTests : IDisposable
         Assert.DoesNotContain(first, m => m.Text == "另一局说的话。");
     }
 
+    [Fact]
+    public async Task Local_diagnostics_do_not_enter_the_public_feed()
+    {
+        using var store = await NewStoreAsync();
+        var host = NewHost(store, out _);
+
+        await host.LoadDemoAsync();
+
+        // 这些是给操作者看的本机提示：出现在电脑的聊天区，但不该上平板。
+        host.ReportProblem("装载失败，请重试。");
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+
+        var feed = await store.ReadPublicMessagesAsync("session-demo", 0, 100, TestContext.Current.CancellationToken);
+        Assert.Empty(feed);
+
+        // 提示本身还在电脑的聊天区里
+        Assert.Contains(host.Messages, m => m.Text.Contains("装载失败", StringComparison.Ordinal));
+    }
+
     private async Task<SessionStore> NewStoreAsync()
     {
         var store = new SessionStore(Path.Combine(_root, "sessions.db"));

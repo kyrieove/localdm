@@ -4,6 +4,7 @@
 @inject IHttpContextAccessor Http
 @inject NavigationManager Nav
 @inject IJSRuntime Js
+@inject IPublicFeedSource Feed
 @implements IDisposable
 @* 交互渲染模式必须显式声明：只注册 AddInteractiveServerComponents 不会让按钮生效。 *@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
@@ -89,23 +90,34 @@
             {
                 <section class="cards">
                     <h2>全部线索卡</h2>
-                    <p class="lead">点哪张看哪张，只在这台设备上显示。已准备好的卡都能打开。</p>
+                    <p class="lead">点哪张看哪张，只在这台设备上显示。暂停分发的组用纸质卡。</p>
                     <ul class="card-list">
                         @foreach (var card in State.Cards)
                         {
                             <li>
-                                <button class="@(session.SelectedCardId == card.CardId ? "active" : "")"
-                                        @onclick="() => Select(card.CardId)">
-                                    <span class="card-name">@card.DisplayName</span>
-                                    <span class="card-sub">@card.GroupName · @card.SourceOrder</span>
-                                </button>
+                                @if (card.IsAvailable)
+                                {
+                                    <button class="@(session.SelectedCardId == card.CardId ? "active" : "")"
+                                            @onclick="() => Select(card.CardId)">
+                                        <span class="card-name">@card.DisplayName</span>
+                                        <span class="card-sub">@card.GroupName · @card.SourceOrder</span>
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="unavailable" disabled>
+                                        <span class="card-name">@card.DisplayName</span>
+                                        <span class="card-sub">@card.GroupName · @card.SourceOrder ·
+                                            @TabletNotReadyText.Describe(card.NotReadyReason)</span>
+                                    </button>
+                                }
                             </li>
                         }
                     </ul>
                     @if (session.SelectedCardId is not null)
                     {
                         <figure class="shot">
-                            <img src="/tablet/cards/@session.SelectedCardId/front" alt="线索卡" />
+                            <img src="/tablet/cards/@Uri.EscapeDataString(session.SelectedCardId)/front" alt="线索卡" />
                         </figure>
                     }
                 </section>
@@ -115,6 +127,10 @@
                 <section class="public">
                     <h2>公共对话</h2>
                     <p class="lead">只读。提问、推进、投票和揭秘都在电脑上完成。</p>
+                    @if (PublicFeed.Count == 0)
+                    {
+                        <p class="lead">还没有公开消息：电脑那边还没把这一局的对话接过来。</p>
+                    }
                     <ol class="feed">
                         @foreach (var line in PublicFeed)
                         {
@@ -143,20 +159,33 @@
 
     private string RoleName => State.Roles.First(r => r.RoleId == State.Session(_sessionKey).RoleId).DisplayName;
 
-    /// <summary>合成公共对话：探针不连真实本局，只证明只读投影的呈现。</summary>
-    private IReadOnlyList<(string Kind, string Text)> PublicFeed { get; } =
-    [
-        ("event", "合成环节：阅本"),
-        ("host", "这是合成公共对话，用于验证平板只读显示。"),
-        ("player", "合成玩家发言。"),
-    ];
+    /// <summary>公开对话：来自服务端给的公开消息来源，跟电脑那边说的是同一份。</summary>
+    private IReadOnlyList<(string Kind, string Text)> PublicFeed { get; set; } = [];
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         // 渲染时已经发过 Cookie，这里直接复用同一个键。
         _sessionKey = TabletSessions.KeyFor(Http.HttpContext) ?? string.Empty;
         TabletSessions.Changed += OnAnySessionChanged;
+        await LoadPublicFeedAsync();
     }
+
+    /// <summary>读公开消息。空的一段就说实话：还没有公开消息。</summary>
+    private async Task LoadPublicFeedAsync()
+    {
+        var snapshot = await Feed.ReadAsync(0, CancellationToken.None);
+        PublicFeed = snapshot.Messages
+            .Select(m => (Kind: KindOf(m.Kind), Text: m.Text))
+            .ToArray();
+        StateHasChanged();
+    }
+
+    private static string KindOf(PublicMessageKind kind) => kind switch
+    {
+        PublicMessageKind.PlayerSpeech => "player",
+        PublicMessageKind.HostReply => "host",
+        _ => "event",
+    };
 
     void IDisposable.Dispose() => TabletSessions.Changed -= OnAnySessionChanged;
 

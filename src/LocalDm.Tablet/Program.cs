@@ -12,22 +12,23 @@ if (args.Contains("--urls") is false && builder.Configuration["urls"] is not { L
 }
 
 // 真实剧本包模式：给了包路径就服务那一本，没给就走合成探针。
-// 资产目录按包的清单指纹定位：换一版包不会取到旧版的图。
+// 给了路径却找不到文件必须报错退出：悄悄退回合成模式会让页面显示假卡，
+// 看起来「能打开」，其实服务的是另一本剧本。
 var packagePath = Environment.GetEnvironmentVariable("LOCALDM_TABLET_PACKAGE");
 ITabletContent content;
-if (!string.IsNullOrWhiteSpace(packagePath) && File.Exists(packagePath))
+if (!string.IsNullOrWhiteSpace(packagePath))
 {
+    if (!File.Exists(packagePath))
+    {
+        throw new FileNotFoundException($"找不到剧本包：{packagePath}", packagePath);
+    }
+
     var package = System.Text.Json.JsonSerializer.Deserialize<LocalDm.Core.Domain.ScriptPackage>(
         File.ReadAllText(packagePath))
         ?? throw new InvalidOperationException("剧本包读不出来。");
     var manifest = package.Tablet
         ?? throw new InvalidOperationException("这个剧本包没有平板清单，要重新准备后才能上平板。");
-    var assetRoot = Path.Combine(
-        Path.GetDirectoryName(Path.GetFullPath(packagePath))!,
-        "..",
-        "assets",
-        manifest.AssetRootFingerprint);
-    content = new PackageTabletContent(package, Path.GetFullPath(assetRoot));
+    content = new PackageTabletContent(package, TabletAssetRoot.Resolve(packagePath, manifest));
 }
 else
 {
@@ -39,7 +40,10 @@ builder.Services.AddRazorComponents()
 builder.Services.AddSingleton(content);
 builder.Services.AddSingleton<TabletSpikeState>();
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddSingleton<IPublicFeedSource, SpikePublicFeedSource>();
+// 公开消息的来源：探针模式给合成内容；包模式给空的一段 ——
+// 独立运行的服务看不到桌面那一局的对话存档，不拿合成对话冒充真实本局。
+builder.Services.AddSingleton<IPublicFeedSource>(
+    content is SpikeTabletContent ? new SpikePublicFeedSource() : new EmptyPublicFeedSource());
 
 // 合成材料：6 个角色、6 张卡（含两张同名卡，用来验证同名不串图）。
 static TabletSpikeData BuildSpikeData()
@@ -181,9 +185,16 @@ static IResult CardImage(string cardId, TabletCardSide side, ITabletContent cont
         return Results.NotFound();
     }
 
-    return content.TryGetCardImage(cardId, side, out var bytes, out var contentType)
-        ? Results.File(bytes, contentType)
-        : Results.NotFound();
+    if (!content.TryGetCardImage(cardId, side, out var bytes, out var contentType, out var failure))
+    {
+        // 「这一组暂停分发」与「没有这张卡」是两回事：
+        // 前者 409（换组别的卡），后者 404。网页据此给不同的提示。
+        return failure is TabletQueryFailure.GroupNotReady or TabletQueryFailure.AssetMissing
+            ? Results.Conflict(new { reason = failure.ToString() })
+            : Results.NotFound();
+    }
+
+    return Results.File(bytes, contentType);
 }
 
 // 角色本：按认领角色返回章节与块的纯文本。
