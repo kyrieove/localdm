@@ -533,7 +533,9 @@ public sealed class DmConversationTests : IDisposable
         Assert.False(ContextBudget.CanCompact(host.Conversation));
         var requestsAfterFirst = gateway.Requests.Count;
 
-        host.CompactCommand.Execute(null);
+        // 按钮此时是灰的（没有可整理的内容就不该发整理请求），
+        // 所以走整句输入这条路——玩家打「/compact」同样该看到这句提示。
+        await SendAsync(host, "/compact");
         await WaitUntilAsync(() => host.Status.Contains("都整理过了", StringComparison.Ordinal));
 
         Assert.Equal("最近 2 轮之前的对话都整理过了，这次没有需要整理的内容。", host.Status);
