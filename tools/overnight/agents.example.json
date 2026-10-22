@@ -1,0 +1,36 @@
+{
+  "repo": "D:\\2\\dev\\dm",
+  "runDir": "D:\\2\\dev\\dm-overnight",
+  "baseBranch": "main",
+  "integrationWorktree": "D:\\2\\dev\\dm-integration",
+  "maxAttempts": 3,
+  "agentTimeoutMinutes": 120,
+  "gateTimeoutMinutes": 40,
+  "includeGated": false,
+  "agents": [
+    {
+      "name": "deepseek",
+      "worktree": "D:\\2\\dev\\dm-deepseek",
+      "branch": "agent/deepseek",
+      "exe": "填：DeepSeek 编码助手的可执行文件",
+      "args": ["填：无交互、自动批准的参数"],
+      "stdinPrompt": true
+    },
+    {
+      "name": "gemini",
+      "worktree": "D:\\2\\dev\\dm-gemini",
+      "branch": "agent/gemini",
+      "exe": "cmd.exe",
+      "args": ["/c", "gemini", "--yolo", "-p", "Do the task given on stdin."],
+      "stdinPrompt": true
+    },
+    {
+      "name": "minimax",
+      "worktree": "D:\\2\\dev\\dm-minimax",
+      "branch": "agent/minimax",
+      "exe": "填：MiniMax 编码工具的可执行文件",
+      "args": ["填：无交互、自动批准的参数"],
+      "stdinPrompt": true
+    }
+  ]
+}
