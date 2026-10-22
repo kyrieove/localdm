@@ -104,6 +104,12 @@
   `LocalDm.Tests` 398 项（392 通过 / 6 项人工授权跳过的语音用例 / 0 失败）；
   `LocalDm.UiTests` 34 项通过 0 失败。界面测试窗口显示在虚拟屏幕外，不打扰使用者。
   逐项问题与复现方式见 `docs/reviews/2026-10-22-three-agent-acceptance.md`。
+- 再合入 VoxCPM 音色那条线（`085ecc6`）后重跑：`LocalDm.Tests` 420 项
+  （413 通过 / 7 跳过 / 0 失败），第 7 条跳过是新增的「Windows 内置音色不退回 Edge」
+  用例——它会真的念一句中文，与 EdgeTtsTests 那几条同类，按同一人工授权跳过，
+  同一断言另有一条不出声的用例覆盖。`LocalDm.UiTests` 34 项通过 0 失败。
+  VoxCPM 的声音本身仍未在本机跑通，根因与修法见
+  `docs/evidence/us3/voxcpm-tts-integration.md`。
 - `LocalDm.Tests`：249 项（243 通过 / 6 项人工授权跳过 / 0 失败）；`LocalDm.UiTests`：16 项通过，
   合计 **259 通过 / 0 失败 / 6 跳过**（2026-10-20 对话式界面轮把「勾选确认」相关断言改成「点击即确认」，
   并新增流程数据驱动、双轮无投票、连点只提交一次、对话与自动朗读/停止/重播等覆盖；
