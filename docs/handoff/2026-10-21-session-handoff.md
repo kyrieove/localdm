@@ -9,6 +9,29 @@
 
 ## 0. 接手时先做的三件事
 
+**2026-10-22 VoxCPM 本机音色（分支 `agent/voxcpm`，独立 worktree `D:\2\dev\dm-voxcpm`，未合进 main）**：
+接入第三条朗读路径，完全本机的神经音色，口播内容不出本机。提交 `5119730`。
+方案见 `docs/plans/2026-10-22-voxcpm-tts-integration.md`，实测见
+`docs/evidence/us3/voxcpm-tts-integration.md`。
+
+**这条线还没跑通声音**：本机三档模型（VoxCPM2 / 1.5 / 0.5B）推理全部失败，
+根因是**系统提交额度耗尽**（本机只剩 7.46 GB，页面文件固定 32 GB 且已占 16 GB），
+不是显存不足。要在本机验收，先释放内存或扩大页面文件，再跑
+`.local/voxcpm-probe/probe2.py cuda openbmb/VoxCPM2` 拿实测数字。
+**不要**把「编译通过」「单元测试通过」当成「声音能读出来」。
+
+架构上两处不是照抄 Edge：`TtsVoice.Engine` 表达引擎归属（不再靠音色名前缀判断），
+VoxCPM 走常驻 python 进程（加载一次模型，每句只付推理成本）。
+降级链：所选引擎 → Edge → Windows 内置；主持人明确选了 Windows 音色时不退回 Edge。
+Windows 上装 voxcpm 必须 `--no-deps`（`pynini`/`wetext` 全版本无 Windows wheel），
+安装说明按证据文档里实测的那条写。
+
+**并行推进的规矩**：仓库里同时有多个会话在改同一个仓库，**各用各的 worktree**
+（`git worktree add D:\2\dev\dm-<名字> -b agent/<名字> <基线提交>`）。
+共用一个工作目录会互相覆盖——本轮就撞上过，正在写的新文件被别的会话的
+`git checkout` 冲掉。已有 worktree：`dm`（main）、`dm-deepseek`、`dm-gemini`、
+`dm-minimax`、`dm-voxcpm`。
+
 **2026-10-22 本机代理补充（分支 `agent/minimax`，未合进 main）**：新增公开消息记录
 （桌面出口 → `public_messages` 表 ✓；平板端点 `GET /tablet/public?after=N` 的契约 ✓），
 并用真实剧本《孽岛疑云》把平板网站真跑通一遍（目录、卡面、卡背、角色本、原稿页）。
