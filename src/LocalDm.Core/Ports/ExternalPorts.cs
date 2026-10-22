@@ -87,6 +87,30 @@ public sealed record TtsVoice
     public required string Name { get; init; }
 
     public required string Culture { get; init; }
+
+    /// <summary>
+    /// 这个音色归哪个引擎渲染。
+    ///
+    /// 归属由数据表达，而不是靠音色名以什么前缀开头去猜：
+    /// 微软神经音色、Windows 内置音色、VoxCPM 音色三者的命名规则互不相同，
+    /// 用前缀判断会在加第四种引擎时散落成多处条件分支。
+    /// </summary>
+    public TtsEngineKind Engine { get; init; } = TtsEngineKind.Windows;
+}
+
+/// <summary>
+/// 可以渲染中文音色的引擎。
+/// </summary>
+public enum TtsEngineKind
+{
+    /// <summary>Windows 内置语音（System.Speech）。永远可用，是最终降级目标。</summary>
+    Windows = 0,
+
+    /// <summary>微软 Edge 神经音色（走本机 python + edge-tts，需要联网）。</summary>
+    Edge = 1,
+
+    /// <summary>本机 VoxCPM 神经音色（走本机 python 常驻进程，完全离线）。</summary>
+    VoxCpm = 2,
 }
 
 /// <summary>
