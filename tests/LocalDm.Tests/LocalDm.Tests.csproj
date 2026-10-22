@@ -4,6 +4,7 @@
     <!-- Windows.Data.Pdf 是 WinRT API：必须声明目标平台版本才能投影。 -->
     <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <UseWPF>true</UseWPF>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
@@ -21,6 +22,7 @@
     <ProjectReference Include="..\..\src\LocalDm.Core\LocalDm.Core.csproj" />
     <ProjectReference Include="..\..\src\LocalDm.Infrastructure\LocalDm.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\LocalDm.App\LocalDm.App.csproj" />
+    <ProjectReference Include="..\..\src\LocalDm.Tablet\LocalDm.Tablet.csproj" />
     <!-- 4.4 要对比「命令行生成的包」与「服务直接生成的包」，命令行入口在这个工程里。 -->
     <ProjectReference Include="..\..\tools\LocalDm.Probe\LocalDm.Probe.csproj" />
   </ItemGroup>

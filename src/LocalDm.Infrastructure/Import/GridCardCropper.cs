@@ -10,8 +10,9 @@ namespace LocalDm.Infrastructure.Import;
 /// 通用网格裁切：按行数、列数、有效区域与有效槽位，把一整版图切成若干张单卡。
 ///
 /// 支持 JPEG/PNG/BMP/TIFF：Windows 自带的 WIC 解码，不引第三方图片库。
-/// 每条边都按整图位置独立取整（见 <see cref="GridGeometry"/>）；
-/// 有效区域超出原图时直接报错，不猜。
+/// 每条边都按整图位置独立取整（见 <see cref="GridGeometry"/>）；镜像时用物理槽位的反向 canonical 槽位
+/// 计算并反射边界，所以奇数宽度下不等宽的列也不会切进邻卡。返回的槽位仍是源图物理槽位，
+/// 正背配对由 <see cref="GridSlotMapping"/> 完成。有效区域超出原图时直接报错，不猜。
 /// </summary>
 public static class GridCardCropper
 {
@@ -24,24 +25,33 @@ public static class GridCardCropper
         ArgumentNullException.ThrowIfNull(layout);
 
         var sheet = RasterImage.Load(imagePath);
-        var crops = new List<CroppedCard>(layout.EffectiveSlots().Count);
-        foreach (var slot in layout.EffectiveSlots())
+        var slots = layout.EffectiveSlots();
+        var crops = new List<CroppedCard>(slots.Count);
+        foreach (var physicalSlot in slots)
         {
-            var rect = GridGeometry.SlotRect(layout, slot);
-            if (rect is not { } region || !GridGeometry.Fits(region, sheet.Width, sheet.Height))
+            var canonicalSlot = layout.MirrorHorizontally
+                ? physicalSlot with { Column = layout.Columns - 1 - physicalSlot.Column }
+                : physicalSlot;
+            var sourceRegion = layout.MirrorHorizontally
+                ? GridGeometry.ReflectedSlotRect(layout, canonicalSlot)
+                : GridGeometry.SlotRect(layout, canonicalSlot);
+            if (sourceRegion is not { } region || !GridGeometry.Fits(region, sheet.Width, sheet.Height))
             {
                 throw new DomainRuleException(
                     DomainErrorCode.INVALID_INPUT,
-                    $"第 {slot.Row + 1} 行第 {slot.Column + 1} 列的格子超出了原图（{sheet.Width}×{sheet.Height}），请检查切片参数。");
+                    $"第 {physicalSlot.Row + 1} 行第 {physicalSlot.Column + 1} 列的格子超出了原图（{sheet.Width}×{sheet.Height}），请检查切片参数。");
             }
 
-            var pixels = layout.MirrorHorizontally
-                ? MirrorHorizontally(sheet.Crop(region))
-                : sheet.Crop(region);
+            var pixels = sheet.Crop(region);
+            if (layout.MirrorHorizontally)
+            {
+                pixels = MirrorHorizontally(pixels);
+            }
 
             crops.Add(new CroppedCard
             {
-                Slot = slot,
+                Slot = physicalSlot,
+                // Region records the actual source pixels; GridSlotMapping handles side pairing later.
                 Region = region,
                 Image = pixels,
                 Png = PngCodec.Encode(pixels),
@@ -66,7 +76,7 @@ public static class GridCardCropper
     }
 }
 
-/// <summary>切出来的一张卡：槽位、在整图上的位置、像素与可直接落盘的 PNG。</summary>
+/// <summary>切出来的一张卡：源图物理槽位、实际源图矩形、像素与可直接落盘的 PNG。</summary>
 public sealed record CroppedCard
 {
     public required GridSlot Slot { get; init; }

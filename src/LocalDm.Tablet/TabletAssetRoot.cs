@@ -15,8 +15,21 @@ public static class TabletAssetRoot
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packagePath);
         ArgumentNullException.ThrowIfNull(manifest);
+        if (string.IsNullOrEmpty(manifest.AssetRootFingerprint)
+            || manifest.AssetRootFingerprint.Length != 64
+            || manifest.AssetRootFingerprint.Any(c => !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))))
+        {
+            throw new ArgumentException("平板资产根指纹必须是 64 位小写 SHA-256。", nameof(manifest));
+        }
 
         var packageDir = Path.GetDirectoryName(Path.GetFullPath(packagePath))!;
-        return Path.GetFullPath(Path.Combine(packageDir, "..", "assets", manifest.AssetRootFingerprint));
+        var assetsDir = Path.GetFullPath(Path.Combine(packageDir, "..", "assets"));
+        var assetRoot = Path.GetFullPath(Path.Combine(assetsDir, manifest.AssetRootFingerprint));
+        if (!assetRoot.StartsWith(assetsDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("平板资产根必须位于包的资产目录下。", nameof(manifest));
+        }
+
+        return assetRoot;
     }
 }

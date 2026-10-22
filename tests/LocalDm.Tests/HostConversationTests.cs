@@ -121,6 +121,108 @@ public sealed class HostConversationTests : IDisposable
     }
 
     [Fact]
+    public async Task Replay_command_can_retry_after_stop_without_the_old_error_overwriting_it()
+    {
+        var gateway = new CountingGateway();
+        var firstGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tts = new CountingTts
+        {
+            ReplayGates = [firstGate, secondGate],
+            ReplayErrors =
+            [
+                new DomainRuleException(DomainErrorCode.REQUEST_CANCELLED, "旧重播已停止。"),
+                null,
+            ],
+        };
+        var host = await NewHostAsync(gateway, tts, autoRead: false);
+        await host.LoadDemoAsync();
+        host.InputText = "先生成一条可重播的合成回复。";
+        await host.SendAsync();
+        var reply = host.Messages[^1];
+
+        reply.ReplayCommand!.Execute(null);
+        await tts.FirstReplayStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.True(host.IsBusy);
+        Assert.False(reply.ReplayCommand.CanExecute(null));
+
+        host.StopCommand.Execute(null);
+        Assert.False(host.IsBusy);
+        Assert.True(reply.ReplayCommand.CanExecute(null));
+
+        reply.ReplayCommand.Execute(null);
+        await tts.SecondReplayStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.False(firstGate.Task.IsCompleted);
+
+        var previousReplayFinished = WaitForNextCanExecuteChangedAsync(reply.ReplayCommand);
+        firstGate.SetResult();
+        await previousReplayFinished.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        Assert.True(host.IsBusy, "旧重播结束时，新重播仍保持忙碌。");
+        Assert.Equal(ChatSpeechState.Speaking, reply.SpeechState);
+        Assert.Equal("已停止本次回应。本局进度没有变化。", host.Status);
+        Assert.False(reply.ReplayCommand.CanExecute(null));
+
+        var secondReplayFinished = WaitUntilAsync(() => !host.IsBusy && reply.SpeechState == ChatSpeechState.Spoken);
+        secondGate.SetResult();
+        await secondReplayFinished;
+
+        Assert.Equal(ChatSpeechState.Spoken, reply.SpeechState);
+        Assert.Equal("已停止本次回应。本局进度没有变化。", host.Status);
+    }
+
+    [Fact]
+    public async Task Send_command_can_restart_after_stop_while_the_previous_reply_is_pending()
+    {
+        var firstGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var gateway = new CountingGateway { Gates = [firstGate, secondGate] };
+        var host = await NewHostAsync(gateway, new CountingTts(), autoRead: false);
+        await host.LoadDemoAsync();
+
+        host.InputText = "第一个问题";
+        host.SendCommand.Execute(null);
+        await gateway.FirstCallStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        Assert.True(host.IsBusy);
+        Assert.False(host.SendCommand.CanExecute(null));
+        host.InputText = "忙碌时的重复问题";
+        host.SendCommand.Execute(null);
+        Assert.Equal(1, gateway.CompletionCount);
+
+        host.StopCommand.Execute(null);
+        Assert.False(host.IsBusy);
+
+        host.InputText = "停止后重发的问题";
+        host.SendCommand.Execute(null);
+        await gateway.SecondCallStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        Assert.False(firstGate.Task.IsCompleted, "新请求必须在旧模型调用返回前启动。");
+        Assert.Equal(2, gateway.CompletionCount);
+
+        var previousCallFinished = WaitForNextCanExecuteChangedAsync(host.SendCommand);
+        firstGate.SetResult();
+        await previousCallFinished.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        Assert.True(host.IsBusy, "旧请求完成时，新一轮仍然保持忙碌。");
+        Assert.False(host.SendCommand.CanExecute(null));
+        Assert.DoesNotContain(host.Messages, m => m.IsHost && m.Text == CountingGateway.Reply);
+        Assert.DoesNotContain(host.Conversation.Turns, turn => turn.Content == "第一个问题");
+        host.InputText = "新一轮忙碌时的重复问题";
+        host.SendCommand.Execute(null);
+        Assert.Equal(2, gateway.CompletionCount);
+
+        var secondCallFinished = WaitForCanExecuteChangedCountAsync(host.SendCommand, expectedCount: 2);
+        secondGate.SetResult();
+        await secondCallFinished.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        Assert.False(host.IsBusy);
+        Assert.Single(host.Messages, m => m.IsHost && m.Text == CountingGateway.Reply);
+        Assert.DoesNotContain(host.Conversation.Turns, turn => turn.Content == "第一个问题");
+        Assert.Contains(host.Conversation.Turns, turn => turn.Content == "停止后重发的问题");
+    }
+
+    [Fact]
     public async Task Chat_that_asks_to_advance_does_not_change_the_stage()
     {
         var gateway = new CountingGateway();
@@ -406,6 +508,38 @@ public sealed class HostConversationTests : IDisposable
         }
     }
 
+    private static Task WaitForNextCanExecuteChangedAsync(RelayCommand command)
+    {
+        var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        EventHandler handler = null!;
+        handler = (_, _) =>
+        {
+            command.CanExecuteChanged -= handler;
+            changed.TrySetResult();
+        };
+        command.CanExecuteChanged += handler;
+        return changed.Task;
+    }
+
+    private static Task WaitForCanExecuteChangedCountAsync(RelayCommand command, int expectedCount)
+    {
+        var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var count = 0;
+        EventHandler handler = null!;
+        handler = (_, _) =>
+        {
+            if (Interlocked.Increment(ref count) != expectedCount)
+            {
+                return;
+            }
+
+            command.CanExecuteChanged -= handler;
+            changed.TrySetResult();
+        };
+        command.CanExecuteChanged += handler;
+        return changed.Task;
+    }
+
     private sealed class CountingGateway : IMagpieGateway
     {
         public List<MagpieCompletionRequest> Requests { get; } = [];
@@ -416,6 +550,12 @@ public sealed class HostConversationTests : IDisposable
         /// <summary>挡板：设了它就等它完成才返回，用来模拟「还在生成」。</summary>
         public TaskCompletionSource? Gate { get; init; }
 
+        public IReadOnlyList<TaskCompletionSource>? Gates { get; init; }
+
+        public TaskCompletionSource FirstCallStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource SecondCallStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<string>>(["test-model"]);
 
@@ -423,9 +563,21 @@ public sealed class HostConversationTests : IDisposable
         {
             Requests.Add(request);
             CompletionCount++;
-            if (Gate is not null)
+            if (CompletionCount == 1)
             {
-                await Gate.Task;
+                FirstCallStarted.TrySetResult();
+            }
+            else if (CompletionCount == 2)
+            {
+                SecondCallStarted.TrySetResult();
+            }
+
+            var gate = Gates is { } gates && CompletionCount <= gates.Count
+                ? gates[CompletionCount - 1]
+                : Gate;
+            if (gate is not null)
+            {
+                await gate.Task;
             }
 
             return Reply;
@@ -440,6 +592,14 @@ public sealed class HostConversationTests : IDisposable
 
         /// <summary>挡板：设了它，重播就一直停在「正在朗读」，用来模拟长音频。</summary>
         public TaskCompletionSource? ReplayGate { get; init; }
+
+        public IReadOnlyList<TaskCompletionSource>? ReplayGates { get; init; }
+
+        public IReadOnlyList<Exception?>? ReplayErrors { get; init; }
+
+        public TaskCompletionSource FirstReplayStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource SecondReplayStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         /// <summary>设了它，重播直接失败（例如本机没有可用中文声音）。</summary>
         public DomainErrorCode? ReplayError { get; init; }
@@ -459,15 +619,32 @@ public sealed class HostConversationTests : IDisposable
 
         public async Task ReplayAsync(SpeechItem item, string? voiceId, CancellationToken cancellationToken)
         {
-            ReplayCount++;
+            var replayCall = ++ReplayCount;
+            if (replayCall == 1)
+            {
+                FirstReplayStarted.TrySetResult();
+            }
+            else if (replayCall == 2)
+            {
+                SecondReplayStarted.TrySetResult();
+            }
+
+            var gate = ReplayGates is { } gates && replayCall <= gates.Count
+                ? gates[replayCall - 1]
+                : ReplayGate;
+            if (gate is not null)
+            {
+                await gate.Task;
+            }
+
+            if (ReplayErrors is { } errors && replayCall <= errors.Count && errors[replayCall - 1] is { } error)
+            {
+                throw error;
+            }
+
             if (ReplayError is { } code)
             {
                 throw new DomainRuleException(code, "本机没有可用的中文声音，文字已保留。");
-            }
-
-            if (ReplayGate is not null)
-            {
-                await ReplayGate.Task;
             }
         }
 

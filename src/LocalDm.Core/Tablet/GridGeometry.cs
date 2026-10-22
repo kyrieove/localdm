@@ -29,6 +29,26 @@ public static class GridGeometry
     }
 
     /// <summary>
+    /// canonical 槽位在左右镜像印版上的真实源矩形；调用方先把物理槽位映射到 canonical 列。
+    /// 以有效区域右边界反射整条矩形边界，保留奇数宽度产生的不等宽列。
+    /// </summary>
+    public static PixelRegion? ReflectedSlotRect(GridLayout layout, GridSlot slot)
+    {
+        var rect = SlotRect(layout, slot);
+        if (rect is not { } source)
+        {
+            return null;
+        }
+
+        var region = layout.Region;
+        return new PixelRegion(
+            region.Right - (source.Right - region.X),
+            source.Y,
+            source.Width,
+            source.Height);
+    }
+
+    /// <summary>
     /// 这一格必须落在整图内，否则这张卡切不完整，不能当成可分发。
     /// 有效区域设错（例如把整幅宽度当成单卡宽度的一半）时由它挡住。
     /// </summary>

@@ -218,18 +218,131 @@ public sealed class TabletAssetTests : IDisposable
         AssertEdgeMarkersIntact(SyntheticPng.Decode(left.Png), 0, 1);
     }
 
+    [Theory]
+    [InlineData(5, 3, 2)]
+    [InlineData(1003, 502, 501)]
+    public void A_mirrored_odd_width_sheet_reflects_cell_edges_without_neighbor_pixels(
+        int width,
+        int expectedLeftWidth,
+        int expectedRightWidth)
+    {
+        // 输入是整版镜像后的像素：宽 5 时三像素卡在左、两像素卡在右；1003 同理。
+        // 镜像裁切要反射不等宽边界，再反转卡内像素，不能按原边界切出半张邻卡。
+        var sheet = new RasterImage(width, 1);
+        var mirroredBoundary = (width + 1) / 2;
+        for (var x = 0; x < width; x++)
+        {
+            sheet.Set(x, 0, x < mirroredBoundary
+                ? ((byte)2, (byte)0, (byte)0)
+                : ((byte)1, (byte)0, (byte)0));
+        }
+
+        var path = Path.Combine(_root, $"mirrored-{width}.png");
+        File.WriteAllBytes(path, PngCodec.Encode(sheet));
+        var grid = new GridLayout
+        {
+            Rows = 1,
+            Columns = 2,
+            Region = new PixelRegion(0, 0, width, 1),
+            MirrorHorizontally = true,
+        };
+
+        var cuts = GridCardCropper.Crop(path, grid);
+        var left = Assert.Single(cuts, cut => cut.Slot == new GridSlot(0, 0));
+        var right = Assert.Single(cuts, cut => cut.Slot == new GridSlot(0, 1));
+
+        Assert.Equal(expectedLeftWidth, left.Width);
+        Assert.Equal(expectedRightWidth, right.Width);
+        Assert.Equal(new PixelRegion(0, 0, expectedLeftWidth, 1), left.Region);
+        Assert.Equal(new PixelRegion(expectedLeftWidth, 0, expectedRightWidth, 1), right.Region);
+        Assert.All(Enumerable.Range(0, left.Width), x => Assert.Equal((byte)2, left.Image.Get(x, 0).R));
+        Assert.All(Enumerable.Range(0, right.Width), x => Assert.Equal((byte)1, right.Image.Get(x, 0).R));
+
+        var assets = TabletAssetBuilder.MaterializeGrid(
+            Path.Combine(_root, $"assets-{width}"),
+            $"source-{width}",
+            path,
+            grid);
+        var leftAsset = Assert.Single(assets, asset => asset.Slot == left.Slot);
+        var rightAsset = Assert.Single(assets, asset => asset.Slot == right.Slot);
+        Assert.Equal(left.Region, leftAsset.CropRegion);
+        Assert.Equal(right.Region, rightAsset.CropRegion);
+        Assert.True(leftAsset.GridMirrorHorizontally);
+        Assert.Equal(grid.Region, leftAsset.GridRegion);
+    }
+
+    [Fact]
+    public void A_mirrored_sparse_slot_keeps_its_physical_slot_and_nonzero_source_offset()
+    {
+        // ValidSlots 是源图上的物理槽位。只保留物理第 0 列时，镜像几何要先查 canonical 第 1 列，
+        // 再反射到带偏移的有效区域；返回仍是物理第 0 列，正背配对由 GridSlotMapping 处理。
+        var sheet = new RasterImage(10, 4);
+        for (var y = 0; y < sheet.Height; y++)
+        {
+            for (var x = 0; x < sheet.Width; x++)
+            {
+                sheet.Set(x, y, ((byte)9, (byte)9, (byte)9));
+            }
+        }
+
+        for (var y = 1; y < 3; y++)
+        {
+            for (var x = 2; x < 5; x++)
+            {
+                sheet.Set(x, y, ((byte)2, (byte)0, (byte)0));
+            }
+
+            for (var x = 5; x < 7; x++)
+            {
+                sheet.Set(x, y, ((byte)1, (byte)0, (byte)0));
+            }
+        }
+
+        var path = Path.Combine(_root, "mirrored-sparse-offset.png");
+        File.WriteAllBytes(path, PngCodec.Encode(sheet));
+        var grid = new GridLayout
+        {
+            Rows = 1,
+            Columns = 2,
+            Region = new PixelRegion(2, 1, 5, 2),
+            ValidSlots = [new GridSlot(0, 0)],
+            MirrorHorizontally = true,
+        };
+
+        var cut = Assert.Single(GridCardCropper.Crop(path, grid));
+
+        Assert.Equal(new GridSlot(0, 0), cut.Slot);
+        Assert.Equal(new PixelRegion(2, 1, 3, 2), cut.Region);
+        Assert.All(Enumerable.Range(0, cut.Width), x =>
+        {
+            for (var y = 0; y < cut.Height; y++)
+            {
+                Assert.Equal((byte)2, cut.Image.Get(x, y).R);
+                Assert.Equal((byte)0, cut.Image.Get(x, y).G);
+            }
+        });
+        Assert.Equal(
+            new GridSlot(0, 1),
+            GridSlotMapping.DefaultForPairing(mirrored: true, backColumns: 2).MapBackHeader(cut.Slot));
+    }
+
     [Fact]
     public void Mirrored_mapping_swaps_which_side_slot_pairs_with_which_front()
     {
-        // 正背面槽位映射：背面第 0 列对应正面第 1 列（印版是反的）。
-        var pairing = GridSlotMapping.DefaultForPairing(mirrored: true);
-        Assert.Equal(new GridSlot(0, 1), pairing.MapBackHeader(new GridSlot(0, 0)));
-        Assert.Equal(new GridSlot(0, 0), pairing.MapBackHeader(new GridSlot(0, 1)));
+        // 正背面槽位映射使用真实列数：三列背面从 0、1、2 映射到正面 2、1、0。
+        var pairing = GridSlotMapping.DefaultForPairing(mirrored: true, backColumns: 3);
+        Assert.Equal(new GridSlot(0, 2), pairing.MapBackHeader(new GridSlot(0, 0)));
+        Assert.Equal(new GridSlot(0, 1), pairing.MapBackHeader(new GridSlot(0, 1)));
+        Assert.Equal(new GridSlot(0, 0), pairing.MapBackHeader(new GridSlot(0, 2)));
 
-        // 同槽位对应：背面第 0 列对正面第 0 列。
-        var same = GridSlotMapping.DefaultForPairing(mirrored: false);
+        // 不镜像时槽位不变，且也按真实列数拒绝越界值。
+        var same = GridSlotMapping.DefaultForPairing(mirrored: false, backColumns: 3);
         Assert.Equal(new GridSlot(0, 0), same.MapBackHeader(new GridSlot(0, 0)));
-        Assert.Equal(new GridSlot(0, 1), same.MapBackHeader(new GridSlot(0, 1)));
+        Assert.Equal(new GridSlot(0, 2), same.MapBackHeader(new GridSlot(0, 2)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => pairing.MapBackHeader(new GridSlot(0, -1)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => pairing.MapBackHeader(new GridSlot(0, 3)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => pairing.MapBackHeader(new GridSlot(-1, 0)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => GridSlotMapping.DefaultForPairing(true, backColumns: 0));
     }
 
     [Fact]
@@ -409,6 +522,11 @@ public sealed class TabletAssetTests : IDisposable
                     Kind = TabletAssetKind.CardFront,
                     SourceFileId = "f-1",
                     SourcePageNumber = 1,
+                    GridRows = 2,
+                    GridColumns = 2,
+                    GridMirrorHorizontally = true,
+                    GridRegion = new PixelRegion(10, 20, 100, 200),
+                    CropRegion = new PixelRegion(10, 20, 50, 100),
                     Slot = new GridSlot(0, 0),
                 },
             },
@@ -429,6 +547,34 @@ public sealed class TabletAssetTests : IDisposable
         var renamed = TabletQueries.Rename(manifest, "c-a", "改了名字的卡");
         var renamedPackage = RealScriptPackageBuilder.Build("合成剧本（非真实剧本）", 5, pages, files, tablet: renamed);
         Assert.NotEqual(withTablet.ContentHash, renamedPackage.ContentHash);
+
+        var sourceAsset = manifest.Assets["asset-1"];
+        var cropMetadataChanges = new[]
+        {
+            sourceAsset with { GridRegion = new PixelRegion(11, 20, 100, 200) },
+            sourceAsset with { CropRegion = new PixelRegion(11, 20, 50, 100) },
+            sourceAsset with { GridMirrorHorizontally = false },
+            sourceAsset with { GridRows = 3 },
+            sourceAsset with { GridColumns = 3 },
+            sourceAsset with { Slot = new GridSlot(0, 1) },
+        };
+        foreach (var changedAsset in cropMetadataChanges)
+        {
+            var changedManifest = manifest with
+            {
+                Assets = new Dictionary<string, TabletAsset>(StringComparer.Ordinal)
+                {
+                    [changedAsset.AssetId] = changedAsset,
+                },
+            };
+            var changedPackage = RealScriptPackageBuilder.Build(
+                "合成剧本（非真实剧本）",
+                5,
+                pages,
+                files,
+                tablet: changedManifest);
+            Assert.NotEqual(withTablet.ContentHash, changedPackage.ContentHash);
+        }
     }
 
     // ===== 合成图片 =====

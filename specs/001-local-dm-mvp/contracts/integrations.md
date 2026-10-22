@@ -52,3 +52,12 @@ parse_wait_timeout 且 pending/parsing 视为等待中，允许按原参数继�
 quality_tier_unavailable、no_engine、parse_server_unavailable、remote_not_allowed 显示实际可行恢复选项，不静默换解析器或外发。
 
 导入用户准备的完整应用包使用 document-package.md，不读 MinerU 私有缓存，也不把 --output 的 Markdown 当作有块定位的完整包。
+
+## ASP.NET Core LAN Web Service
+
+WPF 进程内托管 ASP.NET Core 局域网服务，默认关闭；用户在电脑点击「开启平板分发」后才绑定所选局域网 IPv4 与端口。
+局域网一期使用 HTTP 与本地 IP，不要求安装证书；禁用目录浏览，不开放任意文件下载，不监听公网地址，不配路由器端口转发。
+页面技术候选为 Blazor Interactive Server，必须先经真实平板浏览器实测验证（平板浏览器不限定品牌：iPad、安卓平板使用各自设备上可用的浏览器即可，不要求安装 App）。
+SignalR 交互回路与业务状态分离，刷新页面按浏览器 Cookie 会话恢复，不把业务状态仅保存在 circuit 中。
+Screen Wake Lock 在 HTTP 环境下不承诺网页常亮，加入页提示玩家在系统设置中调整自动锁定。
+服务停止、切换本局或重启 WPF 立即作废旧加入令牌和浏览器会话。电脑的手册、设置、模型密钥和存档不属于任何网页下载入口。

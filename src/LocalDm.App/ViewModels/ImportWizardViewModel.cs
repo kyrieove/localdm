@@ -312,7 +312,7 @@ public sealed class ImportWizardViewModel : ObservableObject
 
         NextCommand = new RelayCommand(NextAsync, () => CanGoNext);
         BackCommand = new RelayCommand(BackAsync, () => CanGoBack);
-        CancelCommand = new RelayCommand(() => { CancelExtraction(); return Task.CompletedTask; }, () => _step == ImportWizardStep.Extracting);
+        CancelCommand = new RelayCommand(() => { CancelExtraction(); return Task.CompletedTask; }, () => _step == ImportWizardStep.Extracting, allowReentry: true);
         ScanCommand = new RelayCommand(ScanAsync, () => !Busy && Directory.Exists(FolderPath));
         AddStepCommand = new RelayCommand(() => { AddStep(); return Task.CompletedTask; });
         BuildCommand = new RelayCommand(BuildAsync, () => CanBuild);

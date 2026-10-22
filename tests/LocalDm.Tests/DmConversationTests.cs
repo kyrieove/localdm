@@ -359,12 +359,81 @@ public sealed class DmConversationTests : IDisposable
         Assert.True(host.CompactCommand.CanExecute(null));
 
         host.CompactCommand.Execute(null);
-        await WaitUntilAsync(() => host.Conversation.CompactionCount == 1);
+        await WaitUntilAsync(() => host.Conversation.CompactionCount == 1 && !host.IsBusy);
 
         Assert.Equal(1, host.Conversation.CompactionCount);
         Assert.Equal("本局备忘：已经查过书房。", host.Conversation.Memo);
         Assert.Equal(4, host.Conversation.Turns.Count);
         Assert.Equal("user", host.Conversation.Turns[0].Role);
+    }
+
+    [Fact]
+    public async Task Manual_compaction_can_retry_after_stop_without_a_late_failure_overwriting_state()
+    {
+        var gateway = new ScriptedGateway();
+        var host = await NewHostAsync(gateway);
+        await host.LoadDemoAsync();
+
+        for (var i = 0; i < 4; i++)
+        {
+            await SendAsync(host, $"第 {i} 轮问题");
+        }
+
+        host.CompactCommand.Execute(null);
+        await WaitUntilAsync(() => host.Conversation.CompactionCount == 1 && !host.IsBusy);
+        var previousMemo = host.Conversation.Memo;
+        Assert.Equal("本局备忘：已经查过书房。", previousMemo);
+
+        await SendAsync(host, "停止测试之前的第五轮问题");
+        await SendAsync(host, "停止测试之前的第六轮问题");
+        Assert.True(host.CompactCommand.CanExecute(null));
+
+        var firstGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        gateway.CompactionGates[2] = firstGate;
+        gateway.CompactionGates[3] = secondGate;
+        gateway.FailedCompactionCalls.Add(2);
+        gateway.CompactionMemo = "本局备忘：停止后的重试结果。";
+
+        host.CompactCommand.Execute(null);
+        await gateway.SecondCompactionStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.True(host.IsBusy);
+        Assert.False(host.CompactCommand.CanExecute(null));
+
+        host.StopCommand.Execute(null);
+        Assert.False(host.IsBusy);
+        Assert.Equal("已停止本次回应。本局进度没有变化。", host.Status);
+        Assert.True(host.CompactCommand.CanExecute(null));
+
+        gateway.CompactionMemo = "本局备忘：新一轮整理结果。";
+        host.CompactCommand.Execute(null);
+        await gateway.ThirdCompactionStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.False(firstGate.Task.IsCompleted);
+
+        var previousCompactionFinished = WaitForNextCanExecuteChangedAsync(host.CompactCommand);
+        firstGate.SetResult();
+        await previousCompactionFinished.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        Assert.True(host.IsBusy, "旧整理失败时，新整理仍保持忙碌。");
+        Assert.False(host.CompactCommand.CanExecute(null));
+        Assert.Equal(previousMemo, host.Conversation.Memo);
+        Assert.Equal("已停止本次回应。本局进度没有变化。", host.Status);
+        Assert.Equal(3, CompactionRequests(gateway).Count);
+
+        var retryFinished = WaitForCanExecuteChangedCountAsync(host.CompactCommand, expectedCount: 2);
+        secondGate.SetResult();
+        await retryFinished.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        Assert.False(host.IsBusy);
+        Assert.Equal(2, host.Conversation.CompactionCount);
+        Assert.Equal("本局备忘：新一轮整理结果。", host.Conversation.Memo);
+
+        var savedStore = new SessionStore(Path.Combine(_root, "sessions.db"));
+        await savedStore.InitializeAsync(TestContext.Current.CancellationToken);
+        var saved = await savedStore.LoadDmConversationAsync(
+            host.Session.Session!.SessionId,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(host.Conversation.Memo, saved?.Memo);
     }
 
     [Fact]
@@ -409,7 +478,7 @@ public sealed class DmConversationTests : IDisposable
         Assert.True(host.CompactCommand.CanExecute(null));
 
         host.CompactCommand.Execute(null);
-        await WaitUntilAsync(() => host.Conversation.CompactionCount == 1);
+        await WaitUntilAsync(() => host.Conversation.CompactionCount == 1 && !host.IsBusy);
 
         // 整理请求里必须真有要整理的对话，而不是一份空清单
         var compaction = Assert.Single(CompactionRequests(gateway));
@@ -677,6 +746,38 @@ public sealed class DmConversationTests : IDisposable
         }
     }
 
+    private static Task WaitForNextCanExecuteChangedAsync(RelayCommand command)
+    {
+        var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        EventHandler handler = null!;
+        handler = (_, _) =>
+        {
+            command.CanExecuteChanged -= handler;
+            changed.TrySetResult();
+        };
+        command.CanExecuteChanged += handler;
+        return changed.Task;
+    }
+
+    private static Task WaitForCanExecuteChangedCountAsync(RelayCommand command, int expectedCount)
+    {
+        var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var count = 0;
+        EventHandler handler = null!;
+        handler = (_, _) =>
+        {
+            if (Interlocked.Increment(ref count) != expectedCount)
+            {
+                return;
+            }
+
+            command.CanExecuteChanged -= handler;
+            changed.TrySetResult();
+        };
+        command.CanExecuteChanged += handler;
+        return changed.Task;
+    }
+
     private static bool IsCompaction(MagpieCompletionRequest request) =>
         request.Messages.Any(m => m.Content.Contains("【整理本局记忆】", StringComparison.Ordinal));
 
@@ -702,6 +803,16 @@ public sealed class DmConversationTests : IDisposable
         /// <summary>整理请求要失败。</summary>
         public bool FailCompaction { get; set; }
 
+        public Dictionary<int, TaskCompletionSource> CompactionGates { get; } = [];
+
+        public HashSet<int> FailedCompactionCalls { get; } = [];
+
+        public TaskCompletionSource SecondCompactionStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource ThirdCompactionStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private int _compactionCallCount;
+
         /// <summary>正常主持请求要失败。</summary>
         public bool FailTurn { get; set; }
 
@@ -711,11 +822,12 @@ public sealed class DmConversationTests : IDisposable
         public Task<string> CompleteAsync(MagpieCompletionRequest request, CancellationToken cancellationToken) =>
             Task.FromResult(ReplyFor(request));
 
-        public Task<MagpieCompletion> CompleteWithUsageAsync(
+        public async Task<MagpieCompletion> CompleteWithUsageAsync(
             MagpieCompletionRequest request,
             CancellationToken cancellationToken)
         {
             Requests.Add(request);
+            var compactionCall = IsCompaction(request) ? Interlocked.Increment(ref _compactionCallCount) : 0;
             if (IsCompaction(request) && FailCompaction)
             {
                 throw new DomainRuleException(DomainErrorCode.MODEL_FAILED, "整理本局记忆失败。");
@@ -727,7 +839,27 @@ public sealed class DmConversationTests : IDisposable
             }
 
             var usage = (UsageFor is { } provider ? provider(_host!, request) : null) ?? Usage ?? RequestUsage(request);
-            return Task.FromResult(new MagpieCompletion(ReplyFor(request), usage));
+            var reply = ReplyFor(request);
+            if (compactionCall == 2)
+            {
+                SecondCompactionStarted.TrySetResult();
+            }
+            else if (compactionCall == 3)
+            {
+                ThirdCompactionStarted.TrySetResult();
+            }
+
+            if (CompactionGates.TryGetValue(compactionCall, out var gate))
+            {
+                await gate.Task;
+            }
+
+            if (FailedCompactionCalls.Contains(compactionCall))
+            {
+                throw new DomainRuleException(DomainErrorCode.MODEL_FAILED, "整理本局记忆失败。");
+            }
+
+            return new MagpieCompletion(reply, usage);
         }
 
         /// <summary>当前这套夹具正在跑的宿主，UsageFor 用它读对话状态。</summary>

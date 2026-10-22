@@ -8,8 +8,8 @@ namespace LocalDm.Infrastructure.Import;
 /// <summary>
 /// 给已经冻结的剧本包准备平板清单与资产。
 ///
-/// 只处理「一张卡一个文件」的材料：按文件名里的编号配正面与卡背。
-/// 配不唯一、缺正面或文件对不上的组一律保持未准备好 ——
+/// 只处理经人确认「一张卡一个文件」的材料：按文件名里的编号配正面与卡背。
+/// 未确认版式、配不唯一、缺正面或文件对不上的组一律保持未准备好 ——
 /// 不用整页图代替单张，也不把没配好的卡混在可用的组里发出去。
 ///
 /// 资产按内容指纹单独存放：换一版包不会覆盖上一版的图，旧页面也取不到新局的同号卡。
@@ -21,11 +21,25 @@ public static class TabletPackagePreparer
     ///
     /// <paramref name="assetsBaseDirectory"/> 是资产总目录；本次的资产落在它下面的
     /// 「内容指纹」子目录里。返回的清单带着同一个指纹。
+    /// 只有 <paramref name="confirmedSingleCardMaterialIds"/> 明确列出的材料组才按单卡文件处理；
+    /// 省略时所有未知版式都暂停。
     /// </summary>
-    public static TabletManifest Prepare(ScriptPackage package, string assetsBaseDirectory)
+    public static TabletManifest Prepare(
+        ScriptPackage package,
+        string assetsBaseDirectory,
+        IReadOnlySet<string>? confirmedSingleCardMaterialIds = null)
     {
         ArgumentNullException.ThrowIfNull(package);
         ArgumentException.ThrowIfNullOrWhiteSpace(assetsBaseDirectory);
+
+        var confirmedGroups = confirmedSingleCardMaterialIds is null
+            ? new HashSet<string>(StringComparer.Ordinal)
+            : new HashSet<string>(confirmedSingleCardMaterialIds, StringComparer.Ordinal);
+        var packageGroups = package.Materials.Select(material => material.MaterialId).ToHashSet(StringComparer.Ordinal);
+        if (confirmedGroups.Any(group => !packageGroups.Contains(group)))
+        {
+            throw new ArgumentException("单卡确认中包含剧本包没有的材料组。", nameof(confirmedSingleCardMaterialIds));
+        }
 
         var files = package.SourceFiles.ToDictionary(f => f.FileId, StringComparer.Ordinal);
         var spans = package.Spans.ToDictionary(s => s.SpanId, StringComparer.Ordinal);
@@ -48,6 +62,28 @@ public static class TabletPackagePreparer
             var candidates = TabletAssetBuilder.PairSingleCards(groupFiles.Select(f => f.PrivatePath).ToArray());
             var notReady = 0;
             TabletNotReadyReason? firstReason = null;
+
+            if (!confirmedGroups.Contains(material.MaterialId))
+            {
+                foreach (var candidate in candidates)
+                {
+                    var cardId = CardId(material.MaterialId, candidate.SourceOrder);
+                    cards[cardId] = UnavailableCard(
+                        cardId,
+                        material.MaterialId,
+                        candidate,
+                        TabletNotReadyReason.CropUnconfirmed);
+                }
+
+                groups[material.MaterialId] = new TabletGroupPreparationState
+                {
+                    GroupName = material.MaterialId,
+                    Readiness = TabletGroupReadiness.NotReady,
+                    Reason = TabletNotReadyReason.CropUnconfirmed,
+                    NotReadyCardCount = candidates.Count,
+                };
+                continue;
+            }
 
             foreach (var candidate in candidates)
             {
@@ -100,7 +136,7 @@ public static class TabletPackagePreparer
 
                 var frontAssetId = cardId + "-front";
                 var frontExtension = Path.GetExtension(frontFile.PrivatePath).TrimStart('.').ToLowerInvariant();
-                var frontRelative = $"cards/{Sanitize(frontAssetId)}.{frontExtension}";
+                var frontRelative = TabletAssetBuilder.SingleAssetRelativePath(frontAssetId, frontExtension);
 
                 var plan = new CardPlan
                 {
@@ -119,20 +155,43 @@ public static class TabletPackagePreparer
                     FrontExtension = frontExtension,
                 };
 
-                var backFile = candidate.BackPath is null
-                    ? null
-                    : files.Values.FirstOrDefault(f => string.Equals(f.PrivatePath, candidate.BackPath, StringComparison.Ordinal));
-                if (backFile is not null && File.Exists(backFile.PrivatePath))
+                if (candidate.BackPath is not null)
                 {
-                    var backHash = TabletAssetBuilder.ComputeFileHash(backFile.PrivatePath);
-                    if (string.Equals(backHash, backFile.ContentHash, StringComparison.OrdinalIgnoreCase))
+                    var backFile = files.Values.FirstOrDefault(f =>
+                        string.Equals(f.PrivatePath, candidate.BackPath, StringComparison.Ordinal));
+                    if (backFile is null || !File.Exists(backFile.PrivatePath))
                     {
-                        plan.BackAssetId = cardId + "-back";
-                        plan.BackPath = backFile.PrivatePath;
-                        plan.BackHash = backHash;
-                        plan.BackExtension = Path.GetExtension(backFile.PrivatePath).TrimStart('.').ToLowerInvariant();
-                        plan.BackRelativePath = $"cards/{Sanitize(plan.BackAssetId)}.{plan.BackExtension}";
+                        notReady++;
+                        firstReason ??= TabletNotReadyReason.AssetMissing;
+                        cards[cardId] = UnavailableCard(
+                            cardId,
+                            material.MaterialId,
+                            candidate,
+                            TabletNotReadyReason.AssetMissing);
+                        continue;
                     }
+
+                    var backHash = TabletAssetBuilder.ComputeFileHash(backFile.PrivatePath);
+                    if (!string.Equals(backHash, backFile.ContentHash, StringComparison.OrdinalIgnoreCase))
+                    {
+                        notReady++;
+                        firstReason ??= TabletNotReadyReason.AssetMissing;
+                        cards[cardId] = UnavailableCard(
+                            cardId,
+                            material.MaterialId,
+                            candidate,
+                            TabletNotReadyReason.AssetMissing);
+                        continue;
+                    }
+
+                    var backAssetId = cardId + "-back";
+                    var backExtension = Path.GetExtension(backFile.PrivatePath).TrimStart('.').ToLowerInvariant();
+                    plan.BackAssetId = backAssetId;
+                    plan.BackSourceFileId = backFile.FileId;
+                    plan.BackPath = backFile.PrivatePath;
+                    plan.BackHash = backHash;
+                    plan.BackExtension = backExtension;
+                    plan.BackRelativePath = TabletAssetBuilder.SingleAssetRelativePath(backAssetId, backExtension);
                 }
 
                 plans.Add(plan);
@@ -143,15 +202,51 @@ public static class TabletPackagePreparer
             groups[material.MaterialId] = new TabletGroupPreparationState
             {
                 GroupName = material.MaterialId,
-                Readiness = notReady == 0 ? TabletGroupReadiness.Ready : TabletGroupReadiness.NotReady,
-                Reason = notReady == 0 ? null : firstReason,
+                Readiness = notReady == 0 && candidates.Count > 0
+                    ? TabletGroupReadiness.Ready
+                    : TabletGroupReadiness.NotReady,
+                Reason = notReady == 0 && candidates.Count > 0
+                    ? null
+                    : firstReason ?? TabletNotReadyReason.AssetMissing,
                 NotReadyCardCount = notReady,
             };
         }
 
-        var fingerprint = Fingerprint(plans);
+        var roleSourceFingerprint = RoleSourceAssetBuilder.SourceFingerprint(package);
+        var fingerprint = Fingerprint(plans, roleSourceFingerprint);
         var assetRoot = Path.Combine(assetsBaseDirectory, fingerprint);
         Directory.CreateDirectory(assetRoot);
+        var roleAssets = RoleSourceAssetBuilder.Materialize(package, assetRoot);
+
+        var plannedPaths = new List<string>();
+        var plannedAssetIds = new List<string>();
+        foreach (var plan in plans)
+        {
+            plannedPaths.Add(plan.FrontRelativePath);
+            plannedAssetIds.Add(plan.FrontAssetId);
+            if (plan.BackRelativePath is not null && plan.BackAssetId is not null)
+            {
+                plannedPaths.Add(plan.BackRelativePath);
+                plannedAssetIds.Add(plan.BackAssetId);
+            }
+        }
+
+        foreach (var roleAsset in roleAssets)
+        {
+            plannedPaths.Add(roleAsset.RelativePath);
+            plannedAssetIds.Add(roleAsset.AssetId);
+        }
+
+        EnsureUniqueRelativePaths(plannedPaths);
+        if (plannedAssetIds.Distinct(StringComparer.Ordinal).Count() != plannedAssetIds.Count)
+        {
+            throw new InvalidOperationException("多个平板资产使用了同一个资产 ID。");
+        }
+
+        foreach (var roleAsset in roleAssets)
+        {
+            assets.Add(roleAsset.AssetId, roleAsset);
+        }
 
         foreach (var plan in plans)
         {
@@ -161,17 +256,19 @@ public static class TabletPackagePreparer
                 plan.SourceFileId,
                 plan.FrontPath,
                 TabletAssetKind.CardFront);
-            assets[plan.FrontAssetId] = front;
+            assets.Add(plan.FrontAssetId, front);
 
-            if (plan.BackAssetId is not null && plan.BackPath is not null)
+            if (plan.BackAssetId is not null
+                && plan.BackSourceFileId is not null
+                && plan.BackPath is not null)
             {
                 var back = TabletAssetBuilder.MaterializeSingle(
                     assetRoot,
                     plan.BackAssetId,
-                    plan.SourceFileId,
+                    plan.BackSourceFileId,
                     plan.BackPath,
                     TabletAssetKind.CardBack);
-                assets[plan.BackAssetId] = back;
+                assets.Add(plan.BackAssetId, back);
             }
 
             cards[plan.CardId] = new TabletCard
@@ -203,9 +300,9 @@ public static class TabletPackagePreparer
     /// 资产目录的内容指纹：按「相对路径 + 内容 hash」排序后取 SHA-256。
     /// 同样的资产内容永远得到同一个指纹，资产目录因此可以复用而不会串。
     /// </summary>
-    private static string Fingerprint(IReadOnlyList<CardPlan> plans)
+    private static string Fingerprint(IReadOnlyList<CardPlan> plans, string roleSourceFingerprint)
     {
-        var lines = new List<string>();
+        var lines = new List<string> { $"role-source={roleSourceFingerprint}" };
         foreach (var plan in plans)
         {
             lines.Add($"{plan.FrontRelativePath}={plan.FrontHash}");
@@ -217,6 +314,18 @@ public static class TabletPackagePreparer
 
         lines.Sort(StringComparer.Ordinal);
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', lines))));
+    }
+
+    private static void EnsureUniqueRelativePaths(IReadOnlyList<string> paths)
+    {
+        var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var path in paths)
+        {
+            if (!unique.Add(path.Replace('\\', '/')))
+            {
+                throw new InvalidOperationException("多个平板资产对应同一个相对路径。");
+            }
+        }
     }
 
     /// <summary>
@@ -257,9 +366,6 @@ public static class TabletPackagePreparer
         return digits.Length > 0 ? digits : name;
     }
 
-    private static string Sanitize(string value) =>
-        new([.. value.Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' ? c : '-')]);
-
     private sealed class CardPlan
     {
         public required string CardId { get; init; }
@@ -274,6 +380,7 @@ public static class TabletPackagePreparer
         public required string FrontRelativePath { get; init; }
         public required string FrontExtension { get; init; }
         public string? BackAssetId { get; set; }
+        public string? BackSourceFileId { get; set; }
         public string? BackPath { get; set; }
         public string? BackHash { get; set; }
         public string? BackRelativePath { get; set; }

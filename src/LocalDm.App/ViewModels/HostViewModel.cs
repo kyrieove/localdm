@@ -33,6 +33,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
     private readonly ISessionStore? _store;
     private readonly SessionViewModel _session;
     private readonly ITtsService? _tts;
+    private readonly SemaphoreSlim _conversationSaveGate = new(1, 1);
 
     /// <summary>
     /// 音色变更回调：把选择落盘。返回 null 表示成功，返回文案表示失败原因。
@@ -133,20 +134,24 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             }
         };
 
-        SendCommand = new RelayCommand(SendAsync, () => !IsBusy);
-        StopCommand = new RelayCommand(StopAsync, () => IsBusy);
+        // Stop clears IsBusy before a gateway that ignores cancellation returns; generation checks protect the newer turn.
+        SendCommand = new RelayCommand(SendAsync, () => !IsBusy, allowReentry: true);
+        StopCommand = new RelayCommand(StopAsync, () => IsBusy, allowReentry: true);
         OpeningSpeechCommand = new RelayCommand(
             () => NarrateIntentAsync(HostNarrationIntent.OpenSession),
-            () => !IsBusy && ShowOpeningSpeech);
+            () => !IsBusy && ShowOpeningSpeech,
+            allowReentry: true);
         AskStatusCommand = new RelayCommand(
             () => AskAsync("现在这个环节需要做什么？"),
-            () => !IsBusy && ShowSuggestions);
+            () => !IsBusy && ShowSuggestions,
+            allowReentry: true);
         AskRulesCommand = new RelayCommand(
             () => AskAsync("请再说明一次当前环节的规则。"),
-            () => !IsBusy && ShowSuggestions);
+            () => !IsBusy && ShowSuggestions,
+            allowReentry: true);
         ShowMaterialsCommand = new RelayCommand(() => { ShowMaterials = true; return Task.CompletedTask; });
         ShowConversationCommand = new RelayCommand(() => { ShowMaterials = false; return Task.CompletedTask; });
-        CompactCommand = new RelayCommand(() => ManualCompactAsync(), () => CanCompact);
+        CompactCommand = new RelayCommand(() => ManualCompactAsync(), () => CanCompact, allowReentry: true);
 
         // 公开消息：桌上每落一条消息就往存档写一条，平板按序号取。
         // 存储不支持公开消息时（比如未接线）就完全不接这条线，不影响主持。
@@ -808,13 +813,14 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         }
 
         // 当前问题已上屏，但请求里只加入一次；更早的真实对话由本局记忆提供。
-        var messages = await PrepareTurnAsync(package, session, text, null);
-        if (messages is null)
+        var token = ++_generation;
+        var messages = await PrepareTurnAsync(package, session, text, null, token);
+        if (token != _generation || messages is null)
         {
             return;
         }
 
-        await RunTurnAsync(messages, "正在请本机模型回答…", AskPipeline, text);
+        await RunTurnAsync(messages, "正在请本机模型回答…", AskPipeline, text, token);
     }
 
     /// <summary>快捷意图：替玩家把这句话打进输入框再发出去，走的还是同一条链路。</summary>
@@ -895,8 +901,9 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var messages = await PrepareTurnAsync(package, session, null, intent);
-        if (messages is null)
+        var token = ++_generation;
+        var messages = await PrepareTurnAsync(package, session, null, intent, token);
+        if (token != _generation || messages is null)
         {
             return;
         }
@@ -906,7 +913,8 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             messages,
             "正在请本机模型写主持词…",
             SpeakPipeline,
-            $"【主持台操作】{HostNarration.IntentLine(intent, phase?.Title ?? "开场")}");
+            $"【主持台操作】{HostNarration.IntentLine(intent, phase?.Title ?? "开场")}",
+            token);
     }
 
     /// <summary>提问这条流水线的两步：先问模型，再朗读。</summary>
@@ -923,7 +931,8 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         ScriptPackage package,
         Session session,
         string? userText,
-        HostNarrationIntent? intent)
+        HostNarrationIntent? intent,
+        int token)
     {
         var settings = _settingsProvider();
         var window = settings.ContextWindowTokens;
@@ -935,7 +944,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
 
         if (ContextBudget.UsageRatio(_conversation, system, NextUserMessage(), window) >= ContextBudget.AutoCompactRatio)
         {
-            if (!await CompactAsync(package, system, NextUserMessage(), window, manual: false))
+            if (!await CompactAsync(package, system, NextUserMessage(), window, manual: false, token: token))
             {
                 return null;
             }
@@ -968,7 +977,8 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         var settings = _settingsProvider();
         var system = HostNarration.BuildSystemPrompt(package);
         var next = HostNarration.BuildAskUserMessage(package, session, string.Empty, _conversation.Memo);
-        await CompactAsync(package, system, next, settings.ContextWindowTokens, manual: true);
+        var token = ++_generation;
+        await CompactAsync(package, system, next, settings.ContextWindowTokens, manual: true, token: token);
     }
 
     /// <summary>
@@ -982,7 +992,8 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         string system,
         string nextUserMessage,
         int contextWindowTokens,
-        bool manual)
+        bool manual,
+        int token)
     {
         var settings = _settingsProvider();
         var keepFromIndex = manual
@@ -992,9 +1003,12 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         if (keepFromIndex == 0)
         {
             // 前面没有可整理的内容：不发请求，免得模型凭空生成一份备忘。
+            // 从没整理过的局是「对话还太短」；整理过的局才是「再之前都整理过了」。
             if (manual)
             {
-                Status = "最近 2 轮之前的对话都整理过了，这次没有需要整理的内容。";
+                Status = _conversation.CompactionCount == 0
+                    ? "对话还太短，暂时没有需要整理的内容。"
+                    : "最近 2 轮之前的对话都整理过了，这次没有需要整理的内容。";
                 return true;
             }
 
@@ -1010,51 +1024,69 @@ public sealed class HostViewModel : ObservableObject, IDisposable
 
         IsGenerating = true;
         Activity.Begin(ActivityKind.Thinking, "正在整理较早的对话…", ["整理记忆"], PhaseDetail());
-        var (memo, reason, late) = await _director.GenerateOnlyAsync(
-            settings.ModelId!,
-            HostNarration.BuildCompactionMessages(package, _conversation, keepFromIndex),
-            CancellationToken.None);
-        IsGenerating = false;
-
-        if (late)
+        var continueTurn = false;
+        try
         {
-            // 操作者按了停止：记忆保持原样。
-            return false;
-        }
+            var (memo, reason, late) = await _director.GenerateOnlyAsync(
+                settings.ModelId!,
+                HostNarration.BuildCompactionMessages(package, _conversation, keepFromIndex),
+                CancellationToken.None);
 
-        if (string.IsNullOrWhiteSpace(memo))
-        {
-            var dropped = DropOldestUntilSendable(system, nextUserMessage, contextWindowTokens);
-            if (dropped > 0)
+            if (token != _generation || late)
             {
-                AppendLocalHint($"整理失败，已丢弃最早的 {dropped} 轮对话以继续主持。");
-            }
-            else
-            {
-                AppendLocalHint("整理较早的对话失败，这一轮照常发送。");
+                // 操作者按了停止：记忆保持原样。
+                return false;
             }
 
-            return true;
-        }
+            if (string.IsNullOrWhiteSpace(memo))
+            {
+                var dropped = DropOldestUntilSendable(system, nextUserMessage, contextWindowTokens);
+                if (dropped > 0)
+                {
+                    AppendLocalHint($"整理失败，已丢弃最早的 {dropped} 轮对话以继续主持。");
+                }
+                else
+                {
+                    AppendLocalHint("整理较早的对话失败，这一轮照常发送。");
+                }
 
-        // 人工验收发现模型会把还没读到的卡面细节写进备忘：备忘里只要有一句照着卡面原文写了
-        // 桌上没人念过的一段，就当作这次整理没成功，整份不采用，这一轮照常发送。
-        var unsupported = DmMemoCheck.UnsupportedTerms(memo, _conversation, package);
-        if (unsupported.Count > 0)
+                continueTurn = !manual;
+                return true;
+            }
+
+            // 人工验收发现模型会把还没读到的卡面细节写进备忘：备忘里只要有一句照着卡面原文写了
+            // 桌上没人念过的一段，就当作这次整理没成功，整份不采用，这一轮照常发送。
+            var unsupported = DmMemoCheck.UnsupportedTerms(memo, _conversation, package);
+            if (unsupported.Count > 0)
+            {
+                AppendLocalHint($"整理较早的对话失败：整理结果里有 {unsupported.Count} 处对话中没出现过的内容，这份备忘没有采用，这一轮照常发送。");
+                continueTurn = !manual;
+                return true;
+            }
+
+            if (token != _generation)
+            {
+                return false;
+            }
+
+            _conversation.ApplyCompaction(memo, keepFromIndex);
+            var kept = (_conversation.Turns.Count + 1) / 2;
+            AppendLocalHint($"已整理较早的对话（第 {_conversation.CompactionCount} 次），保留了最近 {kept} 轮原话。");
+            OnPropertyChanged(nameof(Memo));
+            OnPropertyChanged(nameof(HasMemo));
+            OnPropertyChanged(nameof(CompactionCountText));
+            RefreshContextUsage();
+            await SaveConversationAsync(token);
+            continueTurn = !manual && token == _generation;
+            return token == _generation;
+        }
+        finally
         {
-            AppendLocalHint($"整理较早的对话失败：整理结果里有 {unsupported.Count} 处对话中没出现过的内容，这份备忘没有采用，这一轮照常发送。");
-            return true;
+            if (token == _generation && (manual || !continueTurn))
+            {
+                IsGenerating = false;
+            }
         }
-
-        _conversation.ApplyCompaction(memo, keepFromIndex);
-        var kept = (_conversation.Turns.Count + 1) / 2;
-        AppendLocalHint($"已整理较早的对话（第 {_conversation.CompactionCount} 次），保留了最近 {kept} 轮原话。");
-        OnPropertyChanged(nameof(Memo));
-        OnPropertyChanged(nameof(HasMemo));
-        OnPropertyChanged(nameof(CompactionCountText));
-        RefreshContextUsage();
-        await SaveConversationAsync();
-        return true;
     }
 
     /// <summary>
@@ -1088,9 +1120,9 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         IReadOnlyList<MagpieMessage> messages,
         string thinkingTitle,
         string[] pipeline,
-        string memoryUserText)
+        string memoryUserText,
+        int token)
     {
-        var token = ++_generation;
         var settings = _settingsProvider();
 
         IsGenerating = true;
@@ -1122,7 +1154,12 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             _conversation.AppendUser(memoryUserText);
             _conversation.AppendAssistant(reply, _director.LastUsage);
             RefreshContextUsage();
-            await SaveConversationAsync();
+            await SaveConversationAsync(token);
+
+            if (token != _generation)
+            {
+                return;
+            }
 
             if (!AutoRead)
             {
@@ -1163,6 +1200,11 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         }
         catch (DomainRuleException ex)
         {
+            if (token != _generation)
+            {
+                return;
+            }
+
             AppendHost(ex.PublicReason, fromModel: false);
             Activity.Fail("这一步没有完成", ex.PublicReason);
         }
@@ -1262,6 +1304,11 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         }
         catch (DomainRuleException ex)
         {
+            if (token != _generation)
+            {
+                return;
+            }
+
             message.SetSpeech(ChatSpeechState.Failed, ex.PublicReason);
             Activity.Fail("重播没有完成", ex.PublicReason);
         }
@@ -1312,24 +1359,42 @@ public sealed class HostViewModel : ObservableObject, IDisposable
     /// <summary>
     /// 把本局对话记忆存档。存失败只在状态栏提示，不影响主持。
     /// </summary>
-    private async Task SaveConversationAsync()
+    private async Task SaveConversationAsync(int generation)
     {
-        if (_store is null || _conversationSessionId is null)
+        var store = _store;
+        var sessionId = _conversationSessionId;
+        var conversation = _conversation;
+        if (store is null || sessionId is null)
         {
             return;
         }
 
+        await _conversationSaveGate.WaitAsync();
         try
         {
-            await _store.SaveDmConversationAsync(
-                _conversationSessionId,
-                _conversation.ToSnapshot(),
+            if (sessionId == _conversationSessionId && !ReferenceEquals(conversation, _conversation))
+            {
+                return;
+            }
+
+            await store.SaveDmConversationAsync(
+                sessionId,
+                conversation.ToSnapshot(),
                 CancellationToken.None);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine("[Host] 保存对话记忆失败：" + ex.Message);
-            Status = "对话记忆没有存下来；这一局照常主持。";
+            if (generation == _generation
+                && sessionId == _conversationSessionId
+                && ReferenceEquals(conversation, _conversation))
+            {
+                Status = "对话记忆没有存下来；这一局照常主持。";
+            }
+        }
+        finally
+        {
+            _conversationSaveGate.Release();
         }
     }
 
@@ -1356,7 +1421,8 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             message.SetSpeech(ChatSpeechState.Ready, "尚未朗读");
             message.ReplayCommand = new RelayCommand(
                 () => ReplayMessageAsync(message),
-                () => !IsBusy && message.CanReplay);
+                () => !IsBusy && message.CanReplay,
+                allowReentry: true);
         }
         else
         {

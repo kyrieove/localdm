@@ -36,7 +36,10 @@ public interface ITabletContent
         out string contentType,
         out TabletQueryFailure failure);
 
-    /// <summary>取角色本的原稿页图片（只给本人）。</summary>
+    /// <summary>
+    /// 取角色本的原稿页图片（只给本人）。<paramref name="pageNumber"/> 是该角色的逻辑页序，
+    /// 从 1 开始；它不代表来源文件内部的 PDF 页号。
+    /// </summary>
     bool TryGetRoleSourcePage(string roleId, int pageNumber, out byte[] bytes, out string contentType);
 }
 

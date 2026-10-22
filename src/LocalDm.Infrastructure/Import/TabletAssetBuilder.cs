@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using LocalDm.Core.Domain;
 using LocalDm.Core.Tablet;
@@ -84,14 +85,19 @@ public static partial class TabletAssetBuilder
         var sourceHash = ComputeFileHash(imagePath);
         var cuts = GridCardCropper.Crop(imagePath, layout);
         var assets = new List<TabletAsset>(cuts.Count);
+        var relativePaths = cuts
+            .Select(cut => GridRelativePath(sourceFileId, cut.Slot))
+            .ToArray();
+        EnsureUniqueRelativePaths(relativePaths);
         Directory.CreateDirectory(assetRoot);
 
-        foreach (var cut in cuts)
+        for (var i = 0; i < cuts.Count; i++)
         {
+            var cut = cuts[i];
             var assetId = $"asset-{hashesStartingFrom}-card-r{cut.Slot.Row}c{cut.Slot.Column}";
             hashesStartingFrom++;
             // 派生文件用稳定编号命名，不改名、不覆盖原始资料。
-            var relativePath = $"cards/{Sanitize(sourceFileId)}-r{cut.Slot.Row}c{cut.Slot.Column}.png";
+            var relativePath = relativePaths[i];
             var file = Path.Combine(assetRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(file)!);
             File.WriteAllBytes(file, cut.Png);
@@ -107,7 +113,9 @@ public static partial class TabletAssetBuilder
                 SourcePageNumber = 1,
                 GridRows = layout.Rows,
                 GridColumns = layout.Columns,
+                GridMirrorHorizontally = layout.MirrorHorizontally,
                 GridRegion = layout.Region,
+                CropRegion = cut.Region,
                 Slot = cut.Slot,
             });
         }
@@ -130,7 +138,7 @@ public static partial class TabletAssetBuilder
 
         var bytes = File.ReadAllBytes(imagePath);
         var extension = Path.GetExtension(imagePath).TrimStart('.').ToLowerInvariant();
-        var relativePath = $"cards/{Sanitize(assetId)}.{extension}";
+        var relativePath = SingleAssetRelativePath(assetId, extension);
         var file = Path.Combine(assetRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         File.WriteAllBytes(file, bytes);
@@ -167,8 +175,26 @@ public static partial class TabletAssetBuilder
         return (order, isBack);
     }
 
-    private static string Sanitize(string value) =>
-        new([.. value.Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' ? c : '-')]);
+    internal static string SingleAssetRelativePath(string assetId, string extension) =>
+        $"cards/{StableStem(assetId)}.{extension}";
+
+    private static string GridRelativePath(string sourceFileId, GridSlot slot) =>
+        $"cards/{StableStem(sourceFileId)}-r{slot.Row}c{slot.Column}.png";
+
+    private static string StableStem(string semanticId) => Convert.ToHexStringLower(
+        SHA256.HashData(Encoding.UTF8.GetBytes(semanticId)));
+
+    private static void EnsureUniqueRelativePaths(IReadOnlyList<string> paths)
+    {
+        var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var path in paths)
+        {
+            if (!unique.Add(path.Replace('\\', '/')))
+            {
+                throw new InvalidOperationException("多个网格槽位对应同一个资产文件路径。");
+            }
+        }
+    }
 
     /// <summary>卡背标记：中文「背 / 背面」或英文 back / b，大小写不限。</summary>
     [GeneratedRegex(@"背|_?back\b|\bb$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

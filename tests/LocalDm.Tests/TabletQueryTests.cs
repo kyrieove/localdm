@@ -139,8 +139,9 @@ public sealed class TabletQueryTests
         var manifest = TabletQueries.AttachAssets(
             Manifest(
                 Card("c-a", "能看的卡", "准备好的一组", 1, ready: true),
-                Card("c-b", "拆不开的卡", "没准备好的一组", 1, ready: false)),
-            Assets("asset-front-a", "asset-front-b"));
+                Card("c-b", "拆不开的卡", "没准备好的一组", 1, ready: false),
+                Card("c-c", "同组另一张卡", "没准备好的一组", 2, ready: true)),
+            Assets("asset-front-a", "asset-front-b", "asset-front-c"));
 
         Assert.True(manifest.Groups["准备好的一组"].IsReady);
         Assert.False(manifest.Groups["没准备好的一组"].IsReady);
@@ -160,6 +161,12 @@ public sealed class TabletQueryTests
         Assert.Equal(TabletQueryFailure.GroupNotReady, blocked.Failure);
         Assert.Equal(TabletNotReadyReason.CropUnconfirmed, blocked.Reason);
         Assert.Null(blocked.AssetId);
+
+        // 组是一整个分发单位：即便另一张卡有资产且自身标记 Ready，也必须暂停。
+        var blockedSibling = TabletQueries.TryResolve(manifest, "c-c");
+        Assert.False(blockedSibling.IsAvailable);
+        Assert.Equal(TabletQueryFailure.GroupNotReady, blockedSibling.Failure);
+        Assert.Equal(TabletNotReadyReason.CropUnconfirmed, blockedSibling.Reason);
     }
 
     [Fact]

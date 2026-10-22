@@ -391,6 +391,13 @@ public static class RealScriptPackageBuilder
                     .Append('|').Append(asset.SourcePageNumber)
                     .Append('|').Append(asset.GridRows?.ToString() ?? string.Empty)
                     .Append('|').Append(asset.GridColumns?.ToString() ?? string.Empty)
+                    .Append('|').Append(asset.GridMirrorHorizontally ? '1' : '0')
+                    .Append('|').Append(asset.GridRegion is { } gridRegion
+                        ? $"{gridRegion.X},{gridRegion.Y},{gridRegion.Width},{gridRegion.Height}"
+                        : string.Empty)
+                    .Append('|').Append(asset.CropRegion is { } cropRegion
+                        ? $"{cropRegion.X},{cropRegion.Y},{cropRegion.Width},{cropRegion.Height}"
+                        : string.Empty)
                     .Append('|').Append(asset.Slot is { } slot ? $"{slot.Row},{slot.Column}" : string.Empty)
                     .Append('\n');
             }

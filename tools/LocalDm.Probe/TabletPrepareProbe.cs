@@ -22,6 +22,7 @@ internal static class TabletPrepareProbe
         string? packagePath = null;
         string? assetsDir = null;
         string? outPath = null;
+        var confirmedSingleCardMaterialIds = new HashSet<string>(StringComparer.Ordinal);
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -36,8 +37,13 @@ internal static class TabletPrepareProbe
                 case "--out" when i + 1 < args.Length:
                     outPath = args[++i];
                     break;
+                case "--confirm-single" when i + 1 < args.Length:
+                    confirmedSingleCardMaterialIds.Add(args[++i]);
+                    break;
                 default:
-                    Console.Error.WriteLine("用法：--prepare-tablet --package <包.json> [--assets <目录>] [--out <包.json>]");
+                    Console.Error.WriteLine(
+                        "用法：--prepare-tablet --package <包.json> [--assets <目录>] [--out <包.json>] " +
+                        "[--confirm-single <材料组 ID> ...]");
                     return 2;
             }
         }
@@ -63,7 +69,10 @@ internal static class TabletPrepareProbe
             return 2;
         }
 
-        var manifest = TabletPackagePreparer.Prepare(package, Path.GetFullPath(assetsDir));
+        var manifest = TabletPackagePreparer.Prepare(
+            package,
+            Path.GetFullPath(assetsDir),
+            confirmedSingleCardMaterialIds);
         var prepared = RealScriptPackageBuilder.WithTabletManifest(package, manifest);
 
         // 重新准备算新版本：旧版本文件留着，纸质模式照旧可用。

@@ -9,7 +9,7 @@
 # - 只保存窗口矩形那一块；不落盘整屏。
 # - 不修改系统任何设置。
 param(
-    [string]$ExePath = "D:\2\dev\dm\src\LocalDm.App\bin\Debug\net10.0-windows\LocalDm.exe",
+    [string]$ExePath = "D:\2\dev\dm\src\LocalDm.App\bin\Debug\net10.0-windows10.0.26100.0\LocalDm.exe",
     [string]$OutDir = "D:\2\dev\dm\artifacts\ui"
 )
 

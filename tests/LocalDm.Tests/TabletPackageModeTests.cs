@@ -172,14 +172,15 @@ public sealed class TabletPackageModeTests : IDisposable
         var spans = new List<SourceSpan>();
         var segments = new List<CanonicalSegment>();
 
-        // 角色本两页
+        // 角色本两页：每页一个图片文件。真实导入里图片的页号恒为 1
+        // （SourceIndex 对越界页号直接报源失配），整本的阅读顺序由角色本的来源顺序决定。
         for (var page = 1; page <= 2; page++)
         {
             var fileId = $"role-{page}";
             var path = Path.Combine(sourcesDir, $"角色{page}.png");
             WritePng(path, page);
             files.Add(SourceFileOf(fileId, path));
-            spans.Add(Span($"role-span-{page}", fileId, page));
+            spans.Add(Span($"role-span-{page}", fileId, 1));
             segments.Add(Segment($"role-seg-{page}", page == 1 ? SyntheticRoleBookPageText : "合成角色本第二页。", SegmentVisibility.Private, $"role-span-{page}"));
         }
 
@@ -268,7 +269,14 @@ public sealed class TabletPackageModeTests : IDisposable
         };
 
         var assetsDir = Path.Combine(_root, "assets");
-        var manifest = TabletPackagePreparer.Prepare(package, assetsDir);
+        var confirmedGroups = new HashSet<string>(["clue-1"], StringComparer.Ordinal);
+        if (includeBrokenGroup)
+        {
+            // 这一组也确认了是单卡版式：正因如此，配不唯一才必须被查出来并暂停整组。
+            confirmedGroups.Add("clue-broken");
+        }
+
+        var manifest = TabletPackagePreparer.Prepare(package, assetsDir, confirmedGroups);
         var prepared = RealScriptPackageBuilder.WithTabletManifest(package, manifest);
 
         var packagesDir = Path.Combine(_root, "packages");
@@ -300,7 +308,7 @@ public sealed class TabletPackageModeTests : IDisposable
         FileId = fileId,
         PageNumber = page,
         BlockNumber = 1,
-        ToolLocator = $"doc:合成/p{page}/b1",
+        ToolLocator = $"doc:合成/{fileId}/p{page}/b1",
         TextHash = new string('d', 64),
         OriginalText = "合成文字。",
     };

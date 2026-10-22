@@ -173,12 +173,17 @@ public sealed record TabletAsset
 
     public required int SourcePageNumber { get; init; }
 
-    /// <summary>整版切图参数：原图行数、列数与有效区域，用于回溯这张是怎么切出来的。</summary>
+    /// <summary>整版切图参数：原图行数、列数、有效区域与镜像设置，用于回溯这张是怎么切出来的。</summary>
     public int? GridRows { get; init; }
 
     public int? GridColumns { get; init; }
 
+    public bool GridMirrorHorizontally { get; init; }
+
     public PixelRegion? GridRegion { get; init; }
+
+    /// <summary>实际从原图读取的像素矩形；镜像切图时记录反射后的真实来源区域。</summary>
+    public PixelRegion? CropRegion { get; init; }
 
     public GridSlot? Slot { get; init; }
 }
@@ -218,10 +223,10 @@ public sealed record GridLayout
 
     public required PixelRegion Region { get; init; }
 
-    /// <summary>有效槽位（行优先或任意顺序都可以）。为空表示整张网格每一格都是卡。</summary>
+    /// <summary>源图上的有效物理槽位（行优先或任意顺序都可以）。为空表示整张网格每一格都是卡。</summary>
     public IReadOnlyList<GridSlot> ValidSlots { get; init; } = [];
 
-    /// <summary>这张印版是左右镜像印的：切出来后再水平反转回来。</summary>
+    /// <summary>这张印版是左右镜像印的：反射槽位与边界后再水平反转卡内像素。</summary>
     public bool MirrorHorizontally { get; init; }
 
     /// <summary>这一版网格全部有效槽位，按行优先排好。</summary>
@@ -258,18 +263,28 @@ public sealed record GridSlotMapping
 {
     public required bool Mirrored { get; init; }
 
-    /// <summary>背面印版的列数。水平反转时用它把列号折回来。</summary>
+    /// <summary>背面印版的列数；用于拒绝越界槽位并在镜像时折回列号。</summary>
     public int BackColumns { get; init; } = 1;
 
     public static GridSlotMapping SameSlot { get; } = new() { Mirrored = false };
 
     /// <summary>同槽位对应（不镜像）就是事实上的恒等映射。</summary>
-    public static GridSlotMapping DefaultForPairing(bool mirrored) => mirrored
-        ? new GridSlotMapping { Mirrored = true, BackColumns = 2 }
-        : SameSlot;
+    public static GridSlotMapping DefaultForPairing(bool mirrored, int backColumns)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(backColumns);
+        return new GridSlotMapping { Mirrored = mirrored, BackColumns = backColumns };
+    }
 
     /// <summary>背面的一格 → 正面的那一格。</summary>
-    public GridSlot MapBackHeader(GridSlot backSlot) => Mirrored
-        ? backSlot with { Column = Math.Max(0, BackColumns - 1 - backSlot.Column) }
-        : backSlot;
+    public GridSlot MapBackHeader(GridSlot backSlot)
+    {
+        if (backSlot.Row < 0 || backSlot.Column < 0 || backSlot.Column >= BackColumns)
+        {
+            throw new ArgumentOutOfRangeException(nameof(backSlot), "背面槽位超出了网格范围。");
+        }
+
+        return Mirrored
+            ? backSlot with { Column = BackColumns - 1 - backSlot.Column }
+            : backSlot;
+    }
 }
