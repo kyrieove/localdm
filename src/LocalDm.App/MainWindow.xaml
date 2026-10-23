@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:LocalDm.App.ViewModels"
         xmlns:views="clr-namespace:LocalDm.App.Views"
-        Title="本局主持" Height="860" Width="1360" MinHeight="560" MinWidth="1040"
+        Title="Dungeon Master" Icon="Assets/app.ico" Height="860" Width="1360" MinHeight="560" MinWidth="1040"
         WindowStartupLocation="CenterScreen"
         FontFamily="Microsoft YaHei UI" FontSize="15"
         Foreground="{DynamicResource Ink}"
@@ -70,7 +70,7 @@
 
                         <!-- 书名 -->
                         <StackPanel Margin="20,18,20,10">
-                    <TextBlock Text="本局主持" Style="{StaticResource Display}" FontSize="22" />
+                    <TextBlock Text="Dungeon Master" Style="{StaticResource Display}" FontSize="22" />
                     <TextBlock Text="一台电脑，一场桌上戏" Style="{StaticResource RailLabel}" FontSize="11"
                                Margin="0,4,0,0" />
                 </StackPanel>

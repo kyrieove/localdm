@@ -20,8 +20,15 @@
 <div class="shell">
     <header class="shell-bar @(InWorkspace ? "has-tabs" : "")">
         <div class="shell-title">
-            <span class="mark" aria-hidden="true">局</span>
-            <span class="shell-name">本局主持 · 平板</span>
+            <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+                <rect x="2" y="2" width="60" height="60" rx="12" fill="currentColor" />
+                <g fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round">
+                    <path d="M32 12 50.2 22.5v21L32 54 13.8 43.5v-21Z" />
+                    <path d="M32 22.5 42.5 40.6h-21Z" />
+                    <path stroke-width="2" d="M32 12v10.5M50.2 22.5 32 22.5M50.2 22.5 42.5 40.6M50.2 43.5 42.5 40.6M32 54l10.5-13.4M32 54 21.5 40.6M13.8 43.5l7.7-2.9M13.8 22.5l7.7 18.1M13.8 22.5H32" />
+                </g>
+            </svg>
+            <span class="shell-name">Dungeon Master · 平板</span>
         </div>
         @if (InWorkspace)
         {

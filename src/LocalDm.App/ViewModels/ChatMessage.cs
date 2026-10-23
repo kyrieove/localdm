@@ -82,7 +82,7 @@ public sealed class ChatMessage : ObservableObject
     /// <summary>作者的显示名。事件没有作者，用一条细线代替。</summary>
     public string AuthorName => Author switch
     {
-        ChatAuthor.Host => "本局主持",
+        ChatAuthor.Host => "DM",
         ChatAuthor.Player => "玩家",
         _ => string.Empty,
     };

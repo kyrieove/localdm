@@ -11,11 +11,11 @@
 
 [Setup]
 AppId={{6B1B7B2E-8E4F-4A43-9E9C-2A1E7E1B7C11}}
-AppName=本局主持 LocalDm
+AppName=Dungeon Master
 AppVersion=0.1.0
 AppPublisher=LocalDm
 DefaultDirName={autopf}\LocalDm
-DefaultGroupName=本局主持
+DefaultGroupName=Dungeon Master
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
@@ -27,6 +27,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 UninstallDisplayIcon={app}\LocalDm.exe
+SetupIconFile=..\..\src\LocalDm.App\Assets\app.ico
 ; 安装目录只放程序，不放用户数据
 UsePreviousAppDir=yes
 
@@ -40,12 +41,12 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: 
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\本局主持"; Filename: "{app}\LocalDm.exe"
-Name: "{group}\卸载本局主持"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\本局主持"; Filename: "{app}\LocalDm.exe"; Tasks: desktopicon
+Name: "{group}\Dungeon Master"; Filename: "{app}\LocalDm.exe"
+Name: "{group}\卸载 Dungeon Master"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\Dungeon Master"; Filename: "{app}\LocalDm.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\LocalDm.exe"; Description: "启动本局主持"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\LocalDm.exe"; Description: "启动 Dungeon Master"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 ; 只清理安装目录自身的空目录；用户数据目录绝不触碰
