@@ -17,7 +17,7 @@ medium
 - `ToggleLabel` 文案保持 `开启平板连接` / `关闭平板连接`（偏好设置里作为高级开关保留）。
 
 ## Files
-may change: `src/LocalDm.App/ViewModels/TabletJoinViewModel.cs`, `src/LocalDm.App/AppComposition.cs`, `src/LocalDm.App/App.xaml.cs`, `src/LocalDm.App/ViewModels/LibraryViewModel.cs`, `tests/LocalDm.UiTests/TabletJoinTests.cs` / read-only: `stories/`, `.appdata/`, `.local/`, `src/LocalDm.Tablet/`, `src/LocalDm.Infrastructure/`
+may change: `src/LocalDm.App/ViewModels/TabletJoinViewModel.cs`, `src/LocalDm.App/AppComposition.cs`, `src/LocalDm.App/App.xaml.cs`, `src/LocalDm.App/ViewModels/LibraryViewModel.cs`, `tests/LocalDm.UiTests/TabletJoinTests.cs` / read-only: `stories/`, `.appdata/`, `.local/`
 
 ## Steps (N = 5)
 1. `src/LocalDm.Tablet/SwitchableTabletContent.cs` 与 `src/LocalDm.Infrastructure/Import/TabletMaterials.cs` 已由前两张卡合入（类型 `SwitchableTabletContent`：`SetNone()`、`SetPreparing(string)`、`Set(ITabletContent)`、`Roles`；`TabletMaterials.Ensure(ScriptPackage, string)` 返回带清单的包）。本步不改文件，只确认它们存在；不存在就停下报告。

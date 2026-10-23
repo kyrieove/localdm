@@ -15,7 +15,7 @@ medium
 - 「连不上怎么办」四条：1. 平板和电脑连同一个 Wi-Fi。2. Windows 第一次弹出网络提示时，选「专用网络」并允许。3. 网络类型若是「公用」，在 Windows 网络设置里改成「专用」。4. 仍不行：先在电脑浏览器里打开上面的网址，能打开就是平板那边的网络问题。
 
 ## Files
-may change: `src/LocalDm.App/Views/LibraryView.xaml`, `src/LocalDm.App/MainWindow.xaml`, `src/LocalDm.App/MainWindow.xaml.cs`, `src/LocalDm.App/Views/SetupView.xaml`, `tests/LocalDm.UiTests/TabletJoinTests.cs` / read-only: `stories/`, `.appdata/`, `.local/`, `src/LocalDm.Tablet/`
+may change: `src/LocalDm.App/Views/LibraryView.xaml`, `src/LocalDm.App/MainWindow.xaml`, `src/LocalDm.App/MainWindow.xaml.cs`, `src/LocalDm.App/Views/SetupView.xaml`, `tests/LocalDm.UiTests/TabletJoinTests.cs` / read-only: `stories/`, `.appdata/`, `.local/`
 
 ## Steps (N = 4)
 1. `src/LocalDm.App/Views/LibraryView.xaml`：在注释行 `<!-- 正在导入：点一下回到向导 -->` 的**上一行**插入下面这段（整张卡片）：
