@@ -71,6 +71,38 @@ public sealed class SessionStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Deleting_a_session_removes_its_progress_and_conversation_but_not_other_sessions()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var store = NewStore();
+        await store.InitializeAsync(ct);
+        foreach (var id in new[] { "s1", "s2" })
+        {
+            var current = NewSession(id);
+            await store.SaveSessionAsync(current, ct);
+            var next = current with { Revision = 1, State = SessionState.Playing };
+            var command = new GameCommand
+            {
+                SessionId = id,
+                OperationId = "op1",
+                ExpectedRevision = 0,
+                Type = GameCommandType.Start,
+            };
+            await store.CommitAsync(current, next, command, NewEvent(next, command), NewReceipt(next, command), ct);
+            await store.SaveDmConversationAsync(id, new DmConversationSnapshot { Memo = "备忘", Turns = [] }, ct);
+        }
+
+        await store.DeleteSessionAsync("s1", ct);
+
+        Assert.Null(await store.LoadSessionAsync("s1", ct));
+        Assert.Empty(await store.ReadEventsAsync("s1", ct));
+        Assert.Null(await store.FindReceiptAsync("s1", "op1", ct));
+        Assert.Null(await store.LoadDmConversationAsync("s1", ct));
+        Assert.Equal(SessionState.Playing, (await store.LoadSessionAsync("s2", ct))!.State);
+        Assert.NotNull(await store.LoadDmConversationAsync("s2", ct));
+    }
+
+    [Fact]
     public async Task Commit_with_wrong_revision_is_stale_and_changes_nothing()
     {
         using var store = NewStore();

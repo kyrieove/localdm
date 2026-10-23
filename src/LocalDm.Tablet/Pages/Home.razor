@@ -238,6 +238,7 @@
     private readonly CancellationTokenSource _feedCancellation = new();
     private Task? _feedPolling;
     private string _publicSessionId = string.Empty;
+    private int _feedGeneration;
     private long _publicSequence;
     private bool _feedFailed;
 
@@ -255,10 +256,12 @@
     {
         try
         {
+            var generation = State.ContentGeneration;
             var snapshot = await Feed.ReadAsync(_publicSequence, _feedCancellation.Token);
-            if (snapshot.SessionId != _publicSessionId)
+            if (snapshot.SessionId != _publicSessionId || generation != _feedGeneration)
             {
                 _publicSessionId = snapshot.SessionId;
+                _feedGeneration = generation;
                 _publicSequence = 0;
                 PublicFeed.Clear();
                 snapshot = await Feed.ReadAsync(0, _feedCancellation.Token);

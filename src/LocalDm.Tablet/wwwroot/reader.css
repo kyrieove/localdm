@@ -181,6 +181,20 @@ button:focus-visible, select:focus-visible, input:focus-visible {
 .source-shot img { width: 100%; height: auto; display: block; border: 1px solid var(--rule); }
 .source-shot figcaption { font-size: 11px; color: var(--muted); margin-top: 6px; }
 
+/* 原稿页：双栏时两页左右并排；最后只剩一页时按单栏宽度居中。放大后可以横向滑动。 */
+.reader.source-mode .reader-body { max-width: none; }
+.source-shot { overflow-x: auto; }
+.source-pages {
+    display: grid;
+    grid-template-columns: repeat(var(--reader-columns, 1), minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+    width: calc(100% * var(--source-zoom, 1));
+    margin-inline: auto;
+}
+.source-pages.single { grid-template-columns: minmax(0, calc((100% - 14px * (var(--reader-columns, 1) - 1)) / var(--reader-columns, 1))); justify-content: center; }
+.source-shot.fit-page img { width: auto; max-width: 100%; max-height: calc(100vh - 230px); margin-inline: auto; }
+
 .chapter-head { padding: 26px 0 20px; }
 .chapter-meta { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); letter-spacing: .12em; }
 .chapter-meta .line { width: 22px; border-top: 1px solid var(--seal); }

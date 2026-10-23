@@ -176,6 +176,28 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <Button x:Name="RestartButton" Content="重新开始本局"
+                                Command="{Binding Session.RestartCommand}"
+                                Style="{StaticResource QuietButton}" Padding="14,8" Margin="0,12,0,6"
+                                IsEnabled="{Binding Session.CanRestart}"
+                                Visibility="{Binding Session.IsRestartVisible, Converter={StaticResource BoolToVisibility}}" />
+                        <!-- 重新开始不可撤销：第一次点只展开这一行确认，不弹窗 -->
+                        <StackPanel Margin="0,0,0,6"
+                                    Visibility="{Binding Session.IsRestartConfirming, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="{Binding Session.RestartWarning}" Style="{StaticResource ChatMeta}"
+                                       FontSize="10" Foreground="{StaticResource SealDeep}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="6" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="ConfirmRestartButton" Content="确认重来" Command="{Binding Session.ConfirmRestartCommand}"
+                                        Style="{StaticResource SealButton}" Padding="10,8" IsEnabled="{Binding Session.CanRestart}" />
+                                <Button Grid.Column="2" Content="取消" Command="{Binding Session.CancelRestartCommand}"
+                                        Style="{StaticResource QuietButton}" Padding="10,8" />
+                            </Grid>
+                        </StackPanel>
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>

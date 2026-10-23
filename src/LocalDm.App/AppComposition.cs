@@ -155,6 +155,22 @@ public sealed class AppComposition : IDisposable
             });
         }
 
+        host.Session.RestartRequested += async (_, package) =>
+        {
+            try
+            {
+                // 和换剧本走同一把锁：平板先回等待页、清掉认领，再按新局重开。
+                var row = library.AllPackages.FirstOrDefault(p => p.PackageId == package.PackageId);
+                await tablet.SetPackageAsync(package, row?.FilePath, () => host.RestartPackageAsync(package));
+                library.ClearResumable();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("[App] 重新开始失败：" + ex);
+                host.ReportProblem("重新开始失败，原来的进度没有动。");
+            }
+        };
+
         // 导入向导：识别与建包走同一份服务，起草流程用同一个模型。
         // 服务每次现造：设置页刚改的 MinerU / OCR 路径立刻生效。
         var wizard = new ImportWizardViewModel(

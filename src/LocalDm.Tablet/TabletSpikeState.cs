@@ -22,11 +22,20 @@ public sealed class TabletSpikeState
             // 换剧本：所有设备的认领与阅读状态一并清掉，页面自动回到选角色页或等待页。
             switchable.Changed += () =>
             {
+                Interlocked.Increment(ref _contentGeneration);
                 ResetAll();
                 TabletSessions.RaiseChanged();
             };
         }
     }
+
+    private int _contentGeneration;
+
+    /// <summary>
+    /// 换剧本或重新开始一局时加一。重新开始沿用同一个存档 id，公开消息序号又从头数，
+    /// 网页只比 id 会留着上一局的对话、漏掉新消息，所以还要比这个数。
+    /// </summary>
+    public int ContentGeneration => Volatile.Read(ref _contentGeneration);
 
     /// <summary>当前剧本状态；合成探针与真实包始终是 Ready。</summary>
     public TabletStoryState StoryState => Content.StoryState;

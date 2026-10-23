@@ -57,7 +57,7 @@
         @if (IsSourceMode)
         {
             <figure @key="SourcePage" class="source-shot @(_fitPage ? "fit-page" : "fit-width")" style="--source-zoom:@_sourceZoom.ToString(System.Globalization.CultureInfo.InvariantCulture)">
-                <div class="source-pages">
+                <div class="source-pages @(SourcePageEnd == SourcePage ? "single" : "")">
                     @for (var pg = SourcePage; pg <= SourcePageEnd; pg++)
                     {
                         <img src="@(SourceUrlPrefix + pg)" alt="@(SourceOnly ? RoleName : "本人角色本")原稿第 @pg 页" />

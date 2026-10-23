@@ -32,6 +32,42 @@ public sealed class SessionViewModel : ObservableObject
         CompleteCommand = new RelayCommand(() => ExecuteAsync(GameCommandType.Complete));
         SubmitVoteCommand = new RelayCommand(SubmitVoteAsync);
         ReleaseMaterialsCommand = new RelayCommand(ReleaseMaterialsAsync);
+        RestartCommand = new RelayCommand(() => { SetRestartConfirming(true); return Task.CompletedTask; });
+        CancelRestartCommand = new RelayCommand(() => { SetRestartConfirming(false); return Task.CompletedTask; });
+        ConfirmRestartCommand = new RelayCommand(() =>
+        {
+            SetRestartConfirming(false);
+            if (_package is not null) { RestartRequested?.Invoke(this, _package); }
+            return Task.CompletedTask;
+        });
+    }
+
+    // ===== 重新开始：丢掉这一局的进度与对话，回到「开始这一局」之前 =====
+
+    /// <summary>确认后触发；参数是当前包。清存档、复位平板由外层做。</summary>
+    public event EventHandler<ScriptPackage>? RestartRequested;
+
+    public RelayCommand RestartCommand { get; }
+
+    public RelayCommand ConfirmRestartCommand { get; }
+
+    public RelayCommand CancelRestartCommand { get; }
+
+    /// <summary>开过局就能重来（含玩完的局）；还没开局时没有可丢的进度。</summary>
+    public bool IsRestartVisible => _projection is not null && !IsPrepared && !IsRestartConfirming;
+
+    public bool CanRestart => !Busy;
+
+    /// <summary>第一次点只展开确认行：这一步会清掉进度和对话，不可撤销。</summary>
+    public bool IsRestartConfirming { get; private set; }
+
+    public string RestartWarning => "会清掉这一局的进度、对话和平板上的角色认领，回到开局前。不能撤销。";
+
+    private void SetRestartConfirming(bool value)
+    {
+        IsRestartConfirming = value;
+        OnPropertyChanged(nameof(IsRestartConfirming));
+        OnPropertyChanged(nameof(IsRestartVisible));
     }
 
     public ObservableCollection<string> PhaseConditions { get; } = [];
@@ -195,6 +231,7 @@ public sealed class SessionViewModel : ObservableObject
         OnPropertyChanged(nameof(CanReleaseMaterials));
         OnPropertyChanged(nameof(CanPauseResume));
         OnPropertyChanged(nameof(CanComplete));
+        OnPropertyChanged(nameof(CanRestart));
     }
 
     // ===== 开局 =====
@@ -650,6 +687,8 @@ public sealed class SessionViewModel : ObservableObject
         OnPropertyChanged(nameof(CanPauseResume));
         OnPropertyChanged(nameof(PauseResumeLabel));
         OnPropertyChanged(nameof(IsPausedNow));
+        OnPropertyChanged(nameof(IsRestartVisible));
+        OnPropertyChanged(nameof(CanRestart));
         OnPropertyChanged(nameof(IsVotePhase));
         OnPropertyChanged(nameof(IsRevealPhase));
         OnPropertyChanged(nameof(HasMaterialSection));

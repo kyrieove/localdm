@@ -253,6 +253,35 @@ public sealed class SessionStore : ISessionStore, IPublicMessageFeed, IDisposabl
         }
     }
 
+    /// <summary>
+    /// 删掉一局的全部记录（公开消息、对话记忆、事件、回执、会话），一个事务里做完：
+    /// 要么全删，要么都不动。剧本包登记不动。
+    /// </summary>
+    public async Task DeleteSessionAsync(string sessionId, CancellationToken cancellationToken)
+    {
+        await InitializeAsync(cancellationToken);
+        await _writeLock.WaitAsync(cancellationToken);
+        try
+        {
+            await using var connection = await OpenAsync(cancellationToken);
+            await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
+            foreach (var table in new[] { "public_messages", "dm_conversations", "events", "operation_receipts", "sessions" })
+            {
+                await using var command = connection.CreateCommand();
+                command.Transaction = transaction;
+                command.CommandText = $"DELETE FROM {table} WHERE session_id = $id";
+                command.Parameters.AddWithValue("$id", sessionId);
+                await command.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
     /// <summary>登记已冻结剧本包（只读引用）。</summary>
     public async Task RegisterPackageAsync(
         ScriptPackage package,

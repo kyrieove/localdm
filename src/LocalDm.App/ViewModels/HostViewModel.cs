@@ -663,6 +663,30 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// 重新开始：删掉这一局的存档、事件、对话与公开消息，再按新局装载（回到「开始这一局」之前）。
+    /// 只在主持人确认后调用；平板复位由调用方包在外面。
+    /// </summary>
+    public async Task RestartPackageAsync(ScriptPackage package)
+    {
+        if (_store is not SessionStore store)
+        {
+            Status = "当前没有可用存档。";
+            return;
+        }
+
+        if (IsBusy)
+        {
+            StopCommand.Execute(null);
+        }
+
+        _director.ResetToIdle();
+        SpeechState = SpeechState.Idle;
+        await store.DeleteSessionAsync(SessionIds.For(package), CancellationToken.None);
+        _conversationSessionId = null; // 同一个存档 id：不清掉的话屏幕上还留着上一局的对话
+        await LoadPackageAsync(package);
+    }
+
     /// <summary>当前装载的真实剧本包；用于「继续一局」时校验指纹。</summary>
     private ScriptPackage? _activePendingPackage;
 
