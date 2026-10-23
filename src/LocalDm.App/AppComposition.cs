@@ -24,6 +24,7 @@ public sealed class AppComposition : IDisposable
     private readonly Task _ttsWarmup;
     private HostViewModel? _host;
     private TabletJoinViewModel? _tablet;
+    private LibraryViewModel? _library;
 
     private AppComposition(
         SessionContext context,
@@ -130,6 +131,8 @@ public sealed class AppComposition : IDisposable
             (LocalDm.Core.Ports.IPublicMessageFeed)_context.Store, () => host.Session));
         setup.Tablet = tablet;
         _tablet = tablet;
+        library.Tablet = tablet;
+        _library = library;
 
         async Task LoadCurrentPackageAsync(ScriptPackage package)
         {
@@ -337,6 +340,22 @@ public sealed class AppComposition : IDisposable
     public ToolSettings CurrentToolSettings => _currentSettings ?? ToolSettings.Default;
 
     private ToolSettings? _currentSettings;
+
+    /// <summary>软件启动后调一次：起平板服务，并在后台给已有剧本包补平板材料（读旁路文件，没有才准备）。</summary>
+    public async Task StartTabletAsync()
+    {
+        if (_tablet is null) { return; }
+        await _tablet.StartAsync();
+        var rows = _library?.AllPackages.ToArray() ?? [];
+        _ = Task.Run(() =>
+        {
+            foreach (var row in rows.Where(r => r.Package.Tablet is null && !string.IsNullOrEmpty(r.FilePath)))
+            {
+                try { LocalDm.Infrastructure.Import.TabletMaterials.Ensure(row.Package, row.FilePath); }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine("[Tablet] 后台补材料失败：" + ex.GetType().Name); }
+            }
+        });
+    }
 
     public Task StopTabletAsync() => _tablet?.DisposeAsync().AsTask() ?? Task.CompletedTask;
 

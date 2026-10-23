@@ -359,3 +359,12 @@ public sealed class TabletJoinViewModel : ObservableObject, IAsyncDisposable
 - Reuse existing functions; don't copy existing logic.
 - Run scripts in the foreground and wait; before replying, stop any background task still running.
 - No rm, no git push, no git checkout . / restore . / reset --hard.
+
+## Acceptance
+- verdict: accepted
+- files: src/LocalDm.App/App.xaml.cs, src/LocalDm.App/AppComposition.cs, src/LocalDm.App/ViewModels/LibraryViewModel.cs, src/LocalDm.App/ViewModels/TabletJoinViewModel.cs, tests/LocalDm.UiTests/TabletJoinTests.cs
+- check: `dotnet test tests/LocalDm.UiTests --filter-class "LocalDm.UiTests.TabletJoinTests"` → exit 0 (run by run-card)
+- tokens:
+  - round 1: exec custom-local:antigravity/gemini-3.8-flash: fresh 164k, cached 1722k, out 28k  (agy-tablet-always-on.jsonl) · review gpt-6.1-sol: fresh 89k, cached 467k, out 2k  (codex-review-tablet-always-on.jsonl)
+- review findings: 2 real / 0 false positive (scope 0, card 0, wrong 0) / 0 missed (medium, gpt-6.1-sol)
+- claude fix: TabletWebHost.Create 移进受保护的 try；停止与未运行时 Headline 统一为「平板服务没有启动」，准备中标题按 IsRunning 条件（review 两条 P1）

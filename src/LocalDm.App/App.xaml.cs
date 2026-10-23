@@ -63,6 +63,7 @@ public partial class App : Application
                 Shutdown();
             };
             window.Show();
+            await _composition.StartTabletAsync();
         }
         catch (Exception ex)
         {

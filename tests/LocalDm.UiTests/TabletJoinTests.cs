@@ -1,5 +1,7 @@
 using System.IO;
+using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -70,9 +72,12 @@ public sealed class TabletJoinTests
                     Assert.True(button.IsEnabled);
                     Assert.Equal("开启平板连接", button.Content);
                     button.Command.Execute(null);
-                    await Task.Yield();
+                    await Task.Delay(1500);
+                    Assert.True(shell.Setup.Tablet!.IsRunning);
+                    Assert.Equal("关闭平板连接", shell.Setup.Tablet.ToggleLabel);
+                    button.Command.Execute(null);
+                    await Task.Delay(500);
                     Assert.False(shell.Setup.Tablet!.IsRunning);
-                    Assert.Contains("平板清单", shell.Setup.Tablet.Status, StringComparison.Ordinal);
                     Assert.Null(new HostView().FindName("TabletJoinButton"));
                 }
                 finally { window.Close(); }
@@ -82,17 +87,19 @@ public sealed class TabletJoinTests
     }
 
     [Fact]
-    public async Task Unprepared_package_never_starts_demo_service()
+    public async Task Demo_package_gets_no_tablet_materials()
     {
         await WpfRunner.RunAsync(async () =>
         {
             await using var join = new TabletJoinViewModel(new LocalDm.Tablet.EmptyPublicFeedSource());
-            await join.SetPackageAsync(DemoPackage.Create(), "unused.json");
             await join.StartAsync();
-            Assert.False(join.IsRunning);
-            Assert.Empty(join.LocalUrl);
-            Assert.Null(join.QrCode);
-            Assert.Contains("平板清单", join.Status, StringComparison.Ordinal);
+            Assert.True(join.IsRunning);
+            await join.SetPackageAsync(DemoPackage.Create(), "unused.json");
+            Assert.Contains("平板材料", join.Status, StringComparison.Ordinal);
+            Assert.Contains("演示剧本", join.Status, StringComparison.Ordinal);
+            using var client = new HttpClient { BaseAddress = new Uri(join.LocalUrl) };
+            using var catalog = JsonDocument.Parse(await client.GetStringAsync("tablet/catalog"));
+            Assert.Equal(0, catalog.RootElement.GetProperty("roles").GetArrayLength());
         });
     }
 
@@ -124,8 +131,9 @@ public sealed class TabletJoinTests
                     Kind = PublicMessageKind.PlayerSpeech, Text = "公开测试发言", CreatedAt = DateTimeOffset.UtcNow,
                 }, CancellationToken.None);
                 await using var join = new TabletJoinViewModel(new CurrentSessionPublicFeedSource(store, () => view), root);
-                await join.SetPackageAsync(package, Path.Combine(root, "packages", "current.json"));
                 await join.StartAsync();
+                Assert.True(join.IsRunning);
+                await join.SetPackageAsync(package, Path.Combine(root, "packages", "current.json"));
                 Assert.True(join.IsRunning, join.Status);
                 Assert.NotNull(join.QrCode);
                 Assert.True(join.QrCode.PixelWidth > 200);
@@ -143,13 +151,43 @@ public sealed class TabletJoinTests
                 Assert.Equal("body { color: blue; }", await client.GetStringAsync("custom.css"));
                 var oldUrl = join.LocalUrl;
                 await join.SetPackageAsync(DemoPackage.Create(), null);
-                Assert.False(join.IsRunning);
-                Assert.Null(join.QrCode);
-                using var stopped = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
-                var failure = await Record.ExceptionAsync(() => stopped.GetAsync(oldUrl + "tablet/catalog", TestContext.Current.CancellationToken));
-                Assert.True(failure is HttpRequestException or TaskCanceledException, "关闭旧局后不得再取得目录响应。");
+                Assert.True(join.IsRunning);
+                using var clientAfter = new HttpClient { BaseAddress = new Uri(oldUrl) };
+                using var clearedCatalog = JsonDocument.Parse(await clientAfter.GetStringAsync("tablet/catalog"));
+                Assert.Equal(0, clearedCatalog.RootElement.GetProperty("roles").GetArrayLength());
             }
             finally { Directory.Delete(root, recursive: true); }
+        });
+    }
+
+    [Fact]
+    public async Task Port_busy_falls_back_and_tells_the_user()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            var listener = new TcpListener(IPAddress.Any, 5188);
+            try
+            {
+                listener.Start();
+            }
+            catch
+            {
+                return;
+            }
+
+            try
+            {
+                await using var join = new TabletJoinViewModel(new LocalDm.Tablet.EmptyPublicFeedSource());
+                await join.StartAsync();
+                Assert.True(join.IsRunning);
+                Assert.True(join.HasError);
+                Assert.Contains("5188", join.ErrorText);
+                Assert.DoesNotContain(":5188/", join.LocalUrl);
+            }
+            finally
+            {
+                listener.Stop();
+            }
         });
     }
 }

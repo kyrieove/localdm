@@ -83,6 +83,7 @@ public sealed class LibraryViewModel : ObservableObject
 
     /// <summary>目录里全部版本，含被「已装订」列表折叠起来的旧版本：恢复存档按包标识找包，要用它。</summary>
     public IReadOnlyList<LibraryPackageRow> AllPackages { get; private set; } = [];
+    public TabletJoinViewModel? Tablet { get; set; }
 
     public LibraryPackageRow? Selected
     {
