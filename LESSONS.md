@@ -11,3 +11,4 @@
 - Blazor 探针用 Production 启动 → 脚本没映射，页面空白；从仓库根目录启动 → 内容根不对，静态文件 404 → 在 `src/LocalDm.Tablet` 目录里用 `ASPNETCORE_ENVIRONMENT=Development dotnet run --no-build -- --urls http://127.0.0.1:5099`；每次探针重启服务以释放已认领角色。
 - 发布带 `-r win-x64` 会弄脏 `packages.lock.json` → `--isolation worktree` 被拒 → `Publish.ps1` 现已在发布后还原。
 - 旧 worktree/分支 `orch/tablet-speech-wiring`、`orch/tablet-speech-ui` 留在 `~/.claude/agent-live/orch-runner/wt/` → 内容已合入，删分支需用户确认。
+- Python 替换脚本里写 Windows 路径，`\a` 会变成控制字符 0x07（`Assets\app.ico` → `Assets<BEL>pp.ico`），构建报 MSB4025 才发现：路径里的反斜杠一律用 `chr(92)`，改完 `grep -c $'\a'` 查一遍。

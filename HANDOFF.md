@@ -1,20 +1,28 @@
-# HANDOFF · 2026-10-23 · 平板「组织者手册」页签已做完，等用户实机试
+# HANDOFF · 2026-10-23 · 「点错了能改」卡待派给 sol；之后发布 Dungeon Master
 
 ## 现在
-- 已验证：手册页签已提交（`6eaac94`，ADR 0009）。构建 0 警告，`LocalDm.Tests` 441 条通过（含跳过的），`LocalDm.UiTests` 59 条通过。已经打成安装器（`artifacts/LocalDm-Setup-x64.exe`），并静默装到了 `%LOCALAPPDATA%\Programs\LocalDm`，桌面上有「本局主持」快捷方式。装好的版本启动后能监听 5188 端口，平板页面返回 200，没认领角色去取手册页返回 404。
-- 未验证：真实剧本包上手册识别得对不对（《加个V呗》下次打开时会因为清单版本升到 3 而自动重新准备，手册应该是 29 页）；没有真实 iPad / 安卓平板实测（发言、整套界面、线索卡、手册都没有），`docs/evidence/` 没有记录，通过前不能说完成；用户没在界面里点过导入向导；流程是 AI 草稿，用户没逐条确认。
-- 已知限制：装好的版本不会跟着代码自动更新，改代码后要重跑 `pwsh -File packaging/windows/Publish.ps1`，再运行 `artifacts/LocalDm-Setup-x64.exe`（装过一次后，重装会沿用原来的目录）。`启动本局测试.cmd` 仍然可用，它跑的是仓库里 `artifacts/publish` 那一份。
-- 只有图片、没有文字的手册页如果被声明「不入包」，这一页没有来源 span。PDF 手册不受影响，因为是整份文件逐页渲染；图片手册会漏掉这一页。
-- `specs/001-local-dm-mvp/spec.md` 的 FR-023 说「公共网页响应不含手册」：手册接口要求已认领角色，所以不算公共响应，没改这条。
-- 旧的 `unreviewed-fix`：`LiveBoard.razor` / `Home.razor`，合并前请用户扫一眼。
+- 已验证（都已提交，未推送；构建 0 警告，`LocalDm.Tests` 442 条、`LocalDm.UiTests` 59 条全过）：
+  - `6eaac94` 平板「组织者手册」页签（ADR 0009）
+  - `5dd34f1` 主持台「重新开始本局」（左栏流程提示下方，两步确认，清存档并让平板回到选角色）；平板原稿双栏改成左右并排，只剩一页时居中，并补上缩放 / 整页按钮的样式
+  - `bdb3b87` 改名 Dungeon Master，新图标是二十面骰（`packaging/windows/make-icon.ps1` 生成 `src/LocalDm.App/Assets/app.ico`）；对话里主持人署名改为 DM
+  - 预览页 `docs/preview/2026-10-23-restart-dual/index.html`，用户已看过
+- 未做：**用户说先别发布**。桌面上装的还是旧版「本局主持」（`%LOCALAPPDATA%\Programs\LocalDm`）。
+- 未验证：上面这些都没在真软件、真平板上点过；真实 iPad / 安卓从没实测（`docs/evidence/tablet/` 为空）。
+- `docs/preview/fullscreen-viewer.html` 是未跟踪文件，不是本会话产生的，别动。
 
 ## 下一步
-1. 用户自己试：点桌面的「本局主持」开一局，用平板扫码认领角色，看「组织者手册」页签翻页是否正常；iPad 和安卓各试一次，验证发言、整套界面、线索卡和手册，把设备型号、系统、浏览器版本和结果写进 `docs/evidence/tablet/`。
-2. 用户报问题就修，修完重发布、重装（命令见上）。
+1. 派发 `docs/orch/2026-10-23-dm-correction/card.md`（用户要求：Claude 只思考和计划，实际写代码交给 sol）。卡片检查的两处问题已修，第一次派发什么都没执行：
+   ```bash
+   node D:/2/dev/orch-runner/orchestrate/runner/run-card.mjs --card D:/2/dev/dm/docs/orch/2026-10-23-dm-correction/card.md --name dm-correction --executor sol --risk high --repo D:/2/dev/dm # agent-live/codex-dm-correction.jsonl agent-live/codex-review-dm-correction.jsonl agent-live/codex-plan-dm-correction.jsonl
+   ```
+   内容：规则核心加 `RevertPhase`；同一轮重新提交票数时替换原记录；模型在回复最后一行写〔提议：…〕，软件把它变成电脑上的确认条，点确认才执行；系统提示词只追加第 10 条；ADR 0010 + 宪章 10.0.0。验收时独立核对：从 `AdvancedTo(3)` 退回后环节是 `phase-search`、Revision 加 1、已发材料不变；揭秘后退回被拒。
+2. 验收通过后问用户要不要发布：先 `pwsh -File packaging/windows/Publish.ps1`，再 `artifacts/LocalDm-Setup-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /CURRENTUSER /NORESTART /TASKS=desktopicon`。改名后快捷方式叫 Dungeon Master，桌面上旧的「本局主持.lnk」要请用户自己删。
+3. 实机（只有用户能做）：iPad 和安卓各扫码，验证发言、整套界面、线索卡、手册、双栏，结果写进 `docs/evidence/tablet/`。
 
 ## 先读
-- `docs/decisions/0005`、`0007`、`0008`、`0009`；`LESSONS.md`
-- 探针：在 `src/LocalDm.Tablet` 目录里 `ASPNETCORE_ENVIRONMENT=Development dotnet run --no-build -- --urls http://127.0.0.1:5099`，再 `node tools/tablet-qr/verify-ui.mjs`（或 `verify-reader.mjs`）`--playwright-module <目录>`；每次重启服务。
+- `docs/decisions/0005`、`0007`、`0008`、`0009`；`LESSONS.md`；orchestrate 规则 `D:/2/dev/orch-runner/orchestrate/SKILL.md`
+- 写替换脚本时，Python 字符串里的 `\a`（比如 `Assets\app.ico`）会变成控制字符 0x07，这次 `.iss` 和 `.csproj` 都中过。路径一律用 `chr(92)` 拼。
 
 ## 已知缺口
-- 整版多卡的图片剧本仍没有确认版式的界面：真实应用把所有组当单卡，平板上会发整张大图。
+- 整版多卡的图片剧本仍没有确认版式的界面：平板上会发整张大图。
+- 全图片手册里被声明「不入包」的空白页，平板手册里会缺这一页（PDF 手册不受影响）。
