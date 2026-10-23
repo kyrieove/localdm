@@ -1,0 +1,11 @@
+VERDICT: FAIL
+
+- [P1] tools/LocalDm.Probe/PlaytestProbe.cs:308 — **Operator-generated narration is omitted from player context and transcript**, including the reveal. Evidence: after `ExecuteAsync(GameCommandType.Reveal, null, null)`, the next prompt receives only role book, materials and `recentPublicLog`; reveal output is never appended. All affected command sites found by `rg`: lines 176, 292, 300, 308, 389. Fix: capture new public host messages after each command and append them before subsequent player actions.
+
+- [P1] tools/LocalDm.Probe/PlaytestProbe.cs:536 — **Child-process lifecycle handling can strand model calls or cause false timeouts.** Evidence: `await process.WaitForExitAsync(cts.Token)` cancels the wait, while the catch at 567–569 returns without terminating the process. Also, `RedirectStandardError = true` at 514 has no corresponding reader, allowing a full stderr pipe to block the child. These are the only occurrences found by `rg`. Fix: drain stderr concurrently; on timeout, kill the process tree, await exit and settle reader tasks before returning pass.
+
+- [P1] tools/LocalDm.Probe/PlaytestProbe.cs:36 — **Wrong JSON field types crash the run instead of using the required fallback.** Evidence: unguarded `toProp.GetString()` at 36 and `textProp.GetString()` at 44 throw `InvalidOperationException` for replies such as `{"to":7}` or `{"text":[]}`, but line 67 catches only `JsonException`. These are both unguarded field conversions found by `rg`. Fix: validate field types and return the specified table/raw fallback for invalid replies.
+
+- [P2] tools/LocalDm.Probe/PlaytestProbe.cs:312 — **Added bloat: the reveal loop copies the normal player-action pipeline.** Both occurrences, lines 210–281 and 312–381, repeat invocation, parsing, logging, DM dispatch and metrics updates; `rg` confirms paired call sites at 228/328 and dispatch branches at 252/352. Fix: share one player-action routine, with the transcript label supplied by the caller.
+
+Pre-existing problems, outside the verdict: DmAcceptanceProbe.cs:672–675 silently stops waiting after 120 seconds even if the host remains busy.

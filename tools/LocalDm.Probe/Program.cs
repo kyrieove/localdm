@@ -20,6 +20,11 @@ if (args.Length > 0 && args[0] == "--dm-acceptance")
     return await DmAcceptanceProbe.RunAsync(args.Skip(1).ToArray());
 }
 
+if (args.Length > 0 && args[0] == "--playtest")
+{
+    return await PlaytestProbe.RunAsync(args.Skip(1).ToArray());
+}
+
 if (args.Length > 0 && args[0] == "--import-wizard")
 {
     return await ImportWizardProbe.RunAsync(args.Skip(1).ToArray());

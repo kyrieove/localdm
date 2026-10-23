@@ -429,7 +429,7 @@ public static class DmAcceptanceProbe
     /// 卡背是「1楼-书房（现场）」「调查抽屉」这类导航信息，主持人必须报出来，不算念卡。
     /// 卡面里每张都带的版权声明先剔掉，免得误判。
     /// </summary>
-    private static string[] CardFrontTexts(ScriptPackage package)
+    internal static string[] CardFrontTexts(ScriptPackage package)
     {
         var materialSpans = package.Materials
             .SelectMany(material => material.SourceSpanIds)
@@ -442,7 +442,7 @@ public static class DmAcceptanceProbe
     }
 
     /// <summary>整段对话里，主持人有没有说出卡面上的物件、文字或细节。判据与备忘那道护栏同一套：连续相同 7 个字以上。</summary>
-    private static IReadOnlyList<string> CardLeaks(IEnumerable<ChatMessage> messages, ScriptPackage package)
+    internal static IReadOnlyList<string> CardLeaks(IEnumerable<ChatMessage> messages, ScriptPackage package)
     {
         var fronts = CardFrontTexts(package);
         var leaks = new List<string>();
@@ -455,7 +455,7 @@ public static class DmAcceptanceProbe
     }
 
     /// <summary>卡面原文里每张卡都带的一行版权声明，比对前先剔掉。</summary>
-    private const string CopyrightLine = "《孽岛疑云》版权所有北京智乐源文化发展有限公司2018";
+    internal const string CopyrightLine = "《孽岛疑云》版权所有北京智乐源文化发展有限公司2018";
 
     /// <summary>第 12 条：新建一个主持台，恢复同一局，检查屏幕没有重播，再接着问。</summary>
     private static async Task<int> ResumeInNewHostAsync(
@@ -660,14 +660,14 @@ public static class DmAcceptanceProbe
     }
 
     /// <summary>点一下阶段面板上的按钮，并等播音收尾。</summary>
-    private static async Task StepAsync(HostViewModel host, Func<Task> action)
+    internal static async Task StepAsync(HostViewModel host, Func<Task> action)
     {
         await action();
         await WaitIdleAsync(host);
     }
 
     /// <summary>等主持台回到空闲：模型与朗读都结束。</summary>
-    private static async Task WaitIdleAsync(HostViewModel host)
+    internal static async Task WaitIdleAsync(HostViewModel host)
     {
         for (var i = 0; i < 1200 && (host.IsBusy || host.Session.Busy); i++)
         {
@@ -1011,7 +1011,7 @@ public static class DmAcceptanceProbe
         }
     }
 
-    private static HostViewModel NewHost(
+    internal static HostViewModel NewHost(
         string settingsPath,
         string dataRoot,
         string databasePath,
@@ -1072,7 +1072,7 @@ public static class DmAcceptanceProbe
 
     // ===== 数据来源 =====
 
-    private static string? LatestPackage(string dataRoot)
+    internal static string? LatestPackage(string dataRoot)
     {
         var dir = Path.Combine(dataRoot, "packages");
         return Directory.Exists(dir)
@@ -1084,7 +1084,7 @@ public static class DmAcceptanceProbe
             : null;
     }
 
-    private static ScriptPackage LoadPackage(string path) =>
+    internal static ScriptPackage LoadPackage(string path) =>
         JsonSerializer.Deserialize<ScriptPackage>(File.ReadAllText(path))
         ?? throw new InvalidOperationException("剧本包无法解析。");
 
@@ -1092,7 +1092,7 @@ public static class DmAcceptanceProbe
     /// 本次验收的输出目录：<c>yyyyMMdd-HHmmss</c>，已存在就补一个序号。
     /// 每次运行都新开一个，旧记录不会被覆盖。
     /// </summary>
-    private static string NewRunDirectory(string root)
+    internal static string NewRunDirectory(string root)
     {
         Directory.CreateDirectory(root);
         var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
@@ -1106,7 +1106,7 @@ public static class DmAcceptanceProbe
         return candidate;
     }
 
-    private static string CopyDatabase(string dataRoot, string outDir)
+    internal static string CopyDatabase(string dataRoot, string outDir)
     {
         var source = Path.Combine(dataRoot, "sessions.db");
         var target = Path.Combine(outDir, "sessions.db");
@@ -1151,13 +1151,13 @@ public static class DmAcceptanceProbe
         return asks;
     }
 
-    private static string? ArgumentValue(string[] args, string name)
+    internal static string? ArgumentValue(string[] args, string name)
     {
         var index = Array.IndexOf(args, name);
         return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
     }
 
-    private static string FindRepoRoot()
+    internal static string FindRepoRoot()
     {
         var dir = AppContext.BaseDirectory;
         while (dir is not null && !File.Exists(Path.Combine(dir, "LocalDm.slnx")))

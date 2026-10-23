@@ -125,3 +125,37 @@ dotnet build LocalDm.slnx -nologo -v q -warnaserror && dotnet test tests/LocalDm
 - No rm, no git push, no git checkout . / restore . / reset --hard.
 - 不真跑 `--playtest`、不调用 codebuddy / 模型；不读 `stories/`、`.local/`、`%LOCALAPPDATA%\LocalDm` 下的剧本包。
 - 不为某一本剧本写专属规则或提示词。
+
+- scope override: Probe 需引用 LocalDm.Tablet 才能取角色本（卡片漏写），packages.lock.json 随之更新；用户授权 Claude 自行决定
+
+## Fix 1
+1. `tools/LocalDm.Probe/PlaytestProbe.cs` 把操作员命令后的主持人播报补进公共记录和对局记录：
+   - 新增私有方法 `int AppendNewHostMessages(HostViewModel host, int seen, List<string> publicLog, StringBuilder transcript)`：
+     - 把 `host.Messages` 里下标 `>= seen` 且 `IsModelReply` 的消息，按 `"DM：{Text}"` 追加进 `publicLog`。
+     - 同时在 `transcript` 里写 `### 操作员 · <当前环节标题>`，后面跟内容。
+     - 返回 `host.Messages.Count`。
+   - 每一处 `ExecuteAsync(...)` 都要在执行前记下 `seen = host.Messages.Count`，`StepAsync` 之后调用这个方法。共 5 处：Start（第 176 行）、发材料（第 292 行）、录票（第 300 行）、Reveal（第 308 行）、Advance（第 389 行）。
+2. 同一文件第 510–570 行附近的子进程调用：
+   - 启动后立刻同时开两个任务：`var stdoutTask = process.StandardOutput.ReadToEndAsync();` 和 `var stderrTask = process.StandardError.ReadToEndAsync();`。
+   - 等待改成 `await process.WaitForExitAsync(cts.Token)`。超时被取消时，在 `catch (OperationCanceledException)` 里：
+     - 先执行 `try { process.Kill(entireProcessTree: true); } catch { }`。
+     - 再执行 `await process.WaitForExitAsync();`。
+     - 然后 `await Task.WhenAll(stdoutTask, stderrTask)`，外面包 try/catch，忽略异常。
+     - 最后返回失败（pass）。
+   - 正常结束时，用 `await stdoutTask` 拿输出。
+3. 同一文件的 `ParseMove`（第 30–70 行）：
+   - 读 `to`、`text`、`vote` 之前，先检查 `ValueKind == JsonValueKind.String`。`to` 不是字符串就按 `table` 处理；`text` 不是字符串就用原始 raw 文本；`vote` 不是字符串就当作 null。
+   - 读 `ready`、`confused` 时，只有 `ValueKind` 是 `True` 才算 true。
+   - catch 改成 `catch (Exception ex) when (ex is JsonException or InvalidOperationException)`。
+4. `tests/LocalDm.Tests/PlaytestProbeTests.cs` 新增一条测试：`{"to":7,"text":[]}` 应该解析出 `To == "table"`，不抛异常。
+5. 第二轮揭秘那段循环和普通玩家行动是重复代码（sol 标的 P2），这次不改。
+
+## Acceptance
+- verdict: accepted
+- files: tests/LocalDm.Tests/PlaytestProbeTests.cs, tests/LocalDm.Tests/packages.lock.json, tools/LocalDm.Probe/DmAcceptanceProbe.cs, tools/LocalDm.Probe/LocalDm.Probe.csproj, tools/LocalDm.Probe/PlaytestProbe.cs, tools/LocalDm.Probe/Program.cs
+- check: `dotnet build LocalDm.slnx -nologo -v q -warnaserror && dotnet test tests/LocalDm.Tests -nologo -v q --filter-class "*PlaytestProbeTests"` → exit 0 (run by run-card)
+- tokens:
+  - round 1: exec custom-local:antigravity/gemini-3.8-flash: fresh 314k, cached 6561k, out 16k  (agy-playtest-probe.jsonl)
+  - Fix 1: exec custom-local:antigravity/gemini-3.8-flash: fresh 121k, cached 2092k, out 12k  (agy-playtest-probe.jsonl)
+- review findings: 3 real / 0 false positive / 0 missed (medium, gpt-6.1-sol)
+- deferred: [P2] 揭秘后玩家感想循环与普通玩家行动重复（sol 标出）
