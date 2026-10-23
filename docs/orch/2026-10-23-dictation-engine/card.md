@@ -80,3 +80,12 @@ if (args.Length > 0 && args[0] == "--dictation-check")
 - 不读取、不复制 OpenLess 的源码；不修改 OpenLess 的目录与设置，只读它的模型目录。
 - Run scripts in the foreground and wait; before replying, stop any background task still running.
 - No rm, no git push, no git checkout . / restore . / reset --hard.
+
+## Acceptance
+- verdict: accepted
+- files: Directory.Packages.props, src/LocalDm.Core/Ports/IDictationService.cs, src/LocalDm.Infrastructure/LocalDm.Infrastructure.csproj, src/LocalDm.Infrastructure/Voice/Dictation/DictationModelStore.cs, src/LocalDm.Infrastructure/Voice/Dictation/DictationRecognizer.cs, src/LocalDm.Infrastructure/Voice/Dictation/DictationService.cs, src/LocalDm.Infrastructure/packages.lock.json, tests/LocalDm.Tests/DictationTests.cs, tests/LocalDm.Tests/packages.lock.json, tests/LocalDm.UiTests/packages.lock.json, tools/LocalDm.Probe/DictationProbe.cs, tools/LocalDm.Probe/Program.cs, tools/LocalDm.Probe/packages.lock.json
+- check: `dotnet test tests/LocalDm.Tests --filter-class "LocalDm.Tests.DictationTests"` → exit 0 (run by run-card)
+- claude fix: 4 条 P1 都在 file:line 核实为真，直接修：Dispose 先 Cancel 再置 _disposed；Cancel 只在 Listening 时改状态；StartAsync 捕获准备阶段其它异常并还原 Idle（文案改为 DictationModelStore.PrepareFailedMessage）；ReleaseIdle 到点非 Idle 时重新计时。recheck exit=0。deferred: Dispose 与识别同时进行时 recognizer 可能在 Transcribe 中被释放（卡内未要求，P2）。
+- tokens:
+  - round 1: exec custom-local:antigravity/gemini-3.8-flash: fresh 150k, cached 2072k, out 12k  (agy-dictation-engine.jsonl) · review gpt-6.1-sol: fresh 80k, cached 307k, out 2k  (codex-review-dictation-engine.jsonl)
+- review findings: 4 real / 0 false positive / 0 missed (medium, gpt-6.1-sol)

@@ -21,6 +21,8 @@
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" />
     <PackageReference Include="System.Speech" />
+    <PackageReference Include="org.k2fsa.sherpa.onnx" />
+    <PackageReference Include="NAudio" />
   </ItemGroup>
 
   <ItemGroup>
