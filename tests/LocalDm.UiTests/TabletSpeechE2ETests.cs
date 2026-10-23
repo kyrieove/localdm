@@ -316,7 +316,7 @@ public sealed class TabletSpeechE2ETests
         });
     }
 
-    private static async Task<(HostViewModel Host, GatedGateway Gateway, QuietTts Tts)> CreateHostAsync(string root, bool autoRead = false)
+    internal static async Task<(HostViewModel Host, GatedGateway Gateway, QuietTts Tts)> CreateHostAsync(string root, bool autoRead = false)
     {
         var dbPath = Path.Combine(root, "sessions.db");
         var store = new SessionStore(dbPath);
@@ -336,7 +336,7 @@ public sealed class TabletSpeechE2ETests
         return (host, gateway, tts);
     }
 
-    private static int FreePort()
+    internal static int FreePort()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -345,7 +345,7 @@ public sealed class TabletSpeechE2ETests
         return port;
     }
 
-    private static async Task<HttpClient> NewTablet(int port, string roleId)
+    internal static async Task<HttpClient> NewTablet(int port, string roleId)
     {
         var handler = new HttpClientHandler
         {
@@ -365,7 +365,7 @@ public sealed class TabletSpeechE2ETests
     private static Task<HttpResponseMessage> Say(HttpClient c, string text) =>
         c.PostAsJsonAsync("tablet/say", new { text });
 
-    private static async Task WaitUntilAsync(Func<bool> condition)
+    internal static async Task WaitUntilAsync(Func<bool> condition)
     {
         for (var i = 0; i < 100 && !condition(); i++)
         {
@@ -375,7 +375,7 @@ public sealed class TabletSpeechE2ETests
         Assert.True(condition(), "等待条件超时。");
     }
 
-    private sealed class GatedGateway : IMagpieGateway
+    internal sealed class GatedGateway : IMagpieGateway
     {
         private int _count;
 
@@ -395,7 +395,7 @@ public sealed class TabletSpeechE2ETests
         }
     }
 
-    private sealed class QuietTts : ITtsService
+    internal sealed class QuietTts : ITtsService
     {
         private bool _isSpeaking;
 
@@ -437,7 +437,7 @@ public sealed class TabletSpeechE2ETests
         }
     }
 
-    private sealed class FakeContent : ITabletContent
+    internal sealed class FakeContent : ITabletContent
     {
         private static readonly string[] Names = ["甲", "乙", "丙", "丁", "戊", "己"];
 
@@ -472,7 +472,7 @@ public sealed class TabletSpeechE2ETests
         }
     }
 
-    private sealed class TempRoot : IDisposable
+    internal sealed class TempRoot : IDisposable
     {
         public TempRoot()
         {

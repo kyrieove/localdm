@@ -131,9 +131,11 @@ public sealed class AppComposition : IDisposable
             _dictation);
         var library = new LibraryViewModel(Path.Combine(_context.DataRoot, "packages"));
         _host = host;
+        var feedSource = new CurrentSessionPublicFeedSource((LocalDm.Core.Ports.IPublicMessageFeed)_context.Store, () => host.Session);
         var tablet = new TabletJoinViewModel(
-            new CurrentSessionPublicFeedSource((LocalDm.Core.Ports.IPublicMessageFeed)_context.Store, () => host.Session),
-            speech: new TabletSpeechBridge(host, System.Windows.Application.Current.Dispatcher));
+            feedSource,
+            speech: new TabletSpeechBridge(host, System.Windows.Application.Current.Dispatcher),
+            ui: new CurrentSessionTabletUiSource(feedSource, () => host.Session, System.Windows.Application.Current.Dispatcher));
         setup.Tablet = tablet;
         _tablet = tablet;
         library.Tablet = tablet;

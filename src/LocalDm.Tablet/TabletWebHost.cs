@@ -1,4 +1,7 @@
 using System.IO;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using LocalDm.Core.Tablet;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.FileProviders;
@@ -7,13 +10,20 @@ namespace LocalDm.Tablet;
 
 public static class TabletWebHost
 {
+    private static readonly JsonSerializerOptions UiJson = new(JsonSerializerDefaults.Web)
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        Converters = { new JsonStringEnumConverter() },
+    };
+
     public static WebApplication Create(
         ITabletContent content,
         IPublicFeedSource source,
         string[] args,
         string contentRoot,
         ITabletSpeech? speech = null,
-        TimeProvider? time = null)
+        TimeProvider? time = null,
+        ITabletUiSource? ui = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -35,6 +45,7 @@ public static class TabletWebHost
         builder.Services.AddSingleton(source);
         builder.Services.AddSingleton(speech ?? new NoTabletSpeech());
         builder.Services.AddSingleton(time ?? TimeProvider.System);
+        builder.Services.AddSingleton<ITabletUiSource>(ui ?? new EmptyTabletUiSource());
         builder.Services.AddSingleton<TabletSpeechService>();
         var app = builder.Build();
         app.Use(async (context, next) =>
@@ -313,18 +324,7 @@ public static class TabletWebHost
                 return Results.Unauthorized();
             }
 
-            if (!long.TryParse(context.Request.Query["after"], out var after))
-            {
-                // 没带 after 就是从头要；带错了必须说不行，不能悄悄当成 0。
-                if (context.Request.Query.ContainsKey("after"))
-                {
-                    return Results.BadRequest();
-                }
-
-                after = 0;
-            }
-
-            if (after < 0)
+            if (!TryParseAfter(context, out var after))
             {
                 return Results.BadRequest();
             }
@@ -348,6 +348,27 @@ public static class TabletWebHost
             });
         });
 
+        app.MapGet("/tablet/ui", async (ITabletUiSource ui, TabletSpeechService speechService, HttpContext context) =>
+        {
+            if (TabletSessions.KeyFor(context) is null)
+            {
+                return Results.Unauthorized();
+            }
+
+            if (!TryParseAfter(context, out var after))
+            {
+                return Results.BadRequest();
+            }
+
+            var projection = await ui.ReadAsync(after, speechService.HostBusy, speechService.HostSpeaking, context.RequestAborted);
+            if (projection is null)
+            {
+                return Results.Json(new { ok = false, code = "NOT_READY", message = "等待主持人开始这一局" }, statusCode: 404);
+            }
+
+            return Results.Json(projection, UiJson);
+        });
+
         app.MapRazorComponents<App>()
             .AddInteractiveServerRenderMode();
 
@@ -365,6 +386,13 @@ public static class TabletWebHost
             var roleId = state.Session(key).RoleId;
             return roleId is null ? null : state.Roles.FirstOrDefault(r => r.RoleId == roleId);
         }
+    }
+
+    private static bool TryParseAfter(HttpContext context, out long after)
+    {
+        after = 0;
+        if (!context.Request.Query.ContainsKey("after")) return true;
+        return long.TryParse(context.Request.Query["after"], out after) && after >= 0;
     }
 
     private sealed record SayRequest(string? Text);
