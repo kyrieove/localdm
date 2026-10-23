@@ -14,7 +14,7 @@
     }
 
     <div class="speech-row">
-        <textarea class="speech-input" rows="2" maxlength="300" placeholder="对大家说点什么…"
+        <textarea class="speech-input" rows="1" maxlength="300" placeholder="对大家说点什么…"
                   @bind="_text" @bind:event="oninput" disabled="@(!HasRole)"></textarea>
         <div class="speech-actions">
             <button class="speech-send" disabled="@(!CanSend)" @onclick="SendAsync">发送</button>

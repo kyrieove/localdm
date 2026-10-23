@@ -18,15 +18,23 @@
 }
 
 <div class="shell">
-    <header class="shell-bar">
+    <header class="shell-bar @(InWorkspace ? "has-tabs" : "")">
         <div class="shell-title">
             <span class="mark" aria-hidden="true">局</span>
-            <span>本局主持 · 平板</span>
+            <span class="shell-name">本局主持 · 平板</span>
         </div>
+        @if (InWorkspace)
+        {
+            <nav class="tabs" aria-label="平板功能">
+                <button class="@(_tab == TabBook ? "active" : "")" @onclick="() => SwitchTab(TabBook)">我的角色本</button>
+                <button class="@(_tab == TabCards ? "active" : "")" @onclick="() => SwitchTab(TabCards)">全部线索卡</button>
+                <button class="@(_tab == TabPublic ? "active" : "")" @onclick="() => SwitchTab(TabPublic)">公共对话</button>
+            </nav>
+        }
         <div class="shell-right">
             @if (HasRole)
             {
-                <span class="shell-role">@RoleName</span>
+                <span class="shell-role stamp @(RoleName.Length <= 2 ? "vertical" : "")" aria-label="我的角色：@RoleName">@RoleName</span>
                 <button class="tool" @onclick="Release">退出重选</button>
             }
         </div>
@@ -51,20 +59,31 @@
     else if (!HasRole)
     {
         <section class="join">
-            <h1>加入本局</h1>
-            <p class="lead">
-                与电脑连接同一 Wi-Fi 后打开本页即可。选一个角色开始阅读；已被别人认领的角色不能再选。
-            </p>
+            <div class="join-intro">
+                <h1>加入本局</h1>
+                <p class="lead">
+                    与电脑连接同一 Wi-Fi 后打开本页即可。选一个角色开始阅读；已被别人认领的角色不能再选。
+                </p>
 
-            <div class="address">
-                <label for="addr">本局地址</label>
-                <div class="address-row">
-                    <input id="addr" readonly value="@Nav.BaseUri.TrimEnd('/')" />
-                    <button @onclick="CopyAddress">复制</button>
+                <div class="address">
+                    <label for="addr">本局地址</label>
+                    <div class="address-row">
+                        <input id="addr" readonly value="@Nav.BaseUri.TrimEnd('/')" />
+                        <button @onclick="CopyAddress">复制</button>
+                    </div>
+                    <p class="hint">也可以扫描电脑上的二维码加入。</p>
                 </div>
-                <p class="hint">也可以扫描电脑上的二维码加入。</p>
+                @if (_copied)
+                {
+                    <p class="ok">地址已复制。</p>
+                }
+                @if (_copyFailed)
+                {
+                    <p class="warn">浏览器未允许自动复制，请选中上方网址后复制。</p>
+                }
             </div>
 
+            <div class="join-roles">
             <ul class="role-list">
                 @foreach (var role in State.Roles)
                 {
@@ -81,25 +100,12 @@
             {
                 <p class="warn">这个角色刚被别人认领了，请另选一个。</p>
             }
-            @if (_copied)
-            {
-                <p class="ok">地址已复制。</p>
-            }
-            @if (_copyFailed)
-            {
-                <p class="warn">浏览器未允许自动复制，请选中上方网址后复制。</p>
-            }
+            </div>
         </section>
     }
     else
     {
         <div class="workspace">
-            <nav class="tabs" aria-label="平板功能">
-                <button class="@(_tab == TabBook ? "active" : "")" @onclick="() => SwitchTab(TabBook)">我的角色本</button>
-                <button class="@(_tab == TabCards ? "active" : "")" @onclick="() => SwitchTab(TabCards)">全部线索卡</button>
-                <button class="@(_tab == TabPublic ? "active" : "")" @onclick="() => SwitchTab(TabPublic)">公共对话</button>
-            </nav>
-
             @if (_tab == TabBook)
             {
                 <RoleReader @key="session.RoleId" Book="Book" RoleName="@RoleName" Settings="session.Settings"
@@ -108,6 +114,7 @@
             else if (_tab == "cards")
             {
                 <section class="cards">
+                    <div class="cards-side">
                     <h2>全部线索卡</h2>
                     <p class="lead">点哪张看哪张，只在这台设备上显示。暂停分发的组用纸质卡。</p>
                     <ul class="card-list">
@@ -133,12 +140,19 @@
                             </li>
                         }
                     </ul>
+                    </div>
+                    <div class="cards-view">
                     @if (session.SelectedCardId is not null)
                     {
                         <figure class="shot">
                             <img src="/tablet/cards/@Uri.EscapeDataString(session.SelectedCardId)/front" alt="线索卡" />
                         </figure>
                     }
+                    else
+                    {
+                        <p class="cards-empty">点左边的一张卡，卡面显示在这里。</p>
+                    }
+                    </div>
                 </section>
             }
             else
@@ -167,6 +181,9 @@
     private string _sessionKey = string.Empty;
     private bool _hostBusy;
     private bool _hostSpeaking;
+
+    /// <summary>剧本已就绪且本机已认领角色：这时顶栏里出现三个页签。</summary>
+    private bool InWorkspace => State.StoryState is not (TabletStoryState.None or TabletStoryState.Preparing) && HasRole;
 
     /// <summary>换剧本时内容先于认领清空：以当前内容里还找得到这个角色为准，找不到就当没认领，不抛异常。</summary>
     private bool HasRole => State.Session(_sessionKey).RoleId is { } id

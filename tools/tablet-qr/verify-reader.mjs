@@ -64,6 +64,8 @@ try {
   await page.locator('.reader.focus').waitFor();
   await page.getByRole('button', { name: '退出专注', exact: true }).click();
   await page.getByRole('button', { name: book.chapters[0].title, exact: true }).click();
+  // 点击后要等服务端循环回来再读位置：不等的话会读到跳章前的旧偏移。
+  await page.waitForFunction(() => tabletReader.offset() === 0);
   assert.equal((await readState(page)).offset, 0);
   await page.reload({ waitUntil: 'domcontentloaded' }); await page.waitForFunction(() => window.tabletReader?.total() > 0);
   assert.equal((await readState(page)).offset, 0); pass('focus-chapter-zero-anchor');

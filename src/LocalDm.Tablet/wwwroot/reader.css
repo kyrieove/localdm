@@ -503,3 +503,220 @@ html, body { font-size: 16px; -webkit-text-size-adjust: 100%; }
     .board-full { display: none; }
 }
 
+/* ===== 第三版视觉「书卷」：在原有纸色与朱砂上做书籍装帧 =====
+   方向稿：docs/preview/tablet-ui-20261023/dir-1.html。只改外观与少量结构，类名全部沿用，探针选择器不变。 */
+.shell { max-width: 1280px; padding-bottom: 0; min-height: 100vh; min-height: 100svh; display: grid; grid-template-rows: auto 1fr auto; }
+
+.shell-bar {
+    gap: 24px;
+    padding: 0 26px;
+    min-height: 68px;
+    border-bottom: 3px double var(--rule);
+}
+.shell-title { gap: 12px; font-size: 15px; letter-spacing: .1em; white-space: nowrap; }
+.shell-title .mark { width: 34px; height: 34px; border-width: 1.5px; font-size: 18px; }
+.shell-right { margin-left: auto; gap: 14px; }
+.shell-right .tool {
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--paper);
+    padding: 0 14px;
+    font-size: 15px;
+}
+
+/* 页签并进顶栏，当前页签的朱砂线压在顶栏的双线上 */
+.tabs {
+    position: static;
+    align-self: stretch;
+    display: flex;
+    gap: 4px;
+    margin-left: 8px;
+    padding: 0;
+    border: 0;
+    background: none;
+}
+.tabs button { padding: 0 20px; font-size: 16px; min-height: 44px; border-bottom: 3px solid transparent; margin-bottom: -3px; }
+.tabs button.active { color: var(--ink); font-weight: 600; border-color: var(--seal); }
+
+/* 角色印章 */
+.shell-role.stamp {
+    border: 1.5px solid var(--seal);
+    border-radius: 0;
+    color: var(--seal);
+    background: color-mix(in srgb, var(--seal) 7%, transparent);
+    font: 600 16px/1.2 var(--serif);
+    letter-spacing: .1em;
+    padding: 6px 12px;
+    transform: rotate(-2deg);
+}
+.shell-role.stamp.vertical { writing-mode: vertical-rl; letter-spacing: .2em; line-height: 1; padding: 8px 5px; }
+
+/* 加入页：左边说明与地址，右边一排名牌 */
+.join {
+    display: grid;
+    grid-template-columns: minmax(300px, 380px) 1fr;
+    gap: 44px;
+    max-width: none;
+    margin: 0;
+    padding: 44px 40px;
+    align-items: start;
+}
+.join h1 { font-size: 36px; letter-spacing: .04em; margin-bottom: 12px; }
+.join .lead { font-size: 16px; margin-bottom: 0; }
+.join .address { margin: 26px 0 0; }
+.join-intro .ok, .join-intro .warn { margin: 12px 0 0; }
+.role-list { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.role-list button { position: relative; min-height: 112px; padding: 18px 20px; align-items: stretch; justify-content: space-between; }
+.role-name { font: 500 26px/1.2 var(--serif); letter-spacing: .08em; }
+.role-sub { font-size: 14px; }
+.role-list button:disabled::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 10px;
+    background: linear-gradient(135deg, transparent calc(50% - .5px), var(--rule) 50%, transparent calc(50% + .5px));
+    pointer-events: none;
+}
+.join-roles .warn { margin: 14px 0 0; }
+
+/* 线索卡：左边列表，右边卡面 */
+.cards {
+    display: grid;
+    grid-template-columns: minmax(300px, 420px) 1fr;
+    gap: 34px;
+    max-width: none;
+    margin: 0;
+    padding: 28px 34px;
+    align-items: start;
+}
+.cards h2 { letter-spacing: .02em; }
+.cards .lead { margin-bottom: 0; }
+.card-list { grid-template-columns: 1fr; gap: 10px; margin-top: 18px; }
+.card-list button { min-height: 64px; padding: 12px 16px; justify-content: center; }
+.card-name { font-size: 19px; }
+.card-list button.active { box-shadow: inset 4px 0 0 var(--seal); }
+.card-list button.unavailable .card-sub { color: var(--seal); }
+.cards-view { position: sticky; top: 92px; }
+.shot { margin: 0; padding: 22px; background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; }
+.shot img { margin: 0 auto; max-width: 560px; }
+.cards-empty { margin: 0; padding: 40px 20px; text-align: center; color: var(--muted); border: 1px dashed var(--rule); border-radius: 10px; }
+
+/* 阅读器：像一本摊开的书，左边一条书脊 */
+.reader { margin: 20px 26px; border-left: 10px solid var(--seal); box-shadow: 0 8px 28px rgba(41, 40, 35, .1); }
+.reader-bar { min-height: 60px; flex-wrap: wrap; }
+.crumb { font: 500 15px var(--serif); letter-spacing: .12em; }
+.arrow { width: 64px; height: 52px; font-size: 26px; }
+.reader-foot { min-height: 68px; }
+
+/* 公共对话：左边目录时间线，右边对话 */
+.public { max-width: none; margin: 0; padding: 28px 34px 20px; }
+.public h2 { letter-spacing: .02em; }
+.board { grid-template-columns: 276px minmax(0, 1fr); gap: 34px; }
+.board-rail { top: 92px; padding: 22px; border-radius: 12px; }
+.board-title { font-size: 20px; margin-bottom: 14px; }
+.board-phases li {
+    position: relative;
+    padding: 8px 0 8px 26px;
+    border-left: 0;
+    font-size: 16px;
+}
+.board-phases li::before {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 50%;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 1.5px solid var(--rule);
+    background: var(--paper);
+    transform: translateY(-50%);
+}
+.board-phases li::after {
+    content: "";
+    position: absolute;
+    left: 9px;
+    top: calc(50% + 6px);
+    bottom: calc(-50% + 6px);
+    border-left: 1.5px solid var(--rule);
+}
+.board-phases li:last-child::after { display: none; }
+.board-phases li.done::before { background: var(--ink-soft); border-color: var(--ink-soft); }
+.board-phases li.current::before { background: var(--seal); border-color: var(--seal); box-shadow: 0 0 0 4px color-mix(in srgb, var(--seal) 18%, transparent); }
+.board-hint { font-size: 15px; }
+.board-control, .board-control:disabled { font-size: 15px; opacity: 1; }
+.board-reveal { font-family: var(--serif); }
+
+/* 对话：主持人是带朱砂菱形的正文，玩家是纸色气泡，环节事件是分隔线 */
+.public .feed { max-width: 760px; margin-inline: auto; gap: 14px; }
+.public .feed li { font-size: 17px; line-height: 1.85; }
+.public .feed li.host {
+    position: relative;
+    padding: 0 0 0 22px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    max-width: 100%;
+    font-family: var(--serif);
+}
+.public .feed li.host::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: .85em;
+    width: 8px;
+    height: 8px;
+    background: var(--seal);
+    transform: rotate(45deg);
+}
+.public .feed li.player { border-radius: 14px 14px 4px 14px; background: var(--paper); padding: 10px 16px; }
+.public .feed li.event { display: flex; align-items: center; gap: 12px; width: 100%; color: var(--muted); }
+.public .feed li.event::before, .public .feed li.event::after { content: ""; flex: 1; border-top: 1px solid var(--rule); }
+
+/* 发言条 */
+.speech-bar { max-width: none; margin: 0; padding: 10px 26px; }
+.speech-input { min-height: 52px; resize: none; font-family: var(--serif); font-size: 17px; }
+.speech-actions button { min-height: 48px; padding: 0 20px; font-size: 16px; }
+.speech-panel {
+    position: absolute;
+    left: 26px;
+    right: 26px;
+    bottom: 100%;
+    margin: 0 0 8px;
+    padding: 14px 18px;
+    max-height: 300px;
+    background: var(--paper);
+    box-shadow: 0 -8px 28px rgba(41, 40, 35, .12);
+    border-radius: 12px;
+}
+.speech-panel li { font-size: 15px; }
+
+.wait h1 { font-size: 30px; }
+
+/* 竖屏平板与手机：目录折叠成一行、加入页与线索卡改单列 */
+@media (max-width: 900px) {
+    .join { grid-template-columns: 1fr; gap: 28px; padding: 32px 30px; }
+    .cards { grid-template-columns: 1fr; padding: 24px 30px; }
+    .cards-view { position: static; }
+    .public { padding: 24px 30px 16px; }
+    .board { grid-template-columns: 1fr; gap: 14px; }
+    .board-rail { padding: 10px 18px; }
+    .board-oneline { display: block; font-size: 17px; }
+    .shell-bar.has-tabs .shell-name { display: none; }
+    .shell-bar { gap: 12px; padding: 0 20px; }
+    .tabs { margin-left: 0; }
+    .tabs button { padding: 0 12px; }
+    .reader { margin: 16px; }
+}
+@media (max-width: 640px) {
+    .shell-bar { flex-wrap: wrap; padding: 0 12px; row-gap: 0; }
+    .shell-bar.has-tabs .tabs { order: 3; flex-basis: 100%; justify-content: space-around; min-height: 48px; }
+    .shell-bar.has-tabs { padding-bottom: 0; }
+    .join { padding: 24px 14px; }
+    .join h1 { font-size: 28px; }
+    .role-list button { min-height: 96px; }
+    .role-name { font-size: 22px; }
+    .cards, .public { padding-left: 14px; padding-right: 14px; }
+    .speech-bar { padding: 8px 14px 10px; }
+    .speech-panel { left: 14px; right: 14px; }
+}

@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>方向一 · 书卷</title>
+<style>
+/* 预览控制条与共用素材（不属于设计本身） */
+*{box-sizing:border-box}
+html,body{margin:0;background:#2b2c2e;font:13px/1.4 "Microsoft YaHei UI","Microsoft YaHei","PingFang SC",sans-serif;color:#d9dadc}
+#ctl{position:sticky;top:0;z-index:50;background:#1d1e20;border-bottom:1px solid #3a3b3e;padding:8px 12px;display:flex;flex-direction:column;gap:6px}
+#ctl .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+#ctl strong{font-size:14px;color:#fff;margin-right:8px}
+#ctl .note{color:#8d9096;font-size:12px}
+#ctl button{background:#2f3033;color:#d9dadc;border:1px solid #45464a;border-radius:6px;padding:5px 10px;font:inherit;cursor:pointer}
+#ctl button:hover{background:#3b3c40}
+#ctl label{color:#aeb0b5;font-size:12px;margin-left:8px;display:inline-flex;gap:4px;align-items:center}
+#stage{margin:12px auto;position:relative}
+#frame{position:absolute;left:0;top:0;transform-origin:0 0;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.5);border-radius:14px}
+
+/* 原稿页示意 */
+.scan{position:relative;width:100%;aspect-ratio:210/297;background:var(--scan-bg,#fbf8f0);border:1px solid var(--scan-edge,#d8d3c4);padding:7% 8%;display:flex;flex-direction:column;gap:5%}
+.scan-title{display:block;height:5%;width:46%;background:var(--scan-ink,#b9b3a2);opacity:.85;border-radius:1px}
+.scan-body{display:flex;flex-direction:column;gap:2.6%;flex:1}
+.scan-body i{display:block;height:1.1%;min-height:3px;background:var(--scan-ink,#b9b3a2);opacity:.55;border-radius:1px}
+.scan-no{position:absolute;bottom:3%;left:0;right:0;text-align:center;font-size:11px;color:var(--scan-ink,#b9b3a2)}
+/* 卡面示意 */
+.cardface{aspect-ratio:3/4.2;width:100%;max-width:340px;margin:0 auto;border:1px solid var(--scan-edge,#d8d3c4);background:var(--scan-bg,#fbf8f0);padding:12% 10%;display:flex;flex-direction:column;gap:7%;position:relative}
+.cardface b{display:block;height:9%;width:55%;background:var(--scan-ink,#b9b3a2);opacity:.85}
+.cardface i{display:block;height:3%;background:var(--scan-ink,#b9b3a2);opacity:.5}
+.cardface em{position:absolute;left:0;right:0;bottom:7%;text-align:center;font-style:normal;font-size:12px;color:var(--scan-ink,#b9b3a2)}
+
+
+/* ===== 方向一「书卷」：在现有纸色与朱砂印上做书籍装帧 =====
+   色值沿用 reader.css 的 :root（Shared.xaml）。字体只用系统字体，平板离线可用。 */
+#frame{
+  --paper:#fbfaf7; --deep:#efede7; --ink:#292823; --soft:#5b564c; --rule:#dedbd2; --seal:#943f32; --muted:#6a665c;
+  --serif:"Songti SC","Noto Serif CJK SC","Noto Serif SC","Source Han Serif SC",SimSun,serif;
+  --sans:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+  --scan-bg:#fffdf8; --scan-edge:#cfcabb; --scan-ink:#9d9786;
+  background:var(--deep); color:var(--ink); font:16px/1.6 var(--sans);
+}
+:where(#frame) button,:where(#frame) textarea,:where(#frame) select,:where(#frame) output{font:inherit}
+:where(#frame) button{color:inherit;cursor:pointer;background:none;border:0}
+:where(#frame) button:disabled{opacity:.38;cursor:default}
+:where(#frame) :focus-visible{outline:2px solid var(--seal);outline-offset:2px}
+.d1{display:flex;flex-direction:column;height:100%}
+.d1 .bar{display:flex;align-items:center;gap:24px;padding:0 26px;height:68px;background:var(--paper);flex:none;
+  border-bottom:3px double var(--rule)}
+.d1 .brand{display:flex;align-items:center;gap:12px;font-size:15px;letter-spacing:.1em;white-space:nowrap}
+.d1 .mark{width:34px;height:34px;display:grid;place-items:center;border:1.5px solid var(--seal);color:var(--seal);font:500 18px var(--serif)}
+.d1 .tabs{display:flex;gap:4px;margin-left:8px;height:100%}
+.d1 .tabs button{padding:0 20px;font-size:16px;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-3px;min-height:44px}
+.d1 .tabs button[aria-current="page"]{color:var(--ink);font-weight:600;border-color:var(--seal)}
+.d1 .who{margin-left:auto;display:flex;align-items:center;gap:14px}
+.d1 .stamp{writing-mode:vertical-rl;letter-spacing:.2em;border:1.5px solid var(--seal);color:var(--seal);font:600 16px/1 var(--serif);padding:8px 5px;
+  background:rgba(148,63,50,.05);transform:rotate(-2deg)}
+.d1 .ghost{min-height:44px;padding:0 14px;border:1px solid var(--rule)!important;border-radius:8px;color:var(--soft);font-size:15px;background:var(--paper)!important}
+
+.d1 main{flex:1;min-height:0;display:flex;flex-direction:column;overflow:auto}
+.d1 .center{margin:auto;text-align:center;max-width:520px;padding:40px}
+.d1 .center h1{font:500 30px/1.4 var(--serif);margin:0 0 10px}
+.d1 .pulse{width:56px;height:56px;border-radius:50%;border:2px solid var(--seal);margin:0 auto 22px;animation:p 2.4s ease-in-out infinite}
+@keyframes p{50%{transform:scale(1.18);opacity:.45}}
+@media (prefers-reduced-motion:reduce){.d1 .pulse{animation:none}}
+.lead{font-size:16px;color:var(--soft);line-height:1.9;margin:0}
+
+/* 加入页：左边讲清怎么加入，右边是一排名牌 */
+.d1 .join{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:44px;padding:44px 40px;align-items:start;margin:auto 0}
+[data-orient="port"] .d1 .join{grid-template-columns:1fr;gap:28px;padding:32px 30px}
+.d1 .join h1{font:500 36px/1.3 var(--serif);margin:0 0 12px;letter-spacing:.04em}
+.d1 .addr{margin-top:26px;background:var(--paper);border:1px solid var(--rule);padding:16px;border-radius:10px}
+.d1 .addr span{display:block;font-size:13px;color:var(--muted);letter-spacing:.1em;margin-bottom:8px}
+.d1 .addr div{display:flex;gap:8px}
+.d1 .addr output{flex:1;min-width:0;border:1px solid var(--rule);border-radius:8px;padding:0 12px;min-height:48px;display:flex;align-items:center;font-size:15px;overflow:hidden;white-space:nowrap}
+.d1 .addr button{background:var(--ink);color:var(--paper);padding:0 20px;min-height:48px;border-radius:8px}
+.d1 .addr p{font-size:13px;color:var(--muted);margin:10px 0 0}
+.d1 .names{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;list-style:none;margin:0;padding:0}
+.d1 .names button{width:100%;min-height:112px;padding:18px 20px;text-align:left;background:var(--paper);border:1px solid var(--rule);border-radius:10px;
+  display:flex;flex-direction:column;justify-content:space-between;transition:transform .12s,border-color .12s;position:relative}
+.d1 .names button:not(:disabled):hover{border-color:var(--seal)}
+.d1 .names button:not(:disabled):active{transform:scale(.985)}
+.d1 .names .n{font:500 26px/1.2 var(--serif);letter-spacing:.08em}
+.d1 .names .s{font-size:14px;color:var(--seal)}
+.d1 .names button:disabled{opacity:1;background:var(--deep);border-style:dashed;color:var(--muted)}
+.d1 .names button:disabled .s{color:var(--muted)}
+.d1 .names button:disabled::after{content:"";position:absolute;inset:0;background:linear-gradient(135deg,transparent calc(50% - .5px),var(--rule) 50%,transparent calc(50% + .5px));border-radius:10px}
+.d1 .warn{color:var(--seal);font-size:15px;margin:14px 0 0}
+
+/* 阅读器：像一本摊开的书 */
+.d1 .reader{margin:20px 26px;flex:1;min-height:0;display:flex;flex-direction:column;background:var(--paper);border:1px solid var(--rule);
+  border-left:10px solid var(--seal);box-shadow:0 8px 28px rgba(41,40,35,.1)}
+.d1 .reader.focus{margin:0;border:0;border-left:0}
+.d1 .rbar{display:flex;align-items:center;gap:8px;padding:6px 18px;min-height:60px;border-bottom:1px solid var(--rule);flex:none;flex-wrap:wrap}
+.d1 .crumb{font:500 15px var(--serif);letter-spacing:.12em;color:var(--muted);margin-right:auto}
+.d1 .pg{font-size:14px;color:var(--muted);margin-right:6px;font-variant-numeric:tabular-nums}
+.d1 .tool{min-width:44px;min-height:44px;padding:0 12px;border-radius:8px;font-size:15px;color:var(--soft)}
+.d1 .tool:hover{background:var(--deep)}
+.d1 .tool[aria-pressed="true"]{background:var(--deep);color:var(--ink);font-weight:600}
+.d1 .settings{display:flex;align-items:center;gap:26px;padding:12px 18px;border-bottom:1px solid var(--rule);flex:none;flex-wrap:wrap;background:var(--paper)}
+.d1 .settings h2{font-size:14px;margin:0;color:var(--muted);font-weight:500}
+.d1 .stepper{display:flex;align-items:center;border:1px solid var(--rule);border-radius:8px}
+.d1 .stepper button{width:48px;height:44px}
+.d1 .stepper output{min-width:40px;text-align:center;font-variant-numeric:tabular-nums}
+.d1 .settings select{min-height:44px;border:1px solid var(--rule);border-radius:8px;background:var(--paper);padding:0 10px;font-size:15px;color:var(--ink)}
+.d1 .settings p{font-size:13px;color:var(--muted);margin:0;flex-basis:100%}
+.d1 .rbody{flex:1;min-height:0;overflow:auto;padding:22px 28px;background:var(--paper)}
+.d1 .src-pages{display:grid;gap:14px;margin:0 auto;justify-items:center}
+.d1 .src-pages.w1{grid-template-columns:1fr}.d1 .src-pages.w2{grid-template-columns:1fr 1fr}
+.d1 .src-wrap.fitpage{height:100%;display:flex;justify-content:center}
+.d1 .src-wrap.fitpage .src-pages{height:100%}
+.d1 .src-wrap.fitpage .scan{height:100%;width:auto}
+.d1 .src-wrap.fitwidth .src-pages{width:calc(100% * var(--zoom,1))}
+.d1 .chead{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+.d1 .cm{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);letter-spacing:.12em}
+.d1 .cm i{display:block;width:26px;border-top:1.5px solid var(--seal)}
+.d1 .chs{display:flex;gap:2px}
+.d1 .chs .tool{font-size:14px}
+.d1 .chs [aria-current="location"]{color:var(--seal);text-decoration:underline;text-underline-offset:6px;text-decoration-thickness:2px}
+.d1 .pbody{margin:0 auto;max-width:calc(var(--bs) * 30);column-count:var(--cols);column-gap:3em;column-rule:1px solid var(--rule)}
+.d1 .pbody p{font:var(--bs)/var(--lh) var(--serif);text-align:justify;margin:0 0 .9em;text-indent:2em}
+.d1 .pbody h2{font:500 calc(var(--bs)*1.6)/1.5 var(--serif);margin:.3em 0 .8em;letter-spacing:.04em}
+.d1 .rfoot{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 18px;min-height:68px;border-top:1px solid var(--rule);flex:none}
+.d1 .rfoot .l{display:flex;flex-direction:column;font-size:14px}
+.d1 .rfoot .l small{font-size:13px;color:var(--muted)}
+.d1 .arrows{display:flex;gap:10px}
+.d1 .arrows button{width:64px;height:52px;border:1px solid var(--rule);border-radius:10px;font-size:26px;background:var(--paper)}
+.d1 .arrows button:not(:disabled):hover{border-color:var(--seal);color:var(--seal)}
+.d1 .reader.focus .rbar .crumb,.d1 .reader.focus .chead .cm{display:none}
+
+/* 线索卡 */
+.d1 .cards{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:34px;padding:28px 34px;flex:1;min-height:0}
+[data-orient="port"] .d1 .cards{grid-template-columns:1fr}
+.d1 h2.t{font:500 26px/1.4 var(--serif);margin:0 0 6px}
+.d1 .clist{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:10px}
+.d1 .clist button{width:100%;min-height:64px;padding:12px 16px;text-align:left;background:var(--paper);border:1px solid var(--rule);border-radius:10px;display:flex;flex-direction:column;gap:2px}
+.d1 .clist .n{font:500 19px var(--serif)}
+.d1 .clist .s{font-size:13px;color:var(--muted)}
+.d1 .clist button.on{border-color:var(--seal);box-shadow:inset 4px 0 0 var(--seal);background:#fff}
+.d1 .clist button.no{opacity:1;background:var(--deep);border-style:dashed}
+.d1 .clist button.no .s{color:var(--seal)}
+.d1 .shot{background:var(--paper);border:1px solid var(--rule);padding:22px;display:grid;place-items:center;border-radius:10px}
+.d1 .shot figcaption{font-size:13px;color:var(--muted);margin-top:12px}
+.d1 .paper-note{font-size:14px;color:var(--muted);margin-top:14px}
+
+/* 公共对话：左边是目录，右边是对话 */
+.d1 .pub{display:grid;grid-template-columns:276px 1fr;flex:1;min-height:0}
+[data-orient="port"] .d1 .pub{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+.d1 .rail{background:var(--paper);border-right:1px solid var(--rule);padding:22px 22px;overflow:auto}
+[data-orient="port"] .d1 .rail{border-right:0;padding:0;border-bottom:1px solid var(--rule)}
+.d1 .one{display:none;width:100%;min-height:56px;padding:0 24px;align-items:center;justify-content:space-between;font:500 17px var(--serif)}
+.d1 .one small{font:13px var(--sans);color:var(--muted)}
+[data-orient="port"] .d1 .one{display:flex}
+[data-orient="port"] .d1 .rail .full{display:none;padding:4px 24px 18px}
+[data-orient="port"] .d1 .rail.open .full{display:block}
+.d1 .rail h3{font:500 20px/1.4 var(--serif);margin:0 0 14px}
+.d1 ol.ph{list-style:none;margin:0 0 16px;padding:0}
+.d1 ol.ph li{position:relative;padding:8px 0 8px 26px;font-size:16px;color:var(--muted)}
+.d1 ol.ph li::before{content:"";position:absolute;left:5px;top:50%;width:9px;height:9px;border-radius:50%;border:1.5px solid var(--rule);background:var(--paper);transform:translateY(-50%)}
+.d1 ol.ph li::after{content:"";position:absolute;left:9px;top:calc(50% + 6px);bottom:calc(-50% + 6px);border-left:1.5px solid var(--rule)}
+.d1 ol.ph li:last-child::after{display:none}
+.d1 ol.ph li.done{color:var(--soft)}.d1 ol.ph li.done::before{background:var(--soft);border-color:var(--soft)}
+.d1 ol.ph li.current{color:var(--ink);font-weight:600}
+.d1 ol.ph li.current::before{background:var(--seal);border-color:var(--seal);box-shadow:0 0 0 4px rgba(148,63,50,.18)}
+.d1 .hint{font-size:15px;color:var(--soft);line-height:1.8;margin:0 0 14px}
+.d1 .ctl{display:grid;gap:8px}
+.d1 .ctl button{min-height:44px;border:1px solid var(--rule);border-radius:8px;background:var(--deep);color:var(--muted);text-align:left;padding:0 12px;font-size:15px}
+.d1 .ctl button:disabled{opacity:1}
+.d1 .ctl p,.d1 .meta{font-size:13px;color:var(--muted);margin:6px 0 0}
+.d1 .reveal{margin-top:12px;padding:12px 14px;border-left:3px solid var(--seal);background:var(--deep);font:15px/1.8 var(--serif)}
+.d1 .reveal p{margin:0}
+.d1 .feedbox{display:flex;flex-direction:column;min-height:0}
+.d1 .feed-scroll{flex:1;min-height:0;overflow:auto;padding:24px 34px}
+.d1 ol.feed{list-style:none;margin:0 auto;padding:0;max-width:760px;display:flex;flex-direction:column;gap:14px}
+.d1 .feed li{font-size:17px;line-height:1.85}
+.d1 .feed li.host{padding-left:22px;position:relative;font-family:var(--serif)}
+.d1 .feed li.host::before{content:"";position:absolute;left:2px;top:.85em;width:8px;height:8px;background:var(--seal);transform:rotate(45deg)}
+.d1 .feed li.player{align-self:flex-end;max-width:78%;background:var(--paper);border:1px solid var(--rule);border-radius:14px 14px 4px 14px;padding:10px 16px}
+.d1 .feed li.event{align-self:center;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:12px;width:100%}
+.d1 .feed li.event::before,.d1 .feed li.event::after{content:"";flex:1;border-top:1px solid var(--rule)}
+.d1 .empty{padding:30px 34px;color:var(--soft)}
+
+/* 发言条 */
+.d1 .say{flex:none;background:var(--paper);border-top:1px solid var(--rule);padding:10px 26px 10px;position:relative}
+.d1 .panel{position:absolute;left:26px;right:26px;bottom:100%;margin-bottom:8px;background:var(--paper);border:1px solid var(--rule);border-radius:12px;box-shadow:0 -8px 28px rgba(41,40,35,.12);
+  list-style:none;padding:14px 18px;display:flex;flex-direction:column;gap:6px;max-height:300px;overflow:auto}
+.d1 .panel li{font-size:15px;line-height:1.7}.d1 .panel li.event{font-size:13px;color:var(--muted)}.d1 .panel li.player{color:var(--soft)}
+.d1 .say .row{display:flex;gap:10px;align-items:flex-end}
+.d1 .say textarea{flex:1;resize:none;border:1px solid var(--rule);border-radius:10px;background:#fff;padding:10px 14px;font:17px/1.6 var(--serif);color:var(--ink);min-height:52px}
+.d1 .say textarea:disabled{background:var(--deep)}
+.d1 .say .acts{display:flex;gap:8px}
+.d1 .say .acts button{min-height:48px;padding:0 20px;border-radius:10px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);font-size:16px}
+.d1 .say .acts button:disabled{opacity:.3}
+.d1 .say .acts .stop{background:none;color:var(--seal);border-color:var(--seal)}
+.d1 .say .acts .tg{background:none;color:var(--soft);border-color:var(--rule)}
+.d1 .say .h{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin:4px 2px 0;min-height:20px}
+.d1 .say .h.err{color:var(--seal)}
+[data-orient="port"] .d1 .bar{gap:12px;padding:0 20px}
+[data-orient="port"] .d1 .brand span.t{display:none}
+[data-orient="port"] .d1 .tabs button{padding:0 12px}
+[data-orient="port"] .d1 .names{grid-template-columns:repeat(2,1fr)}
+</style>
+</head>
+<body>
+<script>
+/* ===== 共用示意数据与交互（三个方向共用，只换外观与骨架）=====
+   全部是示意数据，不来自任何真实剧本。公开消息只有 kind + text 两个字段，角色只有名字与是否已认领。 */
+const DATA = {
+  roles: ['林白', '周望', '沈知', '顾青', '许然', '陈默'],
+  othersClaimed: ['周望', '顾青'],
+  me: '沈知',
+  storyTitle: '示意剧本',
+  address: 'http://192.168.1.23:5280',
+  phases: ['开场', '自我介绍', '第一轮搜证', '集中讨论', '投票', '揭秘'],
+  hints: { 2: '本环节可以互相交换信息，卡面只在各自设备上显示。', 4: '请在纸上写下你的选择，由主持人汇总。' },
+  chapters: ['序章', '第一幕', '第二幕'],
+  pages: [
+    { ch: 0, blocks: [['h', '序章'], ['p', '雨从傍晚开始下。你站在门廊里，把伞收起来，听见屋里有人压低了声音说话，像是怕被谁听见。'], ['p', '这是示意正文：真实角色本在这里按你设定的字号与行距重新分页，翻页时位置会被记住。']] },
+    { ch: 0, blocks: [['p', '你把外套搭在椅背上，注意到桌上的杯子还是温的。这一段只用来展示正文的行距、缩进与两端对齐。'], ['p', '换行之后的第二段同样是示意文字。宋体长文适合连续阅读，界面控件则保持无衬线。']] },
+    { ch: 1, blocks: [['h', '第一幕'], ['p', '示意：第一幕的开头。标题与正文之间留出足够的空白，让眼睛有地方落脚。'], ['p', '这里同样是示意文字，用来观察一整页正文在不同字号下的疏密。']] },
+    { ch: 1, blocks: [['p', '章节中间的一页。页码和章节名放在页脚，随时能看到自己读到了哪里。'], ['p', '示意文字，没有任何剧情内容。']] },
+    { ch: 2, blocks: [['h', '第二幕'], ['p', '示意：第二幕的开头。识别文字可能有误，以原稿为准，这句提示常驻页脚。']] },
+  ],
+  srcPageCount: 12,
+  cards: [
+    { name: '线索卡 1', group: 'A 组', order: '第 1 张', ok: true },
+    { name: '线索卡 2', group: 'A 组', order: '第 2 张', ok: true },
+    { name: '线索卡 3', group: 'B 组', order: '第 1 张', ok: false, why: '这一组少正面，暂停分发' },
+    { name: '线索卡 4', group: 'B 组', order: '第 2 张', ok: false, why: '切片还没确认，暂停分发' },
+    { name: '线索卡 5', group: 'C 组', order: '第 1 张', ok: true },
+    { name: '线索卡 6', group: 'C 组', order: '第 2 张', ok: true },
+  ],
+  feed: [
+    ['event', '第 3 环节开始：第一轮搜证'],
+    ['host', '现在进入搜证环节。请各位翻看自己的线索，需要放出的材料我会在电脑上点出。'],
+    ['player', '我想先确认一下，这一环节能互相看手里的卡吗？'],
+    ['host', '可以口头交流，但卡面只在各自设备上显示。'],
+    ['player', '好，那我先说我这边的发现。'],
+    ['event', '材料已放出：线索组 A'],
+  ],
+};
+
+const SIZES = { land: [1180, 820, '平板横屏 1180×820'], port: [820, 1180, '平板竖屏 820×1180'], droid: [800, 1280, '安卓竖屏 800×1280'] };
+
+const S = {
+  screen: 'join', role: null, size: 'land', phase: 2, claimFail: false, copied: false, copyFail: false,
+  mode: 'src', cols: 1, fit: 'width', zoom: 1, settings: false, focus: false, font: 20, spacing: 'relaxed',
+  page: 0, srcPage: 3, cardSel: 0, panel: false, draft: '', notice: '', err: false,
+  busy: false, speaking: false, simSendFail: false, extra: [],
+};
+
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const $ = (s, r = document) => r.querySelector(s);
+
+/* 派生状态 */
+const taken = (n) => DATA.othersClaimed.includes(n);
+const feedAll = () => DATA.feed.concat(S.extra);
+const phaseStatus = (i) => (i < S.phase ? 'done' : i === S.phase ? 'current' : 'upcoming');
+const phaseOneLine = () => `${DATA.phases[S.phase]} · 第 ${S.phase + 1}/${DATA.phases.length} 环节`;
+const controlLabels = () => (S.phase >= 4 ? ['确认提交汇总', '揭秘', '进入复盘', '暂停'] : ['结束搜证', '放出下一批材料', '暂停']);
+const materialMeta = () => (S.phase === 2 ? '待放出材料 2 · 已放出 3' : '待放出材料 0 · 已放出 5');
+const voteMeta = () => (S.phase >= 4 ? '投票汇总：林白 2 票，周望 1 票 · 共 3 票' : '');
+const revealTexts = () => (S.phase === 5 ? ['（揭秘文本示意：主持人公开揭秘的文字显示在这里。）'] : []);
+const hintText = () => DATA.hints[S.phase] || '';
+const controlsNote = '请在电脑上操作';
+const srcStep = () => S.cols;
+const srcEnd = () => Math.min(S.srcPage + S.cols - 1, DATA.srcPageCount);
+const srcLabel = () => (S.srcPage === srcEnd() ? `${S.srcPage}` : `${S.srcPage}～${srcEnd()}`);
+const curPage = () => DATA.pages[S.page];
+const chapterOf = () => curPage().ch;
+const speech = () => {
+  const hasRole = !!S.role;
+  const hint = !hasRole ? '请先认领角色' : S.busy ? '主持正在回应' : S.notice;
+  return {
+    hasRole, canSend: hasRole && !S.busy && S.draft.trim().length > 0, hint, err: S.err && hasRole && !S.busy,
+    count: S.draft.length, max: 300,
+  };
+};
+
+/* 原稿页示意：纯 CSS 画出一页扫描件，不使用任何真实卡图或角色本 */
+function scanPage(n) {
+  let seed = n * 9301 + 49297;
+  const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+  const lines = Array.from({ length: 15 }, () => `<i style="width:${Math.round(58 + rnd() * 40)}%"></i>`).join('');
+  return `<div class="scan"><b class="scan-title"></b><div class="scan-body">${lines}</div><span class="scan-no">${n}</span></div>`;
+}
+const cardFace = (c) => `<div class="cardface"><b></b><i></i><i></i><i style="width:60%"></i><em>卡面示意 · ${esc(c.name)}</em></div>`;
+
+/* 共用的页面素材 */
+function textPageHTML() {
+  return curPage().blocks.map(([k, t]) => (k === 'h' ? `<h2 class="chapter">${esc(t)}</h2>` : `<p class="para">${esc(t)}</p>`)).join('');
+}
+const spacingValue = () => ({ tight: 1.6, relaxed: 1.95, loose: 2.3 }[S.spacing]);
+
+/* ===== 行为 ===== */
+let RENDER = null;
+function patch(o) { Object.assign(S, o); redo(); }
+function act(name, arg) {
+  const total = DATA.pages.length;
+  switch (name) {
+    case 'go': S.screen = arg; S.panel = false; break;
+    case 'claim':
+      if (taken(arg)) { S.claimFail = true; break; }
+      S.role = arg; S.claimFail = false; S.screen = 'book'; break;
+    case 'release': S.role = null; S.screen = 'join'; S.panel = false; break;
+    case 'copy':
+      S.copied = true; S.copyFail = false;
+      try { navigator.clipboard && navigator.clipboard.writeText(DATA.address); } catch (e) { /* 预览里复制失败不影响演示 */ }
+      break;
+    case 'mode': S.mode = arg; S.settings = false; break;
+    case 'cols': S.cols = S.cols === 1 ? 2 : 1; break;
+    case 'fit': S.fit = S.fit === 'width' ? 'page' : 'width'; S.zoom = 1; break;
+    case 'zoom': S.fit = 'width'; S.zoom = Math.min(3, Math.max(0.5, S.zoom + Number(arg))); break;
+    case 'settings': S.settings = !S.settings; break;
+    case 'focus': S.focus = !S.focus; break;
+    case 'font': S.font = Math.min(30, Math.max(16, S.font + Number(arg))); break;
+    case 'spacing': S.spacing = arg; break;
+    case 'turn':
+      if (S.mode === 'src') S.srcPage = Math.min(DATA.srcPageCount, Math.max(1, S.srcPage + Number(arg) * srcStep()));
+      else S.page = Math.min(total - 1, Math.max(0, S.page + Number(arg)));
+      break;
+    case 'chapter': S.page = DATA.pages.findIndex((p) => p.ch === Number(arg)); break;
+    case 'card': S.cardSel = Number(arg); break;
+    case 'panel': S.panel = !S.panel; break;
+    case 'rail': S.rail = !S.rail; break;
+    case 'send': {
+      const m = speech();
+      if (!m.canSend) break;
+      if (S.simSendFail) { S.err = true; S.notice = '没有发出去：主持暂时没有回应，请再试一次'; break; }
+      S.extra.push(['player', S.draft.trim()]); S.draft = ''; S.err = false; S.notice = '已发给大家'; break;
+    }
+    case 'stop': S.speaking = false; break;
+  }
+  if (name === 'copy') setTimeout(() => { S.copied = false; redo(); }, 2500);
+  redo();
+}
+
+function redo() {
+  const f = $('#frame');
+  const had = document.activeElement && document.activeElement.id === 'speech-input';
+  const feedEl = $('.feed-scroll', f);
+  const keep = feedEl ? feedEl.scrollTop : 0;
+  f.dataset.size = S.size;
+  f.dataset.orient = S.size === 'land' ? 'land' : 'port';
+  f.innerHTML = RENDER(S);
+  const ta = $('#speech-input', f);
+  if (ta) { ta.value = S.draft; if (had) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }
+  const nf = $('.feed-scroll', f);
+  if (nf) nf.scrollTop = keep || nf.scrollHeight;
+  fit();
+}
+
+function fit() {
+  const [w, h] = SIZES[S.size];
+  const f = $('#frame'); const st = $('#stage');
+  const ctl = $('#ctl').offsetHeight;
+  const sc = Math.min((innerWidth - 24) / w, (innerHeight - ctl - 20) / h, 1);
+  f.style.width = w + 'px'; f.style.height = h + 'px'; f.style.transform = `scale(${sc})`;
+  st.style.width = w * sc + 'px'; st.style.height = h * sc + 'px';
+}
+
+/* 预览控制条：只在预览页里存在，不属于设计本身 */
+const CHIPS = [
+  ['wait', '等待选剧本', { screen: 'wait', role: null }],
+  ['prep', '材料准备中', { screen: 'prep', role: null }],
+  ['join', '加入页', { screen: 'join', role: null, claimFail: false }],
+  ['joinf', '认领失败', { screen: 'join', role: null, claimFail: true }],
+  ['src', '角色本·原稿', { screen: 'book', role: DATA.me, mode: 'src', settings: false, panel: false }],
+  ['txt', '角色本·文字', { screen: 'book', role: DATA.me, mode: 'text', settings: false, panel: false }],
+  ['set', '字号设置', { screen: 'book', role: DATA.me, mode: 'text', settings: true, panel: false }],
+  ['cards', '线索卡', { screen: 'cards', role: DATA.me, panel: false }],
+  ['pub', '公共·搜证', { screen: 'public', role: DATA.me, phase: 2, panel: false }],
+  ['vote', '公共·投票', { screen: 'public', role: DATA.me, phase: 4, panel: false }],
+  ['rev', '公共·揭秘', { screen: 'public', role: DATA.me, phase: 5, panel: false }],
+  ['panel', '阅读时开对话', { screen: 'book', role: DATA.me, mode: 'src', panel: true }],
+];
+
+function mount(render, title) {
+  RENDER = render;
+  document.title = title;
+  const chips = CHIPS.map(([id, label, p]) => `<button data-chip="${id}">${label}</button>`).join('');
+  const sizes = Object.entries(SIZES).map(([k, v]) => `<button data-size="${k}">${v[2]}</button>`).join('');
+  document.body.insertAdjacentHTML('afterbegin', `
+    <div id="ctl"><div class="row"><strong>${esc(title)}</strong><span class="note">示意数据 · 预览控制条不属于设计</span></div>
+    <div class="row">${chips}</div>
+    <div class="row">${sizes}<label><input type="checkbox" data-flag="busy"> 主持正在回应</label><label><input type="checkbox" data-flag="speaking"> 主持朗读中</label><label><input type="checkbox" data-flag="simSendFail"> 发送出错</label></div></div>
+    <div id="stage"><div id="frame"></div></div>`);
+  document.addEventListener('click', (e) => {
+    const c = e.target.closest('[data-chip]');
+    if (c) { patch(CHIPS.find((x) => x[0] === c.dataset.chip)[2]); return; }
+    const z = e.target.closest('#ctl [data-size]');
+    if (z) { patch({ size: z.dataset.size }); return; }
+    const a = e.target.closest('#frame [data-act]');
+    if (a && !a.disabled) act(a.dataset.act, a.dataset.arg);
+  });
+  document.addEventListener('change', (e) => {
+    const f = e.target.dataset.flag;
+    if (f) { S[f] = e.target.checked; if (f === 'simSendFail' && !S.simSendFail) { S.err = false; S.notice = ''; } redo(); }
+    if (e.target.dataset.spacing !== undefined) act('spacing', e.target.value);
+  });
+  document.addEventListener('input', (e) => {
+    if (e.target.id !== 'speech-input') return;
+    S.draft = e.target.value;
+    const m = speech();
+    const send = $('#frame [data-act="send"]'); if (send) send.disabled = !m.canSend;
+    const cnt = $('#frame .speech-count'); if (cnt) cnt.textContent = `${m.count}/${m.max}`;
+  });
+  addEventListener('resize', fit);
+  redo();
+}
+
+
+const TABS = [['book', '我的角色本'], ['cards', '全部线索卡'], ['public', '公共对话']];
+
+function bar(s) {
+  const tabs = s.role ? `<nav class="tabs" aria-label="平板功能">${TABS.map(([id, l]) => `<button data-act="go" data-arg="${id}" ${s.screen === id ? 'aria-current="page"' : ''}>${l}</button>`).join('')}</nav>` : '';
+  const who = s.role ? `<div class="who"><span class="stamp" aria-label="我的角色：${esc(s.role)}">${esc(s.role)}</span><button class="ghost" data-act="release">退出重选</button></div>` : '';
+  return `<header class="bar"><div class="brand"><span class="mark" aria-hidden="true">局</span><span class="t">本局主持 · 平板</span></div>${tabs}${who}</header>`;
+}
+
+function speechBar(s) {
+  const m = speech();
+  const showToggle = s.screen !== 'public';
+  const recent = feedAll().slice(-8);
+  const panel = s.panel && showToggle ? `<ol class="panel">${recent.map(([k, t]) => `<li class="${k}">${esc(t)}</li>`).join('')}</ol>` : '';
+  return `<footer class="say">${panel}<div class="row">
+    <textarea id="speech-input" rows="1" maxlength="300" placeholder="对大家说点什么…" ${m.hasRole ? '' : 'disabled'}></textarea>
+    <div class="acts"><button data-act="send" ${m.canSend ? '' : 'disabled'}>发送</button>
+    ${s.speaking ? '<button class="stop" data-act="stop">停止朗读</button>' : ''}
+    ${showToggle ? `<button class="tg" data-act="panel">${s.panel ? '收起' : '对话'}</button>` : ''}</div></div>
+    <p class="h ${m.err ? 'err' : ''}"><span>${esc(m.hint)}</span><span class="speech-count">${m.count}/${m.max}</span></p></footer>`;
+}
+
+function joinScreen(s) {
+  return `<section class="join"><div><h1>加入本局</h1>
+    <p class="lead">与电脑连接同一 Wi-Fi 后打开本页即可。选一个角色开始阅读；已被别人认领的角色不能再选。</p>
+    <div class="addr"><span>本局地址</span><div><output>${esc(DATA.address)}</output><button data-act="copy">${s.copied ? '已复制' : '复制'}</button></div><p>也可以扫描电脑上的二维码加入。</p></div></div>
+    <div><ul class="names">${DATA.roles.map((r) => `<li><button data-act="claim" data-arg="${r}" ${taken(r) ? 'disabled' : ''}><span class="n">${r}</span><span class="s">${taken(r) ? '已被认领' : '可认领'}</span></button></li>`).join('')}</ul>
+    ${s.claimFail ? '<p class="warn">这个角色刚被别人认领了，请另选一个。</p>' : ''}</div></section>`;
+}
+
+function reader(s) {
+  const src = s.mode === 'src';
+  const total = src ? DATA.srcPageCount : DATA.pages.length;
+  const label = src ? srcLabel() : s.page + 1;
+  const prevOff = src ? s.srcPage <= 1 : s.page <= 0;
+  const nextOff = src ? srcEnd() >= DATA.srcPageCount : s.page >= total - 1;
+  const tools = `<span class="pg">第 ${label} / ${total} 页</span>
+    <button class="tool" data-act="mode" data-arg="src" aria-pressed="${src}">原稿</button>
+    <button class="tool" data-act="mode" data-arg="text" aria-pressed="${!src}">文字重排</button>
+    <button class="tool" data-act="cols">${s.cols === 1 ? '双栏' : '单栏'}</button>
+    ${src ? `<button class="tool" data-act="fit">${s.fit === 'page' ? '适合宽度' : '整页'}</button>
+      <button class="tool" aria-label="缩小原稿" data-act="zoom" data-arg="-0.25" ${s.zoom <= 0.5 ? 'disabled' : ''}>−</button>
+      <button class="tool" aria-label="放大原稿" data-act="zoom" data-arg="0.25" ${s.zoom >= 3 ? 'disabled' : ''}>＋</button>`
+      : `<button class="tool" data-act="settings" aria-expanded="${s.settings}">Aa</button>`}
+    <button class="tool" data-act="focus">${s.focus ? '退出专注' : '专注'}</button>`;
+  const settings = s.settings && !src ? `<div class="settings"><h2>按你的习惯阅读</h2>
+    <div class="stepper"><button data-act="font" data-arg="-1" aria-label="减小字号" ${s.font <= 16 ? 'disabled' : ''}>A−</button><output>${s.font}</output><button data-act="font" data-arg="1" aria-label="增大字号" ${s.font >= 30 ? 'disabled' : ''}>A＋</button></div>
+    <label>行间留白 <select data-spacing>${[['tight', '紧凑'], ['relaxed', '舒展'], ['loose', '宽松']].map(([v, l]) => `<option value="${v}" ${s.spacing === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <p>字号和屏幕变化后按文本位置重新分页。阅读器页码与原稿页码不同。</p></div>` : '';
+  let body;
+  if (src) {
+    const pages = []; for (let p = s.srcPage; p <= srcEnd(); p++) pages.push(scanPage(p));
+    body = `<div class="rbody"><div class="src-wrap ${s.fit === 'page' ? 'fitpage' : 'fitwidth'}" style="--zoom:${s.zoom}"><div class="src-pages w${pages.length}">${pages.join('')}</div></div></div>`;
+  } else {
+    body = `<div class="rbody" style="--bs:${s.font}px;--lh:${spacingValue()};--cols:${s.cols}"><header class="chead"><div class="cm"><i></i>第 ${chapterOf() + 1} 章</div>
+      <nav class="chs" aria-label="角色本章节">${DATA.chapters.map((c, i) => `<button class="tool" data-act="chapter" data-arg="${i}" ${i === chapterOf() ? 'aria-current="location"' : ''}>${c}</button>`).join('')}</nav></header>
+      <article class="pbody" tabindex="0" aria-label="当前页正文">${textPageHTML()}</article></div>`;
+  }
+  const foot = src ? [`原稿 · 第 ${label} / ${total} 页`, '可缩放查看'] : [`第 ${chapterOf() + 1} 章 · ${DATA.chapters[chapterOf()]}`, '识别文字可能有误，以原稿为准'];
+  return `<section class="reader ${s.focus ? 'focus' : ''}"><div class="rbar"><span class="crumb">${esc(s.role)}</span>${tools}</div>${settings}${body}
+    <footer class="rfoot"><div class="l"><span>${foot[0]}</span><small>${foot[1]}</small></div>
+    <div class="arrows"><button data-act="turn" data-arg="-1" aria-label="上一页" ${prevOff ? 'disabled' : ''}>‹</button><button data-act="turn" data-arg="1" aria-label="下一页" ${nextOff ? 'disabled' : ''}>›</button></div></footer></section>`;
+}
+
+function cardsScreen(s) {
+  const c = DATA.cards[s.cardSel];
+  return `<section class="cards"><div><h2 class="t">全部线索卡</h2>
+    <p class="lead">点哪张看哪张，只在这台设备上显示。暂停分发的组用纸质卡。</p>
+    <ul class="clist">${DATA.cards.map((k, i) => k.ok
+      ? `<li><button class="${i === s.cardSel ? 'on' : ''}" data-act="card" data-arg="${i}"><span class="n">${k.name}</span><span class="s">${k.group} · ${k.order}</span></button></li>`
+      : `<li><button class="no" disabled><span class="n">${k.name}</span><span class="s">${k.group} · ${k.order} · ${k.why}，请用纸质卡</span></button></li>`).join('')}</ul></div>
+    <figure class="shot" style="margin:0">${cardFace(c)}<figcaption>线索卡 · 正面（示意）</figcaption></figure></section>`;
+}
+
+function publicScreen(s) {
+  const lines = feedAll();
+  const reveal = revealTexts();
+  const rail = `<aside class="rail ${s.rail ? 'open' : ''}" aria-label="本局进度">
+    <button class="one" data-act="rail" aria-expanded="${!!s.rail}"><span>${phaseOneLine()}</span><small>${s.rail ? '收起' : '展开'}</small></button>
+    <div class="full"><h3>${DATA.storyTitle}</h3><ol class="ph">${DATA.phases.map((p, i) => `<li class="${phaseStatus(i)}" ${i === s.phase ? 'aria-current="step"' : ''}>${p}</li>`).join('')}</ol>
+    ${hintText() ? `<p class="hint">${hintText()}</p>` : ''}
+    <div class="ctl">${controlLabels().map((l) => `<button disabled>${l}</button>`).join('')}<p>${controlsNote}</p></div>
+    <p class="meta">${materialMeta()}</p>${voteMeta() ? `<p class="meta">${voteMeta()}</p>` : ''}
+    ${reveal.length ? `<div class="reveal">${reveal.map((t) => `<p>${t}</p>`).join('')}</div>` : ''}</div></aside>`;
+  return `<section class="pub">${rail}<div class="feedbox"><div class="feed-scroll"><ol class="feed">${lines.map(([k, t]) => `<li class="${k}">${esc(t)}</li>`).join('')}</ol></div></div></section>`;
+}
+
+function render(s) {
+  let main;
+  if (s.screen === 'wait') main = '<section class="center"><div class="pulse"></div><h1>等待主持人选剧本</h1><p class="lead">电脑一打开剧本，这里会自动变成选角色页，不用刷新。</p></section>';
+  else if (s.screen === 'prep') main = `<section class="center"><div class="pulse"></div><h1>材料准备中</h1><p class="lead">《${DATA.storyTitle}》的卡片正在准备，几秒后自动开始。</p></section>`;
+  else if (s.screen === 'join' || !s.role) main = joinScreen(s);
+  else if (s.screen === 'book') main = reader(s);
+  else if (s.screen === 'cards') main = cardsScreen(s);
+  else main = publicScreen(s);
+  const focus = s.screen === 'book' && s.focus;
+  return `<div class="d1">${focus ? '' : bar(s)}<main>${main}</main>${speechBar(s)}</div>`;
+}
+mount(render, '方向一 · 书卷');
+</script>
+</body>
+</html>
