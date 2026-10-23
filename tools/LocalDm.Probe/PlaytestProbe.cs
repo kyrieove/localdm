@@ -148,7 +148,8 @@ public static class PlaytestProbe
             return 2;
         }
 
-        var package = DmAcceptanceProbe.LoadPackage(packagePath);
+        // 和软件开平板时一样：包里没带平板清单就按旁边的 .tablet.json 补齐（已备好则直接读）。
+        var package = LocalDm.Infrastructure.Import.TabletMaterials.Ensure(DmAcceptanceProbe.LoadPackage(packagePath), packagePath);
         if (package.Tablet is null)
         {
             Console.WriteLine("! 剧本包没有平板清单，停止。");
@@ -545,20 +546,23 @@ public static class PlaytestProbe
         {
             var psi = new ProcessStartInfo
             {
-                FileName = "codebuddy",
-                Arguments = $"-p \"{prompt.Replace("\"", "\\\"")}\" --model {model} --effort high -y --output-format stream-json",
+                // Windows 上 codebuddy 是 npm 的 .cmd 外壳；提示含整本角色本，会超出命令行长度，走标准输入
+                FileName = OperatingSystem.IsWindows() ? "codebuddy.cmd" : "codebuddy",
+                Arguments = $"-p --model {model} --effort high -y --output-format stream-json",
                 WorkingDirectory = workingDir,
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
+                StandardInputEncoding = new UTF8Encoding(false),
                 StandardOutputEncoding = Encoding.UTF8,
                 StandardErrorEncoding = Encoding.UTF8,
             };
 
             using var process = new Process { StartInfo = psi };
             process.Start();
+            await process.StandardInput.WriteAsync(prompt);
             process.StandardInput.Close();
 
             var stdoutTask = process.StandardOutput.ReadToEndAsync();
