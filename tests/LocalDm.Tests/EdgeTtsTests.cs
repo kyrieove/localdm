@@ -80,6 +80,10 @@ public sealed class EdgeTtsTests
             python = "python";
         }
 
+        // 测试自己的探测和引擎的探测各起一个 python，超时必须同一个且足够长，否则并行时两边各自超时就对不上。
+        Environment.SetEnvironmentVariable("LOCALDM_EDGE_PROBE_TIMEOUT_MS", "30000");
+        EdgeTtsEngine.InvalidateProbeCache();
+
         var imports = false;
         try
         {
@@ -92,7 +96,7 @@ public sealed class EdgeTtsTests
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
             });
-            imports = proc is not null && proc.WaitForExit(5000) && proc.ExitCode == 0;
+            imports = proc is not null && proc.WaitForExit(30000) && proc.ExitCode == 0;
             if (proc is { HasExited: false })
             {
                 proc.Kill(entireProcessTree: true);

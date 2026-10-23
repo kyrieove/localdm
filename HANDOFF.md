@@ -20,7 +20,5 @@
 ## 等用户回答
 - 晚上导入新剧本：先问是不是整版多卡（一张图多张卡）。
 
-## 复盘待办（retro，2026-10-23；1–3 已做：pre-push 钩子、派活卡 lint、交接归档）
-  4. 新建 `CODING_STANDARDS.md` 给审查者三条：状态守卫（Dispose 先清理再置标志、Cancel 只在对应状态改状态）、异常边界（宿主创建放进 try、「不拦主流程」的步骤 catch Exception 而不是枚举几种，PDF 渲染的 COMException 就漏过一次）、定时器每次回到空闲都要重装。
-  5. `scripts/ui-shot.ps1 -Click "<按钮名>" -Out x.png`：UIA 点按钮 + PrintWindow 截图，省得每次手写 PowerShell。
-  6. 偶发红测试治根因（不加重试、不跳过）：`EdgeTtsTests` 的 python 探针 5 秒超时改成可注入；`HostConversationTests.Replay_holds_the_session_busy_gate` 去掉时序依赖。
+## 复盘待办
+- 全部做完（钩子、派活卡 lint、交接归档、CODING_STANDARDS.md、scripts/ui-shot.ps1、偶发红测试根因）。

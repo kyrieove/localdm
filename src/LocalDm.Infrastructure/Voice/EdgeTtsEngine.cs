@@ -23,7 +23,11 @@ public static class EdgeTtsEngine
     /// <summary>探测结果的缓存时长：装好依赖后不必重启应用即可生效。</summary>
     private static readonly TimeSpan ProbeCacheTtl = TimeSpan.FromMinutes(5);
 
-    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(5);
+    /// <summary>探测超时，环境变量 LOCALDM_EDGE_PROBE_TIMEOUT_MS 可覆盖（默认 5 秒；并行跑测试时 python 冷启动会超过它）。</summary>
+    private static TimeSpan ProbeTimeout =>
+        int.TryParse(Environment.GetEnvironmentVariable("LOCALDM_EDGE_PROBE_TIMEOUT_MS"), out var ms) && ms > 0
+            ? TimeSpan.FromMilliseconds(ms)
+            : TimeSpan.FromSeconds(5);
 
     private static string? _cachedPythonPath;
     private static bool? _cachedIsAvailable;

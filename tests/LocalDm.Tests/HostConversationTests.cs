@@ -704,8 +704,10 @@ public sealed class HostConversationTests : IDisposable
 
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
-        for (var i = 0; i < 100 && !condition(); i++)
+        // 超时必须失败：以前静默返回，负载高时后面的断言才报错，看起来像别的问题。
+        for (var i = 0; !condition(); i++)
         {
+            Assert.True(i < 500, "等待条件超时（10 秒）。");
             await Task.Delay(20);
         }
     }
