@@ -31,7 +31,7 @@ Windows 11 desktop, WPF (net10.0-windows), C# 14. Single machine, no server, no 
 - 一局约 3–5 小时，分上下午两场，主持人会多次暂停、恢复。
 - 私人材料（角色本、线索卡）在软件外用纸本或 PDF 分发，软件不负责分发秘密。
 - 投票用纸笔，主持人手工录入汇总并二次确认。
-- 语音输入走用户已有的 OpenLess，软件只收文字，不碰麦克风。
+- 语音输入由软件自带：点主持台输入框旁的麦克风（或右 Alt）才录音，音频只在内存里、本机识别、识别完即丢，转出的文字填进输入框、不自动发送（见 `docs/decisions/0006-in-app-dictation-local-asr.md`）。OpenLess 仍可照常用。
 - 公共口播走本机 Windows Magpie 文字模型 + 系统中文语音。
 
 ## Capabilities and Constraints

@@ -1,6 +1,6 @@
 # 0006 软件内置语音输入：本机录音 + 本机识别
 
-日期 2026-10-23。状态：已决定，实现中（引擎卡 `docs/orch/2026-10-23-dictation-engine/`）。
+日期 2026-10-23。状态：已决定，已实现（引擎卡 `docs/orch/2026-10-23-dictation-engine/`、界面卡 `docs/orch/2026-10-23-dictation-ui/`），真人麦克风实机验收未做。
 
 ## 背景
 原约定（`PRODUCT.md`、`docs/user-guide.md`）：语音输入走用户已有的 OpenLess，软件只收文字、不碰麦克风。用户提出在主持台输入框加语音按钮，按了就语音转文字。调查事实：OpenLess 2.0.1 没有任何对外接口（无 API、无命名管道、无转写命令行），只能靠全局热键把字打进当前焦点窗口；它的本地识别是 sherpa-onnx + qwen3-asr-0.6b-int8，模型已在本机 `%APPDATA%\OpenLess\models\sherpa-onnx\`；它的源码是 AGPL-3.0。
