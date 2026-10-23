@@ -836,8 +836,13 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             return;
         }
 
-        AppendPlayer(text);
         InputText = string.Empty;
+        await AskCoreAsync(text);
+    }
+
+    private async Task AskCoreAsync(string text)
+    {
+        AppendPlayer(text);
 
         var settings = _settingsProvider();
         if (string.IsNullOrWhiteSpace(settings.ModelId))
@@ -865,6 +870,65 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         }
 
         await RunTurnAsync(messages, "正在请本机模型回答…", AskPipeline, text, token);
+    }
+
+    /// <summary>
+    /// 平板发言：同步接单，不等整轮结束。必须在 UI 线程调用。
+    /// </summary>
+    public TabletSpeechAck SubmitTabletSpeech(string roleName, string text)
+    {
+        var trimmed = text?.Trim() ?? string.Empty;
+        if (trimmed.Length == 0)
+        {
+            return TabletSpeechAck.Rejected(TabletSpeechOutcome.Empty);
+        }
+
+        if (IsBusy)
+        {
+            return TabletSpeechAck.Rejected(TabletSpeechOutcome.Busy);
+        }
+
+        var settings = _settingsProvider();
+        if (string.IsNullOrWhiteSpace(settings.ModelId))
+        {
+            return TabletSpeechAck.Rejected(TabletSpeechOutcome.NoModel);
+        }
+
+        if (_session.Package is null || _session.Session is null)
+        {
+            return TabletSpeechAck.Rejected(TabletSpeechOutcome.NoSession);
+        }
+
+        var signed = $"【{roleName}】{trimmed}";
+        var route = _router.Route(trimmed);
+        if (route.Kind == HostIntentKind.ProposeCommand)
+        {
+            AppendPlayer(signed);
+            var hint = route.ProposedAction switch
+            {
+                PublicAction.Advance => $"{roleName} 提议：进入下一环节。请在电脑上确认后再推进。",
+                PublicAction.Reveal => $"{roleName} 提议：揭秘。请在电脑上确认后再操作。",
+                _ => $"{roleName} 提议：操作。请在电脑上确认后再推进。",
+            };
+            AppendLocalHint(hint);
+            return new TabletSpeechAck(TabletSpeechOutcome.Proposed, Task.CompletedTask);
+        }
+
+        return new TabletSpeechAck(TabletSpeechOutcome.Accepted, AskCoreAsync(signed));
+    }
+
+    /// <summary>
+    /// 平板打断朗读：正在朗读时打断并返回 true；生成阶段不打断并返回 false。
+    /// </summary>
+    public bool StopSpeakingForTablet()
+    {
+        if (IsSpeaking)
+        {
+            StopCommand.Execute(null);
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>快捷意图：替玩家把这句话打进输入框再发出去，走的还是同一条链路。</summary>

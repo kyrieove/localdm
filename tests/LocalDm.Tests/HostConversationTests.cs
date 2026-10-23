@@ -4,6 +4,7 @@ using LocalDm.Core.Domain;
 using LocalDm.Core.Game;
 using LocalDm.Core.Hosting;
 using LocalDm.Core.Ports;
+using LocalDm.Core.Tablet;
 using LocalDm.Infrastructure.Storage;
 using Microsoft.Data.Sqlite;
 
@@ -428,6 +429,207 @@ public sealed class HostConversationTests : IDisposable
         Assert.True(host.ShowOpeningSpeech, "第二步声明了开场动作，按钮应出现在这里。");
     }
 
+    [Fact]
+    public async Task Tablet_speech_is_signed_in_the_timeline_and_in_the_memory()
+    {
+        var gateway = new CountingGateway();
+        var host = await NewHostAsync(gateway, new CountingTts(), autoRead: false);
+        await host.LoadDemoAsync();
+
+        host.InputText = "电脑草稿";
+        var ack = host.SubmitTabletSpeech("张三", " 我想去书房 ");
+        Assert.Equal(TabletSpeechOutcome.Accepted, ack.Outcome);
+        Assert.Equal("电脑草稿", host.InputText);
+        await ack.Completion;
+
+        var playerMessage = host.Messages.First(m => m.IsPlayer);
+        Assert.Equal("【张三】我想去书房", playerMessage.Text);
+
+        host.InputText = "接着说";
+        await host.SendAsync();
+
+        var secondRequestMessages = gateway.Requests[^1].Messages;
+        // 历史可能和当前问题合并在同一条 user 消息里：数署名原话在整个请求里出现的次数。
+        var all = string.Concat(secondRequestMessages.Where(m => m.Role == "user").Select(m => m.Content));
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(all, "【张三】我想去书房"));
+        Assert.DoesNotContain("【张三】接着说", all, StringComparison.Ordinal);
+        Assert.Contains("接着说", all, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Two_tablet_submits_at_once_accept_exactly_one()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var gateway = new CountingGateway { Gate = gate };
+        var host = await NewHostAsync(gateway, new CountingTts(), autoRead: false);
+        await host.LoadDemoAsync();
+
+        var ack1 = host.SubmitTabletSpeech("甲", "一");
+        Assert.Equal(TabletSpeechOutcome.Accepted, ack1.Outcome);
+        Assert.True(host.IsBusy);
+
+        var ack2 = host.SubmitTabletSpeech("乙", "二");
+        var ack3 = host.SubmitTabletSpeech("丙", "三");
+
+        Assert.Equal(TabletSpeechOutcome.Busy, ack2.Outcome);
+        Assert.Equal(TabletSpeechOutcome.Busy, ack3.Outcome);
+
+        gate.SetResult();
+        await ack1.Completion;
+
+        Assert.Equal(1, gateway.CompletionCount);
+        Assert.Single(host.Messages, m => m.IsPlayer);
+    }
+
+    [Fact]
+    public async Task Desktop_send_and_tablet_submit_at_once_accept_exactly_one()
+    {
+        // 电脑先：桌面 SendAsync 后立刻 SubmitTabletSpeech 返回 Busy
+        {
+            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var gateway = new CountingGateway { Gate = gate };
+            var host = await NewHostAsync(gateway, new CountingTts(), autoRead: false);
+            await host.LoadDemoAsync();
+
+            host.InputText = "电脑的话";
+            var desktop = host.SendAsync();
+            var ack = host.SubmitTabletSpeech("甲", "平板的话");
+
+            Assert.Equal(TabletSpeechOutcome.Busy, ack.Outcome);
+            gate.SetResult();
+            await desktop;
+
+            Assert.Equal(1, gateway.CompletionCount);
+            Assert.Single(host.Messages, m => m.IsPlayer && m.Text == "电脑的话");
+        }
+
+        // 平板先：SubmitTabletSpeech 成功后再 SendAsync 不产生新消息
+        {
+            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var gateway = new CountingGateway { Gate = gate };
+            var host = await NewHostAsync(gateway, new CountingTts(), autoRead: false);
+            await host.LoadDemoAsync();
+
+            var ack = host.SubmitTabletSpeech("甲", "平板的话");
+            Assert.Equal(TabletSpeechOutcome.Accepted, ack.Outcome);
+
+            host.InputText = "电脑的话";
+            await host.SendAsync();
+
+            gate.SetResult();
+            await ack.Completion;
+
+            Assert.DoesNotContain(host.Messages, m => m.IsPlayer && m.Text == "电脑的话");
+            Assert.Equal(1, gateway.CompletionCount);
+        }
+    }
+
+    [Fact]
+    public async Task Tablet_submit_while_generating_or_speaking_is_busy()
+    {
+        var modelGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var speakGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var gateway = new CountingGateway { Gate = modelGate };
+        var tts = new CountingTts { SpeakGate = speakGate };
+        var host = await NewHostAsync(gateway, tts, autoRead: true);
+        await host.LoadDemoAsync();
+
+        // 1. 生成中
+        var ack = host.SubmitTabletSpeech("甲", "第一句");
+        Assert.Equal(TabletSpeechOutcome.Accepted, ack.Outcome);
+        Assert.True(host.IsGenerating);
+        Assert.False(host.IsSpeaking);
+
+        var busyWhileGenerating = host.SubmitTabletSpeech("乙", "生成中的话");
+        Assert.Equal(TabletSpeechOutcome.Busy, busyWhileGenerating.Outcome);
+        Assert.False(host.StopSpeakingForTablet());
+
+        // 2. 朗读中
+        modelGate.SetResult();
+        await WaitUntilAsync(() => host.IsSpeaking);
+        Assert.True(host.IsSpeaking);
+
+        var busyWhileSpeaking = host.SubmitTabletSpeech("丙", "朗读中的话");
+        Assert.Equal(TabletSpeechOutcome.Busy, busyWhileSpeaking.Outcome);
+
+        Assert.True(host.StopSpeakingForTablet());
+        speakGate.SetResult();
+        await ack.Completion;
+    }
+
+    [Fact]
+    public async Task Tablet_advance_phrase_is_only_a_proposal()
+    {
+        var gateway = new CountingGateway();
+        var host = await NewHostAsync(gateway, new CountingTts(), autoRead: false);
+        await host.LoadDemoAsync();
+
+        var revisionBefore = host.Session.Revision;
+        var ack = host.SubmitTabletSpeech("甲", "进入下一环节");
+
+        Assert.Equal(TabletSpeechOutcome.Proposed, ack.Outcome);
+        Assert.Equal(0, gateway.CompletionCount);
+        Assert.Equal(revisionBefore, host.Session.Revision);
+        Assert.False(host.IsBusy);
+
+        Assert.Contains(host.Messages, m => m.IsPlayer && m.Text == "【甲】进入下一环节");
+        Assert.Contains(host.Messages, m => m.IsLocalOnly && m.Text.Contains("提议", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("压缩上下文")]
+    [InlineData("/compact")]
+    public async Task Tablet_compact_phrases_are_plain_speech(string phrase)
+    {
+        var gateway = new CountingGateway();
+        var host = await NewHostAsync(gateway, new CountingTts(), autoRead: false);
+        await host.LoadDemoAsync();
+
+        var ack = host.SubmitTabletSpeech("甲", phrase);
+        Assert.Equal(TabletSpeechOutcome.Accepted, ack.Outcome);
+        await ack.Completion;
+
+        Assert.Equal(1, gateway.CompletionCount);
+        Assert.Contains(gateway.Requests[^1].Messages, m => m.Content.Contains($"【甲】{phrase}", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Tablet_submit_rejects_empty_no_session_and_no_model()
+    {
+        var gateway = new CountingGateway();
+        var host = await NewHostAsync(gateway, new CountingTts(), autoRead: false);
+
+        // 未 LoadDemoAsync 时 NoSession
+        var noSessionAck = host.SubmitTabletSpeech("甲", "你好");
+        Assert.Equal(TabletSpeechOutcome.NoSession, noSessionAck.Outcome);
+        Assert.Empty(host.Messages);
+
+        // 纯空白 Empty
+        await host.LoadDemoAsync();
+        var beforeCount = host.Messages.Count;
+        var emptyAck = host.SubmitTabletSpeech("甲", "   ");
+        Assert.Equal(TabletSpeechOutcome.Empty, emptyAck.Outcome);
+        Assert.Equal(beforeCount, host.Messages.Count);
+
+        // ModelId 空时 NoModel
+        var store = new SessionStore(Path.Combine(_root, "sessions-nomodel.db"));
+        await store.InitializeAsync(TestContext.Current.CancellationToken);
+        var noModelSettings = ToolSettings.Default with { ModelId = "", AutoRead = false };
+        var noModelHost = new HostViewModel(
+            new HostDirector(gateway, new CountingTts()),
+            () => noModelSettings,
+            new HostIntentRouter(),
+            new CommandDispatcher(store),
+            store,
+            new CountingTts());
+        await noModelHost.LoadDemoAsync();
+        var noModelCount = noModelHost.Messages.Count;
+
+        var noModelAck = noModelHost.SubmitTabletSpeech("甲", "你好");
+        Assert.Equal(TabletSpeechOutcome.NoModel, noModelAck.Outcome);
+        Assert.Equal(noModelCount, noModelHost.Messages.Count);
+    }
+
     /// <summary>第二步（序章）才是「开场」所在环节：用来说明按钮不由环节序号决定。</summary>
     private static ScriptPackage OpeningSpeechPackage()
     {
@@ -590,6 +792,9 @@ public sealed class HostConversationTests : IDisposable
 
         public int ReplayCount { get; private set; }
 
+        /// <summary>挡板：设了它，朗读就一直停在「正在朗读」。</summary>
+        public TaskCompletionSource? SpeakGate { get; init; }
+
         /// <summary>挡板：设了它，重播就一直停在「正在朗读」，用来模拟长音频。</summary>
         public TaskCompletionSource? ReplayGate { get; init; }
 
@@ -611,10 +816,13 @@ public sealed class HostConversationTests : IDisposable
         public IReadOnlyList<TtsVoice> GetChineseVoices() =>
             [new TtsVoice { Name = "测试音色", Culture = "zh-CN" }];
 
-        public Task SpeakAsync(SpeechItem item, string? voiceId, CancellationToken cancellationToken)
+        public async Task SpeakAsync(SpeechItem item, string? voiceId, CancellationToken cancellationToken)
         {
             SpeakCount++;
-            return Task.CompletedTask;
+            if (SpeakGate is not null)
+            {
+                await SpeakGate.Task;
+            }
         }
 
         public async Task ReplayAsync(SpeechItem item, string? voiceId, CancellationToken cancellationToken)

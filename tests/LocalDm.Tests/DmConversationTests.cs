@@ -4,6 +4,7 @@ using LocalDm.Core.Domain;
 using LocalDm.Core.Game;
 using LocalDm.Core.Hosting;
 using LocalDm.Core.Ports;
+using LocalDm.Core.Tablet;
 using LocalDm.Infrastructure.Storage;
 
 namespace LocalDm.Tests;
@@ -283,6 +284,61 @@ public sealed class DmConversationTests : IDisposable
             prompt,
             StringComparison.Ordinal);
         Assert.Contains("玩家没有亲口读出来的卡面内容一律不写", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Tablet_and_desktop_submits_are_busy_while_automatic_compaction_is_pending()
+    {
+        var gateway = new ScriptedGateway();
+        var host = await NewHostAsync(gateway);
+        await host.LoadDemoAsync();
+
+        var compactionGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        gateway.CompactionGates[1] = compactionGate;
+
+        Task? pending = null;
+        for (var i = 0; i < 40; i++)
+        {
+            host.InputText = LongQuestion(i);
+            pending = host.SendAsync();
+            if (CompactionRequests(gateway).Count == 1)
+            {
+                break;
+            }
+
+            await pending;
+        }
+
+        Assert.NotNull(pending);
+        await WaitUntilAsync(() => CompactionRequests(gateway).Count == 1);
+
+        var normalRequestsBefore = gateway.Requests.Count(r => !IsCompaction(r));
+        Assert.Single(CompactionRequests(gateway));
+
+        // 整理期间：host.IsBusy 为 true；平板提交为 Busy；电脑发送直接返回且不进 Messages
+        Assert.True(host.IsBusy);
+
+        var tabletAck = host.SubmitTabletSpeech("甲", "整理期间的话");
+        Assert.Equal(TabletSpeechOutcome.Busy, tabletAck.Outcome);
+
+        host.InputText = "电脑的话";
+        await host.SendAsync();
+
+        Assert.DoesNotContain(host.Messages, m => m.Text == "电脑的话");
+        Assert.DoesNotContain(host.Messages, m => m.Text == "整理期间的话");
+        Assert.Single(CompactionRequests(gateway));
+
+        // 放开整理门
+        compactionGate.SetResult();
+        await pending;
+
+        Assert.Single(CompactionRequests(gateway));
+        Assert.Equal(normalRequestsBefore + 1, gateway.Requests.Count(r => !IsCompaction(r)));
+        Assert.False(host.IsBusy);
+
+        var afterAck = host.SubmitTabletSpeech("甲", "整理之后的话");
+        Assert.Equal(TabletSpeechOutcome.Accepted, afterAck.Outcome);
+        await afterAck.Completion;
     }
 
     // ===== 整理失败 =====
