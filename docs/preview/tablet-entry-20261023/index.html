@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>平板入口 · 交互原型</title>
+<style>
+:root{
+  --paper:#fbfaf7;--paper-deep:#efede7;--paper-dim:#fffefa;--ink:#292823;--ink-soft:#5b564c;
+  --rule:#dedbd2;--seal:#943f32;--seal-deep:#7e3228;--seal-wash:#f0e4dd;--muted:#716d63;--ok:#3f6b4a;
+  --serif:"Source Han Serif SC","Noto Serif SC","Songti SC",SimSun,serif;
+  --sans:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+  --paper:#23221e;--paper-deep:#1a1916;--paper-dim:#292822;--ink:#ece8de;--ink-soft:#b9b3a5;
+  --rule:#3a382f;--seal:#d6806f;--seal-deep:#e39a8b;--seal-wash:#3a2a25;--muted:#988f7e;--ok:#8cc29a}}
+*{box-sizing:border-box}
+body{margin:0;background:#d9d6cd;color:var(--ink);font:14px/1.6 var(--sans)}
+@media (prefers-color-scheme:dark){body{background:#0f0e0c}}
+button{font:inherit;color:inherit;cursor:pointer}
+.stage{max-width:1500px;margin:0 auto;padding:18px 20px 40px}
+.bar{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:12px 16px;background:var(--paper);border:1px solid var(--rule);border-radius:10px;margin-bottom:16px}
+.bar b{font:600 13px var(--sans)}
+.seg{display:flex;border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:7px 14px;font-size:13px;color:var(--ink-soft)}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+.note{font-size:12px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,.75fr);gap:20px;align-items:start}
+@media(max-width:1000px){.grid{grid-template-columns:1fr}}
+.cap{font-size:12px;color:var(--muted);margin:0 0 8px;letter-spacing:.06em}
+
+/* ===== 桌面窗口 ===== */
+.win{background:var(--paper);border:1px solid var(--rule);border-radius:10px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.14);display:grid;grid-template-columns:200px 1fr;height:640px}
+.side{background:var(--paper-deep);padding:16px 12px;display:flex;flex-direction:column;border-right:1px solid var(--rule)}
+.brand{font:600 20px var(--serif);padding:0 8px}
+.brand small{display:block;font:11px var(--sans);color:var(--muted);margin-top:2px}
+.rail{margin-top:14px;display:flex;flex-direction:column;gap:2px}
+.rail button{border:0;background:none;text-align:left;padding:9px 10px;border-radius:6px;font-size:14px}
+.rail button:hover{background:var(--rule)}
+.rail button.on{background:var(--paper);box-shadow:inset 3px 0 0 var(--seal);font-weight:600}
+.side .grow{flex:1}
+.mini{display:flex;align-items:center;gap:10px;border:1px solid var(--rule);background:var(--paper);border-radius:8px;padding:8px 10px;margin:0 0 8px;text-align:left;width:100%}
+.mini canvas{width:34px;height:34px;flex:none}
+.mini span{font-size:12px;line-height:1.35}
+.mini em{display:block;font-style:normal;color:var(--muted);font-size:11px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px}
+.dot.live{background:var(--ok)}.dot.err{background:var(--seal)}.dot.wait{background:#c8a24a}
+.main{overflow:auto;padding:26px 30px}
+.main h1{font:500 26px var(--serif);margin:0}
+.main .sub{color:var(--ink-soft);margin:6px 0 16px}
+.btn{border:1px solid var(--rule);background:var(--paper-dim);padding:9px 18px;border-radius:6px;font-size:14px}
+.btn.seal{background:var(--seal);border-color:var(--seal);color:#fff;font-weight:600}
+.btn.seal:hover{background:var(--seal-deep)}
+.btn.quiet:hover{border-color:var(--seal)}
+.btn:disabled{opacity:.4;cursor:default}
+
+/* 平板加入卡片 */
+.join-card{display:grid;grid-template-columns:132px 1fr;gap:18px;border:1px solid var(--rule);background:var(--paper-dim);border-radius:10px;padding:16px;margin:0 0 18px}
+.qrbox{width:132px;height:132px;background:#fff;border:1px solid var(--rule);border-radius:6px;display:grid;place-items:center;position:relative}
+.qrbox canvas{width:120px;height:120px}
+.qrbox.off canvas{opacity:.12}
+.qrbox .ov{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font-size:12px;color:var(--seal);padding:8px}
+.jc h2{font:600 16px var(--sans);margin:0 0 2px;display:flex;align-items:center}
+.jc .state{font-size:13px;color:var(--ink-soft);margin:0 0 8px}
+.url{display:flex;gap:6px;margin:6px 0}
+.url input{flex:1;min-width:0;border:1px solid var(--rule);background:var(--paper);color:var(--ink);padding:7px 9px;border-radius:6px;font-size:13px}
+.joined{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.chip{font-size:12px;padding:2px 10px;border-radius:999px;background:var(--paper-deep);color:var(--ink-soft)}
+.chip.on{background:var(--seal-wash);color:var(--seal-deep)}
+.err-box{border:1px solid var(--seal);background:var(--seal-wash);color:var(--seal-deep);border-radius:6px;padding:8px 10px;font-size:13px;margin-top:6px}
+details.help{margin-top:8px;font-size:13px;color:var(--ink-soft)}
+details.help summary{cursor:pointer;color:var(--seal)}
+details.help ol{margin:6px 0 0;padding-left:20px}
+
+.sec{font-size:12px;color:var(--muted);margin:22px 0 6px;letter-spacing:.06em}
+.row{display:flex;align-items:center;gap:14px;border:1px solid var(--rule);border-radius:8px;background:var(--paper-dim);padding:14px 16px;margin-bottom:8px}
+.row.sel{border-color:var(--ink);background:var(--paper-deep)}
+.row .bar4{width:4px;align-self:stretch;background:var(--ink);border-radius:1px}
+.row h3{font:500 17px var(--serif);margin:0}
+.row p{margin:2px 0 0;font-size:12px;color:var(--muted)}
+.row .grow{flex:1}
+.tag{font-size:12px;color:var(--muted)}
+.tag.ok{color:var(--ok)}
+
+/* ===== 平板 ===== */
+.pad{width:100%;max-width:420px;margin:0 auto;border:10px solid #1b1a17;border-radius:26px;background:var(--paper-deep);overflow:hidden;height:640px;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+.pad-bar{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--paper);border-bottom:1px solid var(--rule);font-size:13px}
+.mark{display:inline-grid;place-items:center;width:24px;height:24px;border:1px solid var(--seal);color:var(--seal);font:15px var(--serif);margin-right:8px}
+.pad-body{flex:1;overflow:auto;padding:22px 16px}
+.pad h1{font:500 26px var(--serif);margin:0 0 8px}
+.pad .lead{color:var(--ink-soft);font-size:14px;margin:0 0 16px}
+.wait{text-align:center;padding:60px 10px}
+.wait .pulse{width:54px;height:54px;border-radius:50%;margin:0 auto 18px;border:2px solid var(--seal);animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(.85);opacity:.4}50%{transform:scale(1.1);opacity:1}}
+@media(prefers-reduced-motion:reduce){.wait .pulse{animation:none}}
+.roles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.role{border:1px solid var(--rule);background:var(--paper);border-radius:10px;padding:14px;text-align:left;min-height:72px}
+.role b{font:500 18px var(--serif);display:block}
+.role span{font-size:12px;color:var(--seal)}
+.role:disabled{background:var(--paper-deep);border-style:dashed;color:var(--muted);cursor:default}
+.role:disabled span{color:var(--muted)}
+.role:hover:not(:disabled){border-color:var(--seal)}
+.tabs{display:flex;border-bottom:1px solid var(--rule);background:var(--paper)}
+.tabs button{flex:1;border:0;background:none;padding:12px 4px;font-size:14px;color:var(--muted);border-bottom:3px solid transparent}
+.tabs button.on{color:var(--ink);font-weight:600;border-color:var(--seal)}
+.page{font:17px/1.95 var(--serif);text-indent:2em;margin:0 0 .9em}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{border:1px solid var(--rule);background:var(--paper);border-radius:10px;padding:12px;text-align:left}
+.card.pause{border-style:dashed;background:var(--paper-deep);color:var(--muted)}
+.card small{display:block;color:var(--muted);font-size:12px}
+.bubble{max-width:82%;padding:10px 14px;border-radius:14px;border:1px solid var(--rule);background:var(--paper);margin:0 0 10px;font-size:15px}
+.bubble.p{margin-left:auto;background:var(--paper-deep)}
+.src{background:var(--paper);border:1px solid var(--rule);border-radius:6px;overflow:auto;max-height:100%;touch-action:pan-x pan-y}
+.src svg{display:block;width:100%;height:auto;transform-origin:top left}
+.pbar{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:0 0 10px;font-size:13px;color:var(--ink-soft)}
+.pbar .grp{display:flex;gap:4px}
+.pbar button{border:1px solid var(--rule);background:var(--paper);border-radius:8px;min-width:40px;min-height:40px;padding:0 10px}
+.pbar button:disabled{opacity:.35;cursor:default}
+.pbar button.on{background:var(--paper-deep);font-weight:600}
+.cardview{margin-top:12px}
+.cardview svg{width:100%;height:auto;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.15)}
+.card.active{border-color:var(--seal);box-shadow:inset 3px 0 0 var(--seal)}
+.toast{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.show{opacity:1}
+dialog{border:1px solid var(--rule);border-radius:12px;background:var(--paper);color:var(--ink);padding:26px 30px;text-align:center}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog canvas{width:260px;height:260px;background:#fff;padding:10px;border-radius:8px}
+.legend{margin-top:18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.legend div{background:var(--paper);border:1px solid var(--rule);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--ink-soft)}
+.legend b{color:var(--ink);display:block;margin-bottom:2px}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="bar">
+    <b>电脑端动作</b>
+    <div class="seg" id="segScript">
+      <button data-v="none" aria-pressed="true">还没打开剧本</button>
+      <button data-v="a" aria-pressed="false">打开《孽岛疑云》</button>
+      <button data-v="b" aria-pressed="false">换成《示例剧本二》</button>
+    </div>
+    <b>服务状态</b>
+    <div class="seg" id="segNet">
+      <button data-v="ok" aria-pressed="true">正常</button>
+      <button data-v="port" aria-pressed="false">端口被占用</button>
+      <button data-v="fw" aria-pressed="false">被防火墙拦</button>
+    </div>
+    <span class="note">原型里的二维码是示意图案，不能扫；真实软件里是可扫的二维码。</span>
+  </div>
+
+  <div class="grid">
+    <div>
+      <p class="cap">电脑端 · 剧本库（常驻「平板加入」卡片，剧本只显示名字）</p>
+      <div class="win">
+        <aside class="side">
+          <div class="brand">本局主持<small>一台电脑，一场桌上戏</small></div>
+          <div class="rail">
+            <button class="on" id="navLib">剧本库</button>
+            <button id="navSess" hidden>回到本局</button>
+          </div>
+          <div class="grow"></div>
+          <button class="mini" id="miniQr" title="点开看大二维码">
+            <canvas id="qrMini" width="34" height="34"></canvas>
+            <span><b id="miniState"><i class="dot live"></i>平板入口</b><em id="miniUrl">192.168.1.23:5188</em></span>
+          </button>
+          <div class="rail"><button>偏好设置</button></div>
+        </aside>
+        <main class="main">
+          <h1>剧本库</h1>
+          <p class="sub">选一本准备完成的剧本，或接着上次的进度继续。</p>
+          <button class="btn seal">导入新剧本</button>
+
+          <div class="sec">平板加入</div>
+          <section class="join-card" aria-label="平板加入">
+            <div class="qrbox" id="qrbox"><canvas id="qrBig" width="120" height="120"></canvas><div class="ov" id="qrov" hidden></div></div>
+            <div class="jc">
+              <h2><i class="dot live" id="jcDot"></i><span id="jcTitle">平板可以加入</span></h2>
+              <p class="state" id="jcState">扫码或打开网址即可。电脑上还没打开剧本，平板会先看到等待页。</p>
+              <div class="url"><input readonly id="jcUrl" value="http://192.168.1.23:5188/"><button class="btn quiet" id="jcCopy">复制</button></div>
+              <div class="joined" id="jcJoined"></div>
+              <div class="err-box" id="jcErr" hidden></div>
+              <details class="help"><summary>连不上怎么办</summary>
+                <ol><li>平板和电脑连同一个 Wi-Fi。</li><li>Windows 第一次弹出网络提示时，选「专用网络」并允许。</li><li>网络类型若是「公用」，在 Windows 网络设置里改成「专用」。</li><li>仍不行：点上面的网址在电脑浏览器里试一次，能开说明是平板那边的网络。</li></ol>
+              </details>
+            </div>
+          </section>
+
+          <div class="sec">已装订</div>
+          <div id="lib"></div>
+
+          <div class="sec">熟悉操作</div>
+          <div class="row"><div class="grow"><h3>演示剧本</h3><p>不含真实剧情，用来熟悉按钮与声音。</p></div><button class="btn quiet">体验演示</button></div>
+        </main>
+      </div>
+    </div>
+
+    <div>
+      <p class="cap">平板浏览器（同一个网址，自动跟随电脑）</p>
+      <div class="pad" id="pad" style="position:relative">
+        <div class="pad-bar"><span><i class="mark">局</i>本局主持 · 平板</span><span id="padRight"></span></div>
+        <div id="padTabs"></div>
+        <div class="pad-body" id="padBody"></div>
+        <div class="toast" id="toast"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div><b>① 服务常驻</b>软件一打开就有二维码和网址，网址固定，平板收藏一次就能一直用。</div>
+    <div><b>② 放原件，不放重排文字</b>角色本是导入的 PDF 页或图片原样，线索卡是卡面/卡背原图。</div>
+    <div><b>③ 平板自动跟随</b>电脑打开、更换剧本时，平板不刷新、不重扫，自己切换；换剧本会清空角色认领。</div>
+    <div><b>④ 只显示剧本名</b>版本号不出现在任何界面上；同一本剧本只有一行。</div>
+    <div><b>⑤ 出错直说原因</b>端口被占、被防火墙拦，都写在二维码卡片上，并给出一步到位的做法。</div>
+  </div>
+</div>
+
+<dialog id="dlg"><h2 style="font:600 20px var(--serif);margin:0 0 10px">平板扫码加入</h2>
+  <canvas id="qrDlg" width="240" height="240"></canvas>
+  <p style="margin:12px 0 4px;font-size:15px" id="dlgUrl"></p>
+  <p class="note" style="margin:0 0 14px">电脑和平板连同一个 Wi-Fi</p>
+  <button class="btn" onclick="dlg.close()">关闭</button></dialog>
+
+<script>
+const $=s=>document.querySelector(s);
+const SCRIPTS={a:{name:'孽岛疑云',n:5,roles:['唐','护士','杰','海','玉'],pages:6},
+          b:{name:'示例剧本二',n:4,roles:['甲','乙','丙','丁'],pages:6}};
+const st={script:'none',net:'ok',role:null,tab:'book',taken:new Set(),prep:false,joined:0};
+const urlOK='http://192.168.1.23:5188/';
+
+/* 示意二维码：同一个字符串得到同一个图案，仅作视觉占位 */
+function drawQr(c,seed,size){
+  const g=c.getContext('2d'),n=25,cell=size/n;let h=0;for(const ch of seed)h=(h*31+ch.charCodeAt(0))>>>0;
+  const rnd=()=>{h=(h*1664525+1013904223)>>>0;return h/4294967296};
+  g.fillStyle='#fff';g.fillRect(0,0,size,size);g.fillStyle='#1b1a17';
+  const finder=(x,y)=>{g.fillRect(x*cell,y*cell,7*cell,7*cell);g.fillStyle='#fff';g.fillRect((x+1)*cell,(y+1)*cell,5*cell,5*cell);g.fillStyle='#1b1a17';g.fillRect((x+2)*cell,(y+2)*cell,3*cell,3*cell)};
+  for(let y=0;y<n;y++)for(let x=0;x<n;x++){const inF=(x<8&&y<8)||(x>n-9&&y<8)||(x<8&&y>n-9);if(!inF&&rnd()>.5)g.fillRect(x*cell,y*cell,cell+.5,cell+.5)}
+  finder(0,0);finder(n-7,0);finder(0,n-7);
+}
+function pageSvg(n,label){
+  let lines='';const seed=n*7+3;
+  for(let i=0;i<22;i++){const w=60+((seed*(i+3)*37)%36);lines+=`<rect x="34" y="${86+i*19}" width="${i%7===6?w*.5:w}%" height="7" rx="3" fill="currentColor" opacity=".16" style="width:calc(${i%7===6?w*.5:w}% - 68px)"/>`}
+  return `<svg viewBox="0 0 400 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${label}"><rect width="400" height="560" fill="#fffefa"/><rect x="34" y="34" width="150" height="14" rx="3" fill="#292823" opacity=".55"/><rect x="34" y="58" width="90" height="8" rx="3" fill="#943f32" opacity=".5"/><g style="color:#292823">${lines}</g><text x="200" y="540" text-anchor="middle" font-size="13" fill="#999">— ${n} —</text></svg>`}
+function cardSvg(name,back){
+  return `<svg viewBox="0 0 300 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${name}${back?'卡背':'卡面'}"><rect width="300" height="420" rx="14" fill="${back?'#3a382f':'#f6efe2'}"/><rect x="14" y="14" width="272" height="392" rx="8" fill="none" stroke="${back?'#c8c3b7':'#943f32'}" stroke-width="2" opacity=".7"/><text x="150" y="${back?215:70}" text-anchor="middle" font-size="26" font-family="serif" fill="${back?'#ece8de':'#292823'}">${name}</text>${back?'':'<g opacity=".18" fill="#292823"><rect x="40" y="120" width="220" height="10" rx="4"/><rect x="40" y="146" width="190" height="10" rx="4"/><rect x="40" y="172" width="210" height="10" rx="4"/><rect x="40" y="198" width="150" height="10" rx="4"/><rect x="40" y="250" width="220" height="90" rx="6"/></g>'}<text x="150" y="398" text-anchor="middle" font-size="11" fill="${back?'#988f7e':'#999'}">原图 · ${back?'卡背':'卡面'}</text></svg>`}
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('show'),2200)}
+
+function render(){
+  const sc=SCRIPTS[st.script],ok=st.net==='ok';
+  // 桌面：二维码卡片
+  drawQr($('#qrBig'),urlOK,120);drawQr($('#qrMini'),urlOK,34);
+  $('#qrbox').classList.toggle('off',!ok);
+  const ov=$('#qrov');ov.hidden=ok;ov.textContent=ok?'':'未启动';
+  const dot=$('#jcDot');dot.className='dot '+(ok?(st.prep?'wait':'live'):'err');
+  $('#jcTitle').textContent=!ok?'平板服务没有启动':st.prep?'正在准备平板材料':'平板可以加入';
+  $('#jcState').textContent=!ok?'':st.script==='none'?'扫码或打开网址即可。电脑上还没打开剧本，平板会先看到等待页。':st.prep?'首次打开这本剧本，需要几秒；平板此时看到「材料准备中」。':`平板扫码后选角色，当前剧本：《${sc.name}》。`;
+  const err=$('#jcErr');err.hidden=ok;
+  err.innerHTML=st.net==='port'?'端口 5188 被别的程序占用，已改用 5231。<b>网址变了：</b>平板需要重新扫码一次。':st.net==='fw'?'Windows 防火墙拦住了平板访问。请在刚才的弹窗里选「专用网络 → 允许」；弹窗已关掉的话，按下面「连不上怎么办」第 2、3 步处理。':'';
+  if(st.net==='port'){err.hidden=false;$('#jcUrl').value='http://192.168.1.23:5231/'}else{$('#jcUrl').value=urlOK}
+  $('#miniState').innerHTML=`<i class="dot ${ok?'live':'err'}"></i>平板入口`;
+  $('#miniUrl').textContent=ok?'192.168.1.23:5188':(st.net==='port'?'192.168.1.23:5231':'未启动');
+  const j=$('#jcJoined');j.innerHTML='';
+  if(ok&&st.script!=='none'&&!st.prep){sc.roles.forEach(r=>{const c=document.createElement('span');c.className='chip'+(st.taken.has(r)?' on':'');c.textContent=r+(st.taken.has(r)?' 已加入':' 空位');j.appendChild(c)})}
+  $('#navSess').hidden=st.script==='none';
+  // 剧本库：只显示名字
+  const lib=$('#lib');lib.innerHTML='';
+  const items=[['孽岛疑云',5,'a'],['示例剧本二',4,'b']];
+  items.forEach(([n,p,k],i)=>{const d=document.createElement('div');d.className='row'+(st.script===k?' sel':'');
+    d.innerHTML=`<i class="bar4"></i><div class="grow"><h3>${n}</h3><p>${p} 人 · ${st.script===k?'本局使用中':'可以开局'}</p></div>${st.script===k?'<span class="tag ok">已打开</span>':'<button class="btn quiet">翻开这本</button>'}`;
+    const b=d.querySelector('button');if(b)b.onclick=()=>setScript(k);lib.appendChild(d)});
+  renderPad();
+}
+
+function renderPad(){
+  const sc=SCRIPTS[st.script],body=$('#padBody'),tabs=$('#padTabs'),ok=st.net==='ok';
+  $('#padRight').innerHTML=st.role?`<span class="chip on">${st.role}</span> <button class="chip" id="rel" style="border:0">退出重选</button>`:'';
+  tabs.innerHTML='';
+  if(!ok){body.innerHTML=`<div class="wait"><h1>连不上电脑</h1><p class="lead">请确认电脑上的软件开着，并和平板连着同一个 Wi-Fi。</p></div>`;return}
+  if(st.script==='none'){body.innerHTML=`<div class="wait"><div class="pulse"></div><h1>等待主持人选剧本</h1><p class="lead">电脑一打开剧本，这里会自动变成选角色页，不用刷新。</p></div>`;return}
+  if(st.prep){body.innerHTML=`<div class="wait"><div class="pulse"></div><h1>材料准备中</h1><p class="lead">《${sc.name}》的卡片正在准备，几秒后自动开始。</p></div>`;return}
+  if(!st.role){
+    body.innerHTML=`<h1>加入《${sc.name}》</h1><p class="lead">选一个角色开始阅读；已被别人认领的角色不能再选。</p><div class="roles" id="roles"></div>`;
+    const box=$('#roles');
+    sc.roles.forEach(r=>{const b=document.createElement('button');b.className='role';const t=st.taken.has(r);b.disabled=t;b.innerHTML=`<b>${r}</b><span>${t?'已被认领':'可认领'}</span>`;b.onclick=()=>{st.role=r;st.taken.add(r);st.tab='book';st.page=1;st.zoom=1;st.card=null;render()};box.appendChild(b)});
+    return}
+  tabs.innerHTML=`<div class="tabs">${[['book','我的角色本'],['cards','全部线索卡'],['pub','公共对话']].map(([k,n])=>`<button data-k="${k}" class="${st.tab===k?'on':''}">${n}</button>`).join('')}</div>`;
+  tabs.querySelectorAll('button').forEach(b=>b.onclick=()=>{st.tab=b.dataset.k;renderPad()});
+  if(st.tab==='book'){
+    const total=sc.pages,pg=st.page=Math.min(st.page||1,total),z=st.zoom||1;
+    body.innerHTML=`<div class="pbar"><span>原稿第 ${pg} / ${total} 页</span><div class="grp"><button id="zo" aria-label="缩小">−</button><button id="zi" aria-label="放大">＋</button><button id="pv" ${pg<=1?'disabled':''} aria-label="上一页">‹</button><button id="nx" ${pg>=total?'disabled':''} aria-label="下一页">›</button></div></div><div class="src"><div style="width:${z*100}%">${pageSvg(pg+(st.script==='b'?10:0),'原稿第'+pg+'页')}</div></div><p class="note" style="margin-top:8px">这里放的是导入的 PDF 页（或图片）原样，保留原文字、颜色和排版；双指可缩放。示意图案，非真实内容。</p>`;
+    $('#pv').onclick=()=>{st.page=pg-1;renderPad()};$('#nx').onclick=()=>{st.page=pg+1;renderPad()};
+    $('#zi').onclick=()=>{st.zoom=Math.min(3,z+.25);renderPad()};$('#zo').onclick=()=>{st.zoom=Math.max(1,z-.25);renderPad()};
+  }else if(st.tab==='cards'){
+    const names=['书房','走廊','信箱','旧照片'];
+    body.innerHTML=`<p class="lead">点哪张看哪张，显示的是导入的卡面原图，只在这台设备上显示。暂停分发的组用纸质卡。</p><div class="cards">${names.map(n=>`<button class="card ${st.card===n?'active':''}" data-n="${n}"><b>${n}</b><small>地点 · 可看</small></button>`).join('')}<button class="card pause"><b>钥匙</b><small>请用纸质卡</small></button></div>${st.card?`<div class="cardview"><div class="pbar"><span>${st.card}</span><div class="grp"><button class="${st.back?'':'on'}" id="fr">卡面</button><button class="${st.back?'on':''}" id="bk">卡背</button></div></div>${cardSvg(st.card,st.back)}</div>`:''}`;
+    body.querySelectorAll('.card[data-n]').forEach(b=>b.onclick=()=>{st.card=b.dataset.n;st.back=false;renderPad()});
+    if(st.card){$('#fr').onclick=()=>{st.back=false;renderPad()};$('#bk').onclick=()=>{st.back=true;renderPad()}}
+  }else body.innerHTML=`<div class="bubble">各位，欢迎来到《${sc.name}》。请先阅读各自的角色本。</div><div class="bubble p">我们先从谁开始？</div><div class="bubble">由第一位发言的玩家开始，按座位顺序进行。</div>`;
+  const rel=$('#rel');if(rel)rel.onclick=()=>{st.taken.delete(st.role);st.role=null;render()}
+}
+
+function setScript(k){
+  if(k===st.script)return;
+  const first=st.script==='none';
+  st.script=k;st.role=null;st.taken.clear();
+  if(k==='a'||k==='b'){st.prep=true;render();setTimeout(()=>{st.prep=false;render();toast('平板已自动跳到新剧本，角色认领已清空')},1400)}
+  else render();
+  $('#segScript').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===k));
+}
+$('#segScript').onclick=e=>{const b=e.target.closest('button');if(b)setScript(b.dataset.v)};
+$('#segNet').onclick=e=>{const b=e.target.closest('button');if(!b)return;st.net=b.dataset.v;$('#segNet').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));render()};
+$('#jcCopy').onclick=()=>{navigator.clipboard?.writeText($('#jcUrl').value).catch(()=>{});toast('网址已复制')};
+$('#miniQr').onclick=()=>{drawQr($('#qrDlg'),urlOK,240);$('#dlgUrl').textContent=$('#jcUrl').value;$('#dlg').showModal()};
+render();
+</script>
+</body>
+</html>
