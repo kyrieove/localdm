@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>改动预览</title>
+<style>
+  :root {
+    --paper: #fbfaf7; --panel: #f1efe9; --ink: #292823; --muted: #807b70;
+    --rule: #ddd8cc; --seal: #943f32; --seal-soft: #f3e6e1; --ok: #3e6b48;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #1f1e1b; --panel: #282722; --ink: #ece8df; --muted: #a39d90;
+      --rule: #3d3a33; --seal: #d07a69; --seal-soft: #3a2a26; --ok: #8fc49a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink);
+    font: 15px/1.65 "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 28px 16px 64px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 18px; margin: 40px 0 6px; padding-top: 18px; border-top: 1px solid var(--rule); }
+  .lead { color: var(--muted); margin: 0 0 8px; }
+  .tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--rule); color: var(--muted); }
+  .tag.done { color: var(--ok); border-color: var(--ok); }
+  .tag.todo { color: var(--seal); border-color: var(--seal); }
+
+  /* 平板阅读器：与 reader.css 里新加的规则一致 */
+  .frame { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 14px; margin-top: 12px; }
+  .frame-cap { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+  .reader-bar { display: flex; justify-content: space-between; align-items: center; font-size: 13px; padding: 0 2px 10px; flex-wrap: wrap; gap: 6px; }
+  .tools { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tool { font: inherit; font-size: 12px; padding: 3px 9px; border: 1px solid var(--rule); background: var(--paper); color: var(--ink); border-radius: 6px; }
+  .tool[aria-pressed="true"] { border-color: var(--seal); color: var(--seal); }
+  .source-pages { display: grid; grid-template-columns: repeat(var(--reader-columns, 1), minmax(0, 1fr)); gap: 14px; align-items: start; margin-inline: auto; }
+  .source-pages.single { grid-template-columns: minmax(0, calc((100% - 14px * (var(--reader-columns, 1) - 1)) / var(--reader-columns, 1))); justify-content: center; }
+  .page { aspect-ratio: 210 / 297; background: #fff; border: 1px solid var(--rule); display: grid; place-items: center; color: #b7b0a2; font-size: 13px; position: relative; }
+  .page::before { content: ""; position: absolute; inset: 12% 14% auto; height: 46%;
+    background: repeating-linear-gradient(#e9e4d8 0 2px, transparent 2px 14px); }
+  .page span { position: absolute; bottom: 8%; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 720px) { .two { grid-template-columns: 1fr; } }
+  .before .source-pages { grid-template-columns: 1fr; max-width: 46%; }
+
+  /* 主持台左栏 */
+  .rail { width: 290px; max-width: 100%; background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 20px; font-size: 13px; }
+  .rail .title { font-size: 17px; margin: 0; }
+  .rail .meta { color: var(--muted); font-size: 12px; margin: 2px 0 10px; }
+  .rail ol { list-style: none; margin: 0; padding: 0; }
+  .rail li { padding: 1px 0 1px 16px; position: relative; color: var(--muted); }
+  .rail li::before { content: ""; position: absolute; left: 0; top: 8px; width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--muted); }
+  .rail li.on { color: var(--ink); font-weight: 600; }
+  .rail li.on::before { background: var(--seal); border-color: var(--seal); }
+  .btn { display: block; width: 100%; font: inherit; padding: 8px; margin-top: 10px; text-align: center; border: 1px solid var(--ink); background: var(--paper); color: var(--ink); border-radius: 4px; }
+  .btn.seal { background: var(--seal); border-color: var(--seal); color: #fff; }
+  .warn { color: var(--seal); font-size: 11px; margin: 10px 0 6px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .row .btn { margin-top: 0; }
+  .rails { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14px; margin-top: 10px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: 12px; }
+
+  .names { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 12px; }
+  .name { border: 1px solid var(--rule); border-radius: 10px; padding: 16px; background: var(--panel); }
+  .name svg { width: 64px; height: 64px; display: block; margin-bottom: 10px; }
+  .name h3 { margin: 0; font-size: 20px; }
+  .name .en { color: var(--muted); font-size: 12px; letter-spacing: .04em; }
+  .name p { margin: 8px 0 0; font-size: 13px; }
+  .pick { border-color: var(--seal); }
+</style>
+</head>
+<body>
+<main>
+  <h1>改动预览</h1>
+  <p class="lead">代码已经提交（<code>5dd34f1</code>），软件<strong>还没重新发布</strong>，桌面上那个仍是旧版。看完这页说「发布」，我再打包重装。</p>
+
+  <h2>1 · 平板原稿：双栏改成左右并排 <span class="tag done">已改</span></h2>
+  <p class="lead">点「双栏」后两页左右并排；翻到最后只剩一页时，这一页按单栏宽度放在正中。缩放「−／＋」和「整页」原来没有样式，点了没反应，这次一起补上了。</p>
+  <div class="two">
+    <div class="frame">
+      <p class="frame-cap">双栏 · 第 1～2 页</p>
+      <div class="reader-bar"><span>组织者手册</span><span class="tools"><button class="tool">单栏</button><button class="tool">整页</button><button class="tool">−</button><button class="tool">＋</button></span></div>
+      <div class="source-pages" style="--reader-columns:2">
+        <div class="page"><span>第 1 页</span></div>
+        <div class="page"><span>第 2 页</span></div>
+      </div>
+    </div>
+    <div class="frame">
+      <p class="frame-cap">双栏 · 最后只剩第 29 页</p>
+      <div class="reader-bar"><span>组织者手册</span><span class="tools"><button class="tool">单栏</button><button class="tool">整页</button><button class="tool">−</button><button class="tool">＋</button></span></div>
+      <div class="source-pages single" style="--reader-columns:2">
+        <div class="page"><span>第 29 页</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="frame before">
+    <p class="frame-cap">改之前：双栏时两页上下叠着，要往下滑才能看到第二页</p>
+    <div class="source-pages"><div class="page"><span>第 1 页</span></div><div class="page"><span>第 2 页</span></div></div>
+  </div>
+
+  <h2>2 · 主持台：「重新开始本局」 <span class="tag done">已改</span></h2>
+  <p class="lead">按钮放在左栏流程提示的下面，开过局才出现，玩完的局也能重来。第一次点只展开一行确认，不弹窗；确认后清掉这一局的进度、对话和平板上的角色认领，回到「开始这一局」之前。</p>
+  <div class="rails">
+    <div class="rail">
+      <p class="title">加个V呗</p>
+      <p class="meta">4 位玩家 · 进行中 · 3 / 11</p>
+      <ol><li>开场说明</li><li>自由讨论与选本</li><li class="on">第一阶段阅读</li><li>第一轮调查</li><li>……</li></ol>
+      <button class="btn">重新开始本局</button>
+    </div>
+    <div class="rail">
+      <p class="title">加个V呗</p>
+      <p class="meta">点了一次之后</p>
+      <ol><li>开场说明</li><li>自由讨论与选本</li><li class="on">第一阶段阅读</li><li>第一轮调查</li><li>……</li></ol>
+      <p class="warn">会清掉这一局的进度、对话和平板上的角色认领，回到开局前。不能撤销。</p>
+      <div class="row"><button class="btn seal">确认重来</button><button class="btn">取消</button></div>
+    </div>
+  </div>
+
+  <h2>3 · 同类问题排查</h2>
+  <table>
+    <thead><tr><th>问题</th><th>原来会怎样</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td>没有「重新开始」</td><td>每本剧本只有一份存档，打开就接着上次的进度，测试过一次就回不到开头。</td><td><span class="tag done">已修</span></td></tr>
+      <tr><td>玩完的局打不开新局</td><td>同一个原因：玩到复盘后再打开这本剧本，还是那局已经结束的存档，没法再玩一次。</td><td><span class="tag done">已修</span>（用重新开始）</td></tr>
+      <tr><td>重来后平板留着上一局对话</td><td>存档编号没变，平板的「公共对话」会一直挂着旧对话，还会漏掉新消息。</td><td><span class="tag done">已修</span></td></tr>
+      <tr><td>平板原稿缩放、整页按钮没反应</td><td>按钮有，样式没写。</td><td><span class="tag done">已修</span></td></tr>
+      <tr><td>票数录错了改不了</td><td>点「确认提交汇总」后，录入框就消失了，没有改正的入口。</td><td><span class="tag todo">没改，等你定</span></td></tr>
+      <tr><td>推进点错了退不回去</td><td>没有「回到上一环节」，只能整局重来。</td><td><span class="tag todo">没改，等你定</span></td></tr>
+    </tbody>
+  </table>
+
+  <h2>4 · 正式名字与 logo（建议）</h2>
+  <p class="lead">现在窗口标题叫「本局主持」，平板上的标记是一个「局」字。下面四个方向都沿用现有的朱红印章色。</p>
+  <div class="names">
+    <div class="name pick">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="8" fill="var(--seal)"/><path d="M32 14c-6 8-9 13-9 18a9 9 0 0 0 18 0c0-5-3-10-9-18z" fill="#fff"/><rect x="26" y="46" width="12" height="4" rx="1" fill="#fff"/></svg>
+      <h3>掌灯</h3><div class="en">LAMPLIT</div>
+      <p>主持人「掌灯」带大家走完一夜的故事，有夜里围坐的感觉。两个字好记，图标是一盏火苗。<strong>我推荐这个。</strong></p>
+    </div>
+    <div class="name">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="8" fill="none" stroke="var(--seal)" stroke-width="4"/><text x="32" y="43" text-anchor="middle" font-size="30" fill="var(--seal)" font-family="serif">说</text></svg>
+      <h3>说书台</h3><div class="en">STORYTELLER</div>
+      <p>说得最直白：一张台子、一个讲故事的人。偏传统，和现在的「书卷」视觉最搭。</p>
+    </div>
+    <div class="name">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="28" fill="var(--seal)"/><path d="M40 18a16 16 0 1 0 6 24 13 13 0 1 1-6-24z" fill="#fff"/></svg>
+      <h3>夜话</h3><div class="en">NIGHT TALES</div>
+      <p>强调「一群人夜里聊一个故事」，偏氛围感，适合推理和恐怖本。图标是一弯月牙。</p>
+    </div>
+    <div class="name">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="8" fill="var(--seal)"/><text x="32" y="44" text-anchor="middle" font-size="32" fill="#fff" font-family="serif">局</text></svg>
+      <h3>开局</h3><div class="en">OPENING</div>
+      <p>保留现在的「局」字印章，改动最小。缺点是太普通，不太像一个名字。</p>
+    </div>
+  </div>
+  <p class="lead" style="margin-top:14px">选定后我会改窗口标题、安装器名字、桌面快捷方式和平板顶栏，再出一个真正的 .ico 图标。这几个名字我都没查过有没有重名或商标。</p>
+</main>
+</body>
+</html>
