@@ -35,7 +35,8 @@ public static class ImportWizardProbe
         var titleOverride = ArgumentValue(args, "--title");
         var outFile = ArgumentValue(args, "--out");
 
-        var dataRoot = Path.Combine(workRoot, "data");
+        // --data-root：直接导进某个运行数据目录（例如软件自己的 %LOCALAPPDATA%\LocalDm），而不是记录目录下的 data。
+        var dataRoot = ArgumentValue(args, "--data-root") ?? Path.Combine(workRoot, "data");
         var packagesDir = Path.Combine(dataRoot, "packages");
         Directory.CreateDirectory(packagesDir);
 
@@ -198,6 +199,15 @@ public static class ImportWizardProbe
         report.AppendLine();
 
         // ===== ⑤ 建包 =====
+        // --ignore-blank-pages：等同于人在分层列表里把「没识别到文字」的手册页逐个改成「不入包」。
+        if (args.Contains("--ignore-blank-pages"))
+        {
+            foreach (var row in wizard.LayeringPages.Where(page => page.HasNoText))
+            {
+                row.Layer = "不入包";
+            }
+        }
+
         await wizard.BuildAsync();
         Console.WriteLine();
         Console.WriteLine($"【⑤ 完成】{wizard.ReadinessText}");
