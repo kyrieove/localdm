@@ -7,6 +7,8 @@ using System.Net.Sockets;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using LocalDm.Core.Domain;
+using LocalDm.Core.Import;
+using LocalDm.Infrastructure.Import;
 using LocalDm.Core.Tablet;
 using LocalDm.Tablet;
 using Microsoft.AspNetCore.Builder;
@@ -81,7 +83,7 @@ public sealed class TabletJoinViewModel : ObservableObject, IAsyncDisposable
             _packagePath = packagePath;
             OnPropertyChanged(nameof(StoryTitle));
             Status = package?.Tablet is null
-                ? "这本剧本还没有平板清单，请先完成平板材料准备。不会改用演示材料。"
+                ? "开启连接时会自动准备这本剧本的平板材料，不会改用演示材料。"
                 : "已选择本局真实剧本。开启连接后，平板即可扫码加入。";
         }
         finally { _gate.Release(); }
@@ -94,12 +96,29 @@ public sealed class TabletJoinViewModel : ObservableObject, IAsyncDisposable
         {
             if (_disposed) { return; }
             if (_server is not null) { return; }
-            if (_package?.Tablet is null || string.IsNullOrEmpty(_packagePath))
+            if (_package is null || string.IsNullOrEmpty(_packagePath))
             {
-                Status = "当前剧本未准备平板清单，请从剧本库选择已准备的真实剧本。";
+                Status = "还没有可用的平板清单：请先从剧本库打开一本真实剧本，再开启平板连接。";
                 return;
             }
-            var content = new PackageTabletContent(_package, TabletAssetRoot.Resolve(_packagePath, _package.Tablet));
+
+            if (_package.Tablet is null)
+            {
+                if (_package.PackageId == LocalDm.App.Demo.DemoPackage.PackageId)
+                {
+                    Status = "演示剧本没有平板清单，也不会用演示材料冒充。请先从剧本库打开一本真实剧本。";
+                    return;
+                }
+
+                Status = "正在准备平板材料（首次需要几秒，只在本机处理）…";
+                _package = await PrepareTabletAsync(_package, _packagePath);
+            }
+            if (_package.Tablet is not { } tablet)
+            {
+                return;
+            }
+
+            var content = new PackageTabletContent(_package, TabletAssetRoot.Resolve(_packagePath, tablet));
             var server = TabletWebHost.Create(content, _feed, ["--urls", "http://0.0.0.0:0"], _webRoot);
             try { await server.StartAsync(); }
             catch { await server.DisposeAsync(); throw; }
@@ -119,6 +138,19 @@ public sealed class TabletJoinViewModel : ObservableObject, IAsyncDisposable
         }
         finally { _gate.Release(); }
     }
+
+    /// <summary>
+    /// 旧包没有平板清单时现场补：只在内存里补，不写新版本，当前这一局的存档与包标识不变。
+    /// ponytail: 按「一张卡一个文件」整组确认，配不唯一或文件对不上的组仍由准备器暂停；
+    /// 整版多卡的剧本需要人逐组确认版式，那一步还没有界面。
+    /// </summary>
+    private static Task<ScriptPackage> PrepareTabletAsync(ScriptPackage package, string packagePath) => Task.Run(() =>
+    {
+        var assetsDir = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(packagePath))!, "..", "assets"));
+        var confirmed = package.Materials.Select(m => m.MaterialId).ToHashSet(StringComparer.Ordinal);
+        var manifest = TabletPackagePreparer.Prepare(package, assetsDir, confirmed);
+        return RealScriptPackageBuilder.WithTabletManifest(package, manifest);
+    });
 
     public async Task StopAsync()
     {

@@ -81,6 +81,9 @@ public sealed class LibraryViewModel : ObservableObject
 
     public ObservableCollection<LibraryPackageRow> Packages { get; } = [];
 
+    /// <summary>目录里全部版本，含被「已装订」列表折叠起来的旧版本：恢复存档按包标识找包，要用它。</summary>
+    public IReadOnlyList<LibraryPackageRow> AllPackages { get; private set; } = [];
+
     public LibraryPackageRow? Selected
     {
         get => _selected;
@@ -218,11 +221,14 @@ public sealed class LibraryViewModel : ObservableObject
     public Task LoadAsync(CancellationToken cancellationToken)
     {
         Packages.Clear();
+        AllPackages = [];
         if (!Directory.Exists(_packagesDir))
         {
             HasPackages = false;
             return Task.CompletedTask;
         }
+
+        var all = new List<LibraryPackageRow>();
 
         foreach (var file in Directory.GetFiles(_packagesDir, "*.json").OrderBy(f => f, StringComparer.Ordinal))
         {
@@ -248,7 +254,7 @@ public sealed class LibraryViewModel : ObservableObject
                 continue;
             }
 
-            Packages.Add(new LibraryPackageRow(
+            all.Add(new LibraryPackageRow(
                 package.PackageId,
                 package.Title,
                 package.PlayerCount,
@@ -258,6 +264,16 @@ public sealed class LibraryViewModel : ObservableObject
                 package.Spans.Count,
                 file,
                 package));
+        }
+
+        // 重新整理流程、准备平板材料都会生成新版本：同一本剧本只列最新一版，别让人面对 v1 v2 v3 三条。
+        AllPackages = all;
+        foreach (var row in all
+                     .GroupBy(r => (r.Title, r.PlayerCount))
+                     .Select(g => g.OrderByDescending(r => int.TryParse(r.Version, out var v) ? v : 0).First())
+                     .OrderBy(r => r.Title, StringComparer.Ordinal))
+        {
+            Packages.Add(row);
         }
 
         HasPackages = Packages.Count > 0;

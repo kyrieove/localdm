@@ -134,7 +134,7 @@ public sealed class AppComposition : IDisposable
         async Task LoadCurrentPackageAsync(ScriptPackage package)
         {
             // 先关旧局的网页，再换桌面会话，避免旧卡目录读到新局的消息。
-            var row = library.Packages.FirstOrDefault(p => p.PackageId == package.PackageId);
+            var row = library.AllPackages.FirstOrDefault(p => p.PackageId == package.PackageId);
             await tablet.SetPackageAsync(package, row?.FilePath, async () =>
             {
                 await host.LoadPackageAsync(package);
@@ -281,7 +281,7 @@ public sealed class AppComposition : IDisposable
         LibraryViewModel library,
         CancellationToken cancellationToken)
     {
-        var knownPackageIds = library.Packages
+        var knownPackageIds = library.AllPackages
             .Select(r => r.PackageId)
             .Append(DemoPackage.PackageId)
             .ToHashSet(StringComparer.Ordinal);
@@ -308,7 +308,7 @@ public sealed class AppComposition : IDisposable
         Session? bestSession = null;
 
         // 包目录里的剧本 + 内置演示剧本（演示不在目录里，但它的存档也可能没走完）
-        var candidates = library.Packages
+        var candidates = library.AllPackages
             .Select(r => (Package: r.Package, SessionId: SessionIds.For(r.Package)))
             .ToList();
         candidates.Add((DemoPackage.Create(), DemoPackage.SessionId));
