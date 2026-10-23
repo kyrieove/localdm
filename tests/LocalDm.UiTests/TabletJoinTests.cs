@@ -87,6 +87,45 @@ public sealed class TabletJoinTests
     }
 
     [Fact]
+    public async Task Library_page_shows_join_card_before_any_script_is_opened()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            var root = Path.Combine(Path.GetTempPath(), "localdm-join-ui-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var context = await SessionContext.OpenAsync(root);
+                using var composition = await AppComposition.CreateFromContextAsync(context, CancellationToken.None);
+                var shell = await composition.CreateShellAsync(CancellationToken.None);
+                await shell.Library.Tablet!.StartAsync();
+                var view = new LibraryView { DataContext = shell.Library };
+                var window = new Window { Content = view, Width = 1200, Height = 800 };
+                WpfRunner.ShowOffscreen(window);
+                try
+                {
+                    Assert.NotNull(view.FindName("TabletJoinCard"));
+                    var headline = Assert.IsType<TextBlock>(view.FindName("TabletJoinHeadline"));
+                    Assert.Equal("平板可以加入", headline.Text);
+                    var qr = Assert.IsType<Image>(view.FindName("TabletJoinQr"));
+                    Assert.NotNull(qr.Source);
+                }
+                finally
+                {
+                    window.Close();
+                    await shell.Library.Tablet!.DisposeAsync();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        });
+    }
+
+    [Fact]
     public async Task Demo_package_gets_no_tablet_materials()
     {
         await WpfRunner.RunAsync(async () =>

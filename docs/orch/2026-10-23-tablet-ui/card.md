@@ -132,3 +132,13 @@ may change: `src/LocalDm.App/Views/LibraryView.xaml`, `src/LocalDm.App/MainWindo
 - Reuse existing functions; don't copy existing logic.
 - Run scripts in the foreground and wait; before replying, stop any background task still running.
 - No rm, no git push, no git checkout . / restore . / reset --hard.
+
+## Acceptance
+- verdict: accepted
+- files: src/LocalDm.App/MainWindow.xaml, src/LocalDm.App/MainWindow.xaml.cs, src/LocalDm.App/Views/LibraryView.xaml, src/LocalDm.App/Views/SetupView.xaml, tests/LocalDm.UiTests/TabletJoinTests.cs
+- check: `dotnet test tests/LocalDm.UiTests --filter-class "LocalDm.UiTests.TabletJoinTests"` → exit 0 (run by run-card)
+- tokens:
+  - round 1: exec custom-local:antigravity/gemini-3.8-flash: fresh 109k, cached 1248k, out 7k  (agy-tablet-ui.jsonl) · review gpt-6.1-sol: fresh 71k, cached 226k, out 1k  (codex-review-tablet-ui.jsonl)
+- review findings: 0 real / 1 false positive (scope 0, card 1, wrong 0) / 0 missed (medium, gpt-6.1-sol)
+- claude fix: none — P1 only reflects card self-contradiction (Parameters 132 vs snippet 128 inside a 140 box); no behaviour impact
+- deferred: align QR size number in the card

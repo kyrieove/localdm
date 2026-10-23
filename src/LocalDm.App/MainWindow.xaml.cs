@@ -1,6 +1,8 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using LocalDm.App.ViewModels;
 using LocalDm.Core.Domain;
 using LocalDm.Infrastructure.Storage;
@@ -114,5 +116,42 @@ public partial class MainWindow
 
         StepUiScale(e.Delta > 0 ? 1 : -1);
         e.Handled = true;
+    }
+
+    private void OnTabletEntryClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ShellViewModel { Library.Tablet: { } tablet })
+        {
+            return;
+        }
+
+        var panel = new StackPanel { Margin = new Thickness(28), HorizontalAlignment = HorizontalAlignment.Center };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "平板扫码加入",
+            FontSize = 20,
+            FontFamily = (FontFamily)FindResource("DisplayFace"),
+            HorizontalAlignment = HorizontalAlignment.Center,
+        });
+        var qr = new Image { Source = tablet.QrCode, Width = 280, Height = 280, Margin = new Thickness(0, 14, 0, 10) };
+        RenderOptions.SetBitmapScalingMode(qr, BitmapScalingMode.NearestNeighbor);
+        panel.Children.Add(qr);
+        panel.Children.Add(new TextBlock
+        {
+            Text = tablet.SelectedAddress ?? tablet.Status,
+            TextWrapping = TextWrapping.Wrap,
+            MaxWidth = 280,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        });
+        new Window
+        {
+            Title = "平板入口",
+            Owner = this,
+            Content = panel,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            ResizeMode = ResizeMode.NoResize,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background = (Brush)FindResource("Paper"),
+        }.ShowDialog();
     }
 }

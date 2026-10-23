@@ -294,6 +294,20 @@
                             Style="{StaticResource QuietButton}" FontSize="12" Padding="10,6" Margin="0,0,0,6"
                             ToolTip="停止生成或朗读，游戏进度不变"
                             Visibility="{Binding ShowStop, Converter={StaticResource BoolToVisibility}}" />
+                    <Button x:Name="NavTablet" Style="{StaticResource RailButton}" FontSize="12" Click="OnTabletEntryClick"
+                            ToolTip="点开看大二维码，平板扫码加入">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="36" Height="36" Background="White" CornerRadius="4" VerticalAlignment="Center">
+                                <Image Source="{Binding DataContext.Library.Tablet.QrCode, RelativeSource={RelativeSource AncestorType=Window}}"
+                                       Width="32" Height="32" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                            </Border>
+                            <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="平板入口" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding DataContext.Library.Tablet.SelectedAddress, RelativeSource={RelativeSource AncestorType=Window}}"
+                                           FontSize="10" Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis" MaxWidth="130" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
                     <Button x:Name="NavVoice" Content="{Binding VoiceLabel}" Style="{StaticResource RailButton}"
                             FontSize="12" Command="{Binding DataContext.ShowSetupCommand,
                                                     RelativeSource={RelativeSource AncestorType=Window}}"

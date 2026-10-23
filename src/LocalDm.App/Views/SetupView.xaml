@@ -27,8 +27,8 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Margin="0,0,20,0">
-                            <TextBlock Text="平板连接" FontSize="17" FontWeight="SemiBold" />
-                            <TextBlock Text="{Binding StoryTitle}" Style="{StaticResource ChatMeta}" Margin="0,6,0,0" />
+                            <TextBlock Text="平板服务（高级）" FontSize="17" FontWeight="SemiBold" />
+                            <TextBlock Text="平板入口与二维码在剧本库页顶部；这里只用来关闭或重新开启服务。" Style="{StaticResource ChatMeta}" Margin="0,6,0,0" TextWrapping="Wrap" />
                         </StackPanel>
                         <Button x:Name="TabletConnectionToggle" Grid.Column="1" Content="{Binding ToggleLabel}"
                                 Command="{Binding ToggleCommand}" Style="{StaticResource QuietButton}" Padding="16,8" />
@@ -37,12 +37,9 @@
                                Style="{StaticResource ChatMeta}" Margin="0,12,0,0" />
                     <Grid Margin="0,16,0,0" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <Image x:Name="TabletQrCode" Source="{Binding QrCode}" Width="180" Height="180"
-                               RenderOptions.BitmapScalingMode="NearestNeighbor" />
-                        <StackPanel Grid.Column="1" Margin="20,0,0,0" VerticalAlignment="Center">
+                        <StackPanel Grid.Column="0" Margin="0" VerticalAlignment="Center">
                             <TextBlock Text="电脑和平板连同一个 Wi-Fi 后，扫码或打开下面的网址。" TextWrapping="Wrap" />
                             <ComboBox x:Name="TabletAddressSelector" ItemsSource="{Binding Addresses}"
                                       SelectedItem="{Binding SelectedAddress}" Margin="0,12,0,12" />
