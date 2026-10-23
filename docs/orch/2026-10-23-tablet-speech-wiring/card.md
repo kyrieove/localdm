@@ -6,7 +6,7 @@
 - 端到端测试（真实 `HostViewModel` + 真实平板 HTTP 服务 + WPF 调度器，模型用假网关）：两块平板同时发送、电脑输入框和平板同时发送、AI 回答中途平板发送、朗读中平板发送——每种都只有一个请求被接受，其余得到 `409 BUSY` 与文案「主持正在回应」；平板发言在电脑对话里是署名玩家消息。
 
 ## Risk
-high — 要独立重算的关键数字：N 块平板同时 `POST /tablet/say` 时 `202` 的个数恰好 1，`gateway.CompletionCount` 恰好 1。
+medium — 与卡 A 同一决定：不做计划审查，Claude 独立重算。要独立重算的关键数字：N 块平板同时 `POST /tablet/say` 时 `202` 的个数恰好 1，`gateway.CompletionCount` 恰好 1。
 
 ## Parameters
 - 桥接类线程规则：`SubmitAsync` 用 `dispatcher.InvokeAsync(() => host.SubmitTabletSpeech(roleName, text)).Task`（返回 `Task<TabletSpeechAck>`）；`StopSpeaking` 用 `dispatcher.Invoke(host.StopSpeakingForTablet)`；`IsBusy => host.IsBusy`，`IsSpeaking => host.IsSpeaking`（布尔读取，不切线程）。
