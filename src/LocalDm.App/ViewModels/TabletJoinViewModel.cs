@@ -130,7 +130,7 @@ public sealed class TabletJoinViewModel : ObservableObject, IAsyncDisposable
                 _content.Set(new PackageTabletContent(ready, TabletAssetRoot.Resolve(packagePath, ready.Tablet!)));
                 SetReady($"平板扫码后选角色，当前剧本：《{package.Title}》。");
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 Debug.WriteLine("[Tablet] 备材料失败：" + ex.GetType().Name);
                 _content.SetNone();

@@ -206,7 +206,7 @@ public sealed partial class ScriptImportService
         {
             await Task.Run(() => TabletMaterials.Ensure(built.Package, packagePath), cancellationToken);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             System.Diagnostics.Debug.WriteLine("[Tablet] 导入时备平板材料失败：" + ex.GetType().Name);
         }
