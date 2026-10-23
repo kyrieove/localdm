@@ -43,3 +43,14 @@ may change: `tests/LocalDm.UiTests/TabletSpeechE2ETests.cs` / read-only: `storie
 - 不删除、不跳过已有测试。
 - Run scripts in the foreground and wait; before replying, stop any background task still running.
 - No rm, no git push, no git checkout . / restore . / reset --hard.
+
+## Acceptance
+- verdict: accepted
+- files: tests/LocalDm.UiTests/TabletSpeechE2ETests.cs
+- check: `dotnet test tests/LocalDm.UiTests --filter-class "LocalDm.UiTests.TabletSpeechE2ETests"` → exit 0 (recheck)
+- tokens: exec agy gemini-3.8-flash: fresh 102k, cached 1129k, out 8k (agy-tablet-speech-wiring-v2.jsonl) · review gpt-6.1-sol 1 round
+- review findings: 3 real / 0 false positive / 0 missed (medium, gpt-6.1-sol, 2 rounds；scope override 因 PRODUCT.md/user-guide.md 是 Claude 自己改的)
+- scope override: PRODUCT.md 和 docs/user-guide.md 是 Claude 在 agy 执行期间同步文档时自己改的，不是 agy 改的（agy 只写了 TabletSpeechE2ETests.cs）。
+- claude fix: sol 两条 P1 属实且都是测试写弱了——停止用例不该自己放开朗读门（改为只靠 stop 恢复空闲并断言 !IsSpeaking）；WaitUntilAsync 超时必须断言失败。recheck exit=0；全量 LocalDm.Tests 428（422 过/6 跳过/0 败）、UiTests 53 过。独立复核关键数字：5 个并发用例断言 202 恰好 1、CompletionCount 恰好 1，通过。
+- unreviewed-fix: tests/LocalDm.UiTests/TabletSpeechE2ETests.cs 第二轮 sol 的 P1（等待超时的断言会跳过 StopAsync/DisposeAsync）已修为 5 处 try/finally，并把只调一次的 TCS 辅助方法改名为 Opened；两轮审查用完，未再审，合并前请用户看这一处。recheck exit=0。
+- deferred: 无
