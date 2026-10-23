@@ -114,7 +114,8 @@ read-only: `stories/`, `.local/`
      public string? PreviousPhaseTitle
      ```
      `PreviousPhaseTitle` 的写法：`_package` 为 null 或 `_projection` 为 null 就返回 null；`var i = _package.Phases.ToList().FindIndex(p => p.PhaseId == _projection.CurrentPhase.PhaseId);`，下标 ≤ 0 返回 null，否则返回 `_package.Phases[i - 1].Title`。
-   - `SubmitVoteAsync`（第 546–555 行）：调用 `ExecuteAsync` 之前写 `LastVoteWasCorrection = _correctingVote;`；调用之后，提交成功（`_projection?.VoteSummary` 不为 null）就 `_correctingVote = false;`，再 `OnPropertyChanged(nameof(IsVoteVisible))`。
+   - `SubmitVoteAsync`（第 546–555 行）：调用 `ExecuteAsync` 之前写 `LastVoteWasCorrection = _correctingVote; var before = Revision;`；调用之后**只在 `Revision != before`（本次真的提交成功）时**才 `_correctingVote = false; OnPropertyChanged(nameof(IsVoteVisible));`。被拒绝时 Revision 不变：保留 `VoteInput` 和改票状态，让操作者改了再交。不要用 `_projection?.VoteSummary != null` 判断（拒绝路径保留旧投影，它恒为真）。
+   - `ExecuteAsync` 的 `case DispatchOutcome.Committed` 分支里、`RefreshView` 之前加：`if (type != GameCommandType.SubmitVoteSummary) { _correctingVote = false; }`——推进、退回等任何别的状态变化都结束改票，免得改票框带进下一个投票环节。
    - `Attach` 里加 `_correctingVote = false;`，换局或重开时清掉。
    - `CommandStatus`（第 529–543 行）加 `GameCommandType.RevertPhase => $"已退回「{phase}」。",`。
 
@@ -142,15 +143,30 @@ read-only: `stories/`, `.local/`
      public RelayCommand ConfirmCorrectionCommand { get; }
      public RelayCommand DismissCorrectionCommand { get; }
      ```
-     `OfferCorrection(CorrectionKind? kind)`：kind 为 null 就直接 return。判断能不能做：`RevertPhase` 要求 `_session.SessionStateText == "Playing"` 且 `_session.PreviousPhaseTitle is not null`；`CorrectVote` 要求 `_session.IsVotePhase && _session.HasVoteSummary && _session.SessionStateText == "Playing"`。能做就设 `_pendingCorrection = kind`；不能做就 `AppendLocalHint("DM 提议的改正现在不能做，请直接在左侧操作。")`。两种情况都要 `OnPropertyChanged(nameof(HasPendingCorrection))` 和 `OnPropertyChanged(nameof(PendingCorrectionText))`。
+     `OfferCorrection(CorrectionKind? kind)`：kind 为 null 就直接 return。判断能不能做：`RevertPhase` 要求 `_session.SessionStateText == "Playing"` 且 `_session.PreviousPhaseTitle is not null`；`CorrectVote` 要求 `_session.IsVotePhase && _session.HasVoteSummary && _session.SessionStateText == "Playing"`。能做就设 `_pendingCorrection = kind`，并记下 `_pendingRevision = _session.Revision;`（新字段 `private int _pendingRevision;`：提议绑定提出时的状态版本）；不能做就 `AppendLocalHint("DM 提议的改正现在不能做，请直接在左侧操作。")`。两种情况都要 `OnPropertyChanged(nameof(HasPendingCorrection))` 和 `OnPropertyChanged(nameof(PendingCorrectionText))`。
      构造函数里（第 151–190 行那一组 `new RelayCommand`）：
-     - `ConfirmCorrectionCommand = new RelayCommand(ConfirmCorrectionAsync);`
+     - `ConfirmCorrectionCommand = new RelayCommand(ConfirmCorrectionAsync, () => HasPendingCorrection && !_session.Busy);`
      - `DismissCorrectionCommand = new RelayCommand(() => { SetPendingCorrection(null); return Task.CompletedTask; });`
 
-     `ConfirmCorrectionAsync`：先取出 kind，再 `SetPendingCorrection(null)`。`RevertPhase` → `await _session.RevertPhaseAsync();`；`CorrectVote` → `_session.BeginVoteCorrection();`。`SetPendingCorrection` 是私有小方法：赋值并发出上面两个通知。
+     `ConfirmCorrectionAsync`：
+     1. `if (_session.Busy || _pendingCorrection is null) return;`——回复和朗读期间 `_session.Busy` 为真（`RunTurnAsync` 里 `SetNarrationBusy(true)`），此时**不清提议**，按钮本来也是灰的；空闲后再点。
+     2. `if (_session.Revision != _pendingRevision) { SetPendingCorrection(null); AppendLocalHint("DM 提议的改正现在不能做，请直接在左侧操作。"); return; }`——状态已经变了，旧提议作废。
+     3. 取出 kind，`SetPendingCorrection(null)`；`RevertPhase` → `await _session.RevertPhaseAsync();`；`CorrectVote` → `_session.BeginVoteCorrection();`。
+     `SetPendingCorrection` 是私有小方法：赋值、发出上面两个通知、`ConfirmCorrectionCommand.RaiseCanExecuteChanged()`。
+   - `OnSessionPropertyChanged`（约第 1703 行）末尾加：
+     ```csharp
+     if (e.PropertyName == nameof(SessionViewModel.Busy)) { ConfirmCorrectionCommand.RaiseCanExecuteChanged(); }
+     if (e.PropertyName == nameof(SessionViewModel.Revision) && _pendingCorrection is not null && _session.Revision != _pendingRevision)
+     {
+         SetPendingCorrection(null); // 手动推进、改票等让状态变了：旧提议不能再作用到新环节
+     }
+     ```
    - `AnnounceLoadedSession` 和 `RestartPackageAsync` 的开头各加 `SetPendingCorrection(null);`：换局、重开都清掉旧提议。
 
-7. `src/LocalDm.App/Views/HostView.xaml`：在第 382 行附近「现在该做什么？」那排快捷按钮的容器之前，加一条确认条：
+7. `src/LocalDm.App/Views/HostView.xaml`：底边输入区（第 369 行 `Border Grid.Row="3"` 里的 `Grid`，第 373–377 行有 3 个 `RowDefinition`）加一行给确认条：
+   - 在第 374 行前面再加一个 `<RowDefinition Height="Auto" />`，共 4 行。
+   - 原有子元素行号各加 1：第 379 行快捷按钮 `StackPanel Grid.Row="0"` → `"1"`；第 389 行 `Border Grid.Row="1" Style="{StaticResource ComposerFrame}"` → `"2"`；第 477 行 `Grid Grid.Row="2" Margin="2,9,2,0"` → `"3"`。
+   - 确认条放在第 379 行的 `StackPanel` 前面，`Grid.Row="0"`，`Margin="0,0,0,10"`：
    - 外层 `Border`：`Visibility="{Binding HasPendingCorrection, Converter={StaticResource BoolToVisibility}}"`，样式照第 50 行附近「本局已暂停」那条提示的 `Border` 写（同样的背景、边框、圆角、内边距）。
    - 里面一个 `Grid`，三列 `*`/`Auto`/`Auto`：
      - 第一列是 `TextBlock Text="{Binding PendingCorrectionText}"`，`TextWrapping="Wrap"`。
@@ -177,8 +193,12 @@ read-only: `stories/`, `.local/`
        3. `await WaitUntilAsync(() => !host.Session.Busy)`，记下 `var first = host.Session.Package!.Phases[0].PhaseId;`。
        4. `gateway.NextReply = "好的，刚才推进早了。\n" + CorrectionProposal.RevertTag;`，然后 `await SendAsync(host, "刚才点错了，推进早了");`。
        5. 断言：最后一条 `Author == ChatAuthor.Host` 的消息 `Text` 不含 `"〔"`；`host.HasPendingCorrection` 为 true；`host.Session.Session!.CurrentPhaseId` 还不等于 `first`（确认前没动）。
-       6. `host.ConfirmCorrectionCommand.Execute(null);`（`RelayCommand.Execute` 是 async void），再 `await WaitUntilAsync(() => host.Session.Session!.CurrentPhaseId == first);`。
+       6. `await WaitUntilAsync(() => !host.Session.Busy);`（回复结束前确认按钮是灰的），再 `host.ConfirmCorrectionCommand.Execute(null);`（`RelayCommand.Execute` 是 async void），再 `await WaitUntilAsync(() => host.Session.Session!.CurrentPhaseId == first);`。
        7. 断言：`host.Session.Session!.CurrentPhaseId == first`；`host.HasPendingCorrection` 为 false。
+     - 新增 `[Fact] Pending_correction_waits_while_busy_and_expires_when_state_changes`：
+       1. 同上第 1–5 步，得到一个待确认的退回提议。
+       2. `host.Session.SetNarrationBusy(true);` → 断言 `host.ConfirmCorrectionCommand.CanExecute(null)` 为 false、`host.HasPendingCorrection` 仍为 true；再 `host.Session.SetNarrationBusy(false);` → `CanExecute` 为 true。
+       3. `await host.Session.ExecuteAsync(GameCommandType.Advance); await WaitUntilAsync(() => !host.Session.Busy);` → 断言 `host.HasPendingCorrection` 为 false（状态变了，旧提议作废）。
 
 9. 文档：
    - 新文件 `docs/decisions/0010-model-proposed-corrections.md`，格式照 `docs/decisions/0009-tablet-handbook-tab.md`（标题、日期 2026-10-23、背景 / 决定 / 否掉的方案 / 后果），一页以内，内容：
