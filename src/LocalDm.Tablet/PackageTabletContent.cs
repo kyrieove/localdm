@@ -54,6 +54,26 @@ public sealed class PackageTabletContent : ITabletContent
 
     public IReadOnlyDictionary<string, RoleBookText> RoleBooks { get; }
 
+    public int HandbookPageCount => _manifest.HandbookPageAssetIds.Count;
+
+    public bool TryGetHandbookPage(int pageNumber, out byte[] bytes, out string contentType)
+    {
+        bytes = [];
+        contentType = "application/octet-stream";
+
+        if (pageNumber < 1
+            || pageNumber > HandbookPageCount
+            || !_manifest.Assets.TryGetValue(_manifest.HandbookPageAssetIds[pageNumber - 1], out var asset)
+            || asset.Kind != TabletAssetKind.HandbookPage
+            || !TryReadAsset(asset.RelativePath, asset.ContentHash, out bytes, out var path))
+        {
+            return false;
+        }
+
+        contentType = ContentTypeFor(path);
+        return true;
+    }
+
     public bool TryGetCardImage(
         string cardId,
         TabletCardSide side,

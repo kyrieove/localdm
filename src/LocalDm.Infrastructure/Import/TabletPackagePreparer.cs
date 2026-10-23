@@ -228,6 +228,7 @@ public static class TabletPackagePreparer
         var assetRoot = Path.Combine(assetsBaseDirectory, fingerprint);
         Directory.CreateDirectory(assetRoot);
         var roleAssets = RoleSourceAssetBuilder.Materialize(package, assetRoot);
+        var handbookAssets = RoleSourceAssetBuilder.MaterializeHandbook(package, assetRoot);
 
         var plannedPaths = new List<string>();
         var plannedAssetIds = new List<string>();
@@ -242,7 +243,7 @@ public static class TabletPackagePreparer
             }
         }
 
-        foreach (var roleAsset in roleAssets)
+        foreach (var roleAsset in roleAssets.Concat(handbookAssets))
         {
             plannedPaths.Add(roleAsset.RelativePath);
             plannedAssetIds.Add(roleAsset.AssetId);
@@ -254,7 +255,7 @@ public static class TabletPackagePreparer
             throw new InvalidOperationException("多个平板资产使用了同一个资产 ID。");
         }
 
-        foreach (var roleAsset in roleAssets)
+        foreach (var roleAsset in roleAssets.Concat(handbookAssets))
         {
             assets.Add(roleAsset.AssetId, roleAsset);
         }
@@ -316,6 +317,7 @@ public static class TabletPackagePreparer
             Cards = cards,
             Groups = groups,
             Assets = assets,
+            HandbookPageAssetIds = [.. handbookAssets.Select(asset => asset.AssetId)],
             PreparedAt = DateTimeOffset.UtcNow,
         };
     }

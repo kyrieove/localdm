@@ -24,4 +24,7 @@ public sealed class TabletSpikeData
 
     /// <summary>每个角色的阅读材料（合成文本）。</summary>
     public required IReadOnlyDictionary<string, RoleBookText> RoleBooks { get; init; }
+
+    /// <summary>合成手册页数；页图文件名为 <c>handbook-{页}.png</c>。</summary>
+    public int HandbookPageCount { get; init; }
 }

@@ -28,24 +28,46 @@ public static class RoleSourceAssetBuilder
         ArgumentNullException.ThrowIfNull(package);
         ArgumentException.ThrowIfNullOrWhiteSpace(assetRoot);
 
-        var rolePages = GetRolePages(package);
-        var pages = rolePages
+        var pages = GetRolePages(package)
             .SelectMany(role => role.Pages)
             .DistinctBy(page => (page.File.FileId, page.PageNumber))
             .ToArray();
-        if (pages.Length == 0)
+        return Materialize(pages, assetRoot, TabletAssetKind.RolePage, "role-page");
+    }
+
+    /// <summary>
+    /// 组织者手册整份逐页（含真相页与不入包的页），按包内文件顺序、文件内页序返回（ADR 0009）。
+    /// </summary>
+    public static IReadOnlyList<TabletAsset> MaterializeHandbook(ScriptPackage package, string assetRoot)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+        ArgumentException.ThrowIfNullOrWhiteSpace(assetRoot);
+        return Materialize(HandbookPages(package), assetRoot, TabletAssetKind.HandbookPage, "handbook-page");
+    }
+
+    private static IReadOnlyList<TabletAsset> Materialize(
+        IReadOnlyList<RoleSourcePage> pages,
+        string assetRoot,
+        TabletAssetKind kind,
+        string idPrefix)
+    {
+        if (pages.Count == 0)
         {
             return [];
         }
 
         if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763))
         {
-            throw new PlatformNotSupportedException("角色本原稿需要 Windows 10 1809 或更新版本。");
+            throw new PlatformNotSupportedException("原稿页需要 Windows 10 1809 或更新版本。");
         }
 
         var fullAssetRoot = Path.GetFullPath(assetRoot);
-        return Task.Run(() => MaterializeAsync(pages, fullAssetRoot)).GetAwaiter().GetResult();
+        return Task.Run(() => MaterializeAsync(pages, fullAssetRoot, kind, idPrefix)).GetAwaiter().GetResult();
     }
+
+    private static RoleSourcePage[] HandbookPages(ScriptPackage package) =>
+        [.. LocalDm.Core.Hosting.HostNarration.HandbookFiles(package)
+            .SelectMany(file => Enumerable.Range(1, file.PageCount).Select(page => new RoleSourcePage(file, page, [])))];
 
     /// <summary>
     /// Stable fingerprint of ordered role source identities and the page rendering recipe.
@@ -76,12 +98,23 @@ public static class RoleSourceAssetBuilder
             }
         }
 
+        var handbookPages = HandbookPages(package);
+        Add(hash, "handbook=" + handbookPages.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        foreach (var page in handbookPages)
+        {
+            Add(hash, page.File.FileId);
+            Add(hash, page.File.ContentHash.ToLowerInvariant());
+            Add(hash, page.PageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
         return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
     private static async Task<IReadOnlyList<TabletAsset>> MaterializeAsync(
         IReadOnlyList<RoleSourcePage> pages,
-        string assetRoot)
+        string assetRoot,
+        TabletAssetKind kind,
+        string idPrefix)
     {
         var assets = new List<TabletAsset>(pages.Count);
         Directory.CreateDirectory(assetRoot);
@@ -97,7 +130,7 @@ public static class RoleSourceAssetBuilder
                 var rendered = await RenderPagesAsync(file, sourceBytes, filePages.Select(page => page.PageNumber));
                 foreach (var (pageNumber, png) in rendered)
                 {
-                    assets.Add(WriteAsset(assetRoot, file, pageNumber, ".png", png));
+                    assets.Add(WriteAsset(assetRoot, file, pageNumber, ".png", png, kind, idPrefix));
                 }
             }
             else if (extension is ".png" or ".jpg" or ".jpeg" or ".webp")
@@ -109,7 +142,7 @@ public static class RoleSourceAssetBuilder
 
                 foreach (var page in filePages)
                 {
-                    assets.Add(WriteAsset(assetRoot, file, page.PageNumber, extension, sourceBytes));
+                    assets.Add(WriteAsset(assetRoot, file, page.PageNumber, extension, sourceBytes, kind, idPrefix));
                 }
             }
             else
@@ -209,12 +242,14 @@ public static class RoleSourceAssetBuilder
         SourceFile file,
         int pageNumber,
         string extension,
-        byte[] bytes)
+        byte[] bytes,
+        TabletAssetKind kind,
+        string idPrefix)
     {
         var fileKey = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(file.FileId)));
-        var assetId = $"role-page-{fileKey}-p{pageNumber}";
-        var relativePath = $"role-pages/{fileKey}-p{pageNumber}{extension}";
-        var fullPath = Path.Combine(assetRoot, "role-pages", $"{fileKey}-p{pageNumber}{extension}");
+        var assetId = $"{idPrefix}-{fileKey}-p{pageNumber}";
+        var relativePath = $"{idPrefix}s/{fileKey}-p{pageNumber}{extension}";
+        var fullPath = Path.Combine(assetRoot, $"{idPrefix}s", $"{fileKey}-p{pageNumber}{extension}");
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         File.WriteAllBytes(fullPath, bytes);
 
@@ -223,7 +258,7 @@ public static class RoleSourceAssetBuilder
             AssetId = assetId,
             RelativePath = relativePath,
             ContentHash = Convert.ToHexStringLower(SHA256.HashData(bytes)),
-            Kind = TabletAssetKind.RolePage,
+            Kind = kind,
             SourceFileId = file.FileId,
             SourceContentHash = file.ContentHash,
             SourcePageNumber = pageNumber,

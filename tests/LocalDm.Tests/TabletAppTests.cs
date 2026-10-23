@@ -313,6 +313,31 @@ public sealed class TabletAppTests : IDisposable
             (await anonymous.GetAsync(new Uri(baseAddress, "/tablet/role/source"), ct)).StatusCode);
     }
 
+    [Fact]
+    public async Task Handbook_pages_are_available_only_to_sessions_with_a_claimed_role()
+    {
+        using var host = TabletBlazorHost.Start(RepoRoot("LocalDm.Tablet.csproj"));
+        var baseAddress = new Uri($"http://127.0.0.1:{PortOf(host)}");
+        var ct = TestContext.Current.CancellationToken;
+
+        using var anonymous = new HttpClient();
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await anonymous.GetAsync(new Uri(baseAddress, "/tablet/handbook/source/1"), ct)).StatusCode);
+
+        var client = NewClient(baseAddress);
+        await client.GetAsync("/", ct); // 拿到会话 Cookie，但还没认领角色
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/tablet/handbook/source/1", ct)).StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await client.PostAsync("/tablet/claim?roleId=role-1", null, ct)).StatusCode);
+        var first = await client.GetByteArrayAsync("/tablet/handbook/source/1", ct);
+        var second = await client.GetByteArrayAsync("/tablet/handbook/source/2", ct);
+        Assert.NotEqual(first, second);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/tablet/handbook/source/3", ct)).StatusCode);
+    }
+
     private HttpClient NewClient(Uri baseAddress)
     {
         var client = new HttpClient(new HttpClientHandler { UseCookies = true })

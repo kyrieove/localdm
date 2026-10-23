@@ -70,6 +70,20 @@ public sealed class SwitchableTabletContent : ITabletContent
         return false;
     }
 
+    public int HandbookPageCount => _inner?.HandbookPageCount ?? 0;
+
+    public bool TryGetHandbookPage(int pageNumber, out byte[] bytes, out string contentType)
+    {
+        if (_inner is { } inner)
+        {
+            return inner.TryGetHandbookPage(pageNumber, out bytes, out contentType);
+        }
+
+        bytes = [];
+        contentType = "application/octet-stream";
+        return false;
+    }
+
     public bool TryGetRoleSourcePage(string roleId, int pageNumber, out byte[] bytes, out string contentType)
     {
         if (_inner is { } inner)

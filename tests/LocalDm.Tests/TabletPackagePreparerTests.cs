@@ -185,6 +185,43 @@ public sealed class TabletPackagePreparerTests : IDisposable
         Assert.NotEqual(first.AssetRootFingerprint, second.AssetRootFingerprint);
     }
 
+    [Fact]
+    public void The_handbook_file_is_rendered_page_by_page_and_role_and_clue_files_are_not()
+    {
+        var package = CreatePackage(("clues", "1.png", 3), ("roles", "r.png", 5), ("hb", "h.png", 6));
+        var pdfPath = Path.Combine(_root, "handbook.pdf");
+        PackageRoleSourceTests.WriteTwoPagePdf(pdfPath);
+        var handbook = package.SourceFiles[2] with
+        {
+            PrivatePath = pdfPath,
+            ContentHash = TabletAssetBuilder.ComputeFileHash(pdfPath),
+            PageCount = 2,
+        };
+        // 手册只在第 1 页识别到文字；第 2 页（比如声明不入包的页）没有 span，也要整份给出。
+        package = package with
+        {
+            SourceFiles = [package.SourceFiles[0], package.SourceFiles[1], handbook],
+            Materials = [package.Materials[0]],
+            Roles = [new RoleIndex
+            {
+                RoleId = "role",
+                PrivateMaterialRef = "synthetic",
+                SourceSpanIds = [package.Spans[1].SpanId],
+            }],
+        };
+
+        var manifest = TabletPackagePreparer.Prepare(package, Path.Combine(_root, "assets"));
+
+        var pages = manifest.HandbookPageAssetIds.Select(id => manifest.Assets[id]).ToArray();
+        Assert.Equal([1, 2], pages.Select(page => page.SourcePageNumber));
+        Assert.All(pages, page =>
+        {
+            Assert.Equal(TabletAssetKind.HandbookPage, page.Kind);
+            Assert.Equal(handbook.FileId, page.SourceFileId);
+        });
+        Assert.DoesNotContain(manifest.Cards.Values, card => card.SourceFileId == handbook.FileId);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

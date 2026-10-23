@@ -66,6 +66,8 @@ public sealed class TabletUiProjectionTests
             Assert.DoesNotContain("备忘", json, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("上下文占用", json, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("privateStory", json, StringComparison.OrdinalIgnoreCase);
+            // 手册只经已认领会话的原稿页接口给（ADR 0009），投影里不出现它的资产或地址。
+            Assert.DoesNotContain("handbook", json, StringComparison.OrdinalIgnoreCase);
 
             if (!isUnlocked)
             {

@@ -14,7 +14,7 @@ namespace LocalDm.Core.Tablet;
 /// </summary>
 public sealed record TabletManifest
 {
-    public const int CurrentManifestVersion = 2;
+    public const int CurrentManifestVersion = 3;
 
     public required int ManifestVersion { get; init; }
 
@@ -29,6 +29,9 @@ public sealed record TabletManifest
     public required IReadOnlyDictionary<string, TabletGroupPreparationState> Groups { get; init; }
 
     public required IReadOnlyDictionary<string, TabletAsset> Assets { get; init; }
+
+    /// <summary>组织者手册原稿页的资产 ID，按页序排列（ADR 0009）：只给已认领角色的会话，不进公共投影与卡目录。</summary>
+    public IReadOnlyList<string> HandbookPageAssetIds { get; init; } = [];
 
     /// <summary>准备完成的时间；人工重做准备会换一个新包版本。</summary>
     public DateTimeOffset? PreparedAt { get; init; }
@@ -196,6 +199,9 @@ public enum TabletAssetKind
 
     /// <summary>角色本原稿页。一期只做线索卡，这类资产先留位给角色本接入。</summary>
     RolePage = 2,
+
+    /// <summary>组织者手册原稿页（含真相页），整份文件逐页。</summary>
+    HandbookPage = 3,
 }
 
 /// <summary>整版图上的一格：行、列都从 0 开始，与有效区域左上角对齐。</summary>

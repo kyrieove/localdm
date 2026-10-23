@@ -43,6 +43,17 @@ public interface ITabletContent
     /// 从 1 开始；它不代表来源文件内部的 PDF 页号。
     /// </summary>
     bool TryGetRoleSourcePage(string roleId, int pageNumber, out byte[] bytes, out string contentType);
+
+    /// <summary>组织者手册原稿页数（ADR 0009）；没有手册时为 0，页签不出现。</summary>
+    int HandbookPageCount => 0;
+
+    /// <summary>取手册原稿页（1 起）。调用方负责只给已认领角色的会话。</summary>
+    bool TryGetHandbookPage(int pageNumber, out byte[] bytes, out string contentType)
+    {
+        bytes = [];
+        contentType = "application/octet-stream";
+        return false;
+    }
 }
 
 /// <summary>合成探针的内容来源：全部是本地生成的假数据，不读任何真实剧本。</summary>
@@ -69,6 +80,11 @@ public sealed class SpikeTabletContent : ITabletContent
         .ToArray();
 
     public IReadOnlyDictionary<string, RoleBookText> RoleBooks => _data.RoleBooks;
+
+    public int HandbookPageCount => _data.HandbookPageCount;
+
+    public bool TryGetHandbookPage(int pageNumber, out byte[] bytes, out string contentType) =>
+        TryReadSyntheticPage(pageNumber >= 1 && pageNumber <= HandbookPageCount ? $"handbook-{pageNumber}.png" : null, out bytes, out contentType);
 
     public bool TryGetCardImage(
         string cardId,
@@ -107,11 +123,16 @@ public sealed class SpikeTabletContent : ITabletContent
 
     public bool TryGetRoleSourcePage(string roleId, int pageNumber, out byte[] bytes, out string contentType)
     {
+        return TryReadSyntheticPage($"{roleId}-source-{pageNumber}.png", out bytes, out contentType);
+    }
+
+    private bool TryReadSyntheticPage(string? fileName, out byte[] bytes, out string contentType)
+    {
         bytes = [];
         contentType = "application/octet-stream";
 
-        var path = Path.Combine(_data.AssetRoot, $"{roleId}-source-{pageNumber}.png");
-        if (!File.Exists(path))
+        var path = fileName is null ? null : Path.Combine(_data.AssetRoot, fileName);
+        if (path is null || !File.Exists(path))
         {
             return false;
         }

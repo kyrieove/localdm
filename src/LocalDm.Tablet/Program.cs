@@ -69,6 +69,12 @@ static TabletSpikeData BuildSpikeData()
         }
     }
 
+    const int handbookPages = 2;
+    for (var page = 1; page <= handbookPages; page++)
+    {
+        SyntheticAssets.WritePage(Path.Combine(assetRoot, $"handbook-{page}.png"), $"handbook-{page}");
+    }
+
     var book = SyntheticRoleBook.Create();
     var roleBooks = roles.ToDictionary(r => r.RoleId, r => book with
     {
@@ -88,6 +94,7 @@ static TabletSpikeData BuildSpikeData()
         AssetRoot = assetRoot,
         StoryTitle = SyntheticRoleBook.Title,
         RoleBooks = roleBooks,
+        HandbookPageCount = handbookPages,
     };
 }
 

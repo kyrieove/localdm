@@ -11,7 +11,10 @@
             {
                 <button class="tool" aria-pressed="@IsSourceMode" @onclick="() => SetModeAsync(false)">原稿</button>
             }
-            <button class="tool" aria-pressed="@(!IsSourceMode)" @onclick="() => SetModeAsync(true)">文字重排</button>
+            @if (!SourceOnly)
+            {
+                <button class="tool" aria-pressed="@(!IsSourceMode)" @onclick="() => SetModeAsync(true)">文字重排</button>
+            }
             <button class="tool" @onclick="ToggleColumnsAsync">@(_activeSettings.Columns == 1 ? "双栏" : "单栏")</button>
             @if (IsSourceMode)
             {
@@ -57,7 +60,7 @@
                 <div class="source-pages">
                     @for (var pg = SourcePage; pg <= SourcePageEnd; pg++)
                     {
-                        <img src="/tablet/role/source/@pg" alt="本人角色本原稿第 @pg 页" />
+                        <img src="@(SourceUrlPrefix + pg)" alt="@(SourceOnly ? RoleName : "本人角色本")原稿第 @pg 页" />
                     }
                 </div>
                 <figcaption>原稿第 @SourcePageLabel 页，保留原文文字、颜色与排版。</figcaption>
@@ -120,12 +123,16 @@
     [Parameter] public ReadingSettings Settings { get; set; } = new();
     [Parameter] public long Offset { get; set; }
     [Parameter] public EventCallback<ReadingProgressUpdate> OnProgress { get; set; }
+    /// <summary>原稿图地址前缀，页号接在后面；手册页签换成 /tablet/handbook/source/。</summary>
+    [Parameter] public string SourceUrlPrefix { get; set; } = "/tablet/role/source/";
+    /// <summary>只看原稿：没有文字重排（手册页签）。</summary>
+    [Parameter] public bool SourceOnly { get; set; }
 
     private int SourcePageCount => Book?.SourcePageAssetIds.Count ?? 0;
     private int SourcePage => Math.Clamp(_activeSettings.SourcePageNumber, 1, Math.Max(1, SourcePageCount));
     private int SourcePageEnd => Math.Min(SourcePage + _activeSettings.Columns - 1, SourcePageCount);
     private string SourcePageLabel => SourcePage == SourcePageEnd ? SourcePage.ToString() : $"{SourcePage}～{SourcePageEnd}";
-    private bool IsSourceMode => SourcePageCount > 0 && !_activeSettings.PreferText;
+    private bool IsSourceMode => SourcePageCount > 0 && (SourceOnly || !_activeSettings.PreferText);
 
     protected override void OnParametersSet()
     {
@@ -161,7 +168,7 @@
         await SyncStateAsync();
     }
 
-    private static object[] Flatten(RoleBookText book)
+    private object[] Flatten(RoleBookText book)
     {
         var result = new List<object>();
         foreach (var chapter in book.Chapters)
@@ -175,7 +182,7 @@
                     sourcePageNumber = block.SourcePageNumber, imageAssetId = block.ImageAssetId,
                     caption = block.ImageCaption,
                     sourceUrl = block.ImageAssetId is not null && block.SourcePageNumber is int page
-                        ? $"/tablet/role/source/{page}" : null,
+                        ? $"{SourceUrlPrefix}{page}" : null,
                 });
             }
         }

@@ -239,6 +239,21 @@ public static class HostNarration
             && !segment.SourceSpanIds.Any(id => materialSpans.Contains(id));
     }
 
+    /// <summary>
+    /// 组织者手册的来源文件，按包内文件顺序。判断与 <see cref="IsRoleBookSegment"/> 同源：
+    /// 文件里有 span、且没有一个 span 属于角色本或线索卡，才算手册（混了角色页的文件一律不算，免得把别人的角色本当手册发出去）。
+    /// </summary>
+    public static IReadOnlyList<SourceFile> HandbookFiles(ScriptPackage package)
+    {
+        var claimed = RoleSpans(package);
+        claimed.UnionWith(MaterialSpans(package));
+        var spansByFile = package.Spans.ToLookup(span => span.FileId, StringComparer.Ordinal);
+        return package.SourceFiles
+            .Where(file => spansByFile[file.FileId].Any()
+                && !spansByFile[file.FileId].Any(span => claimed.Contains(span.SpanId)))
+            .ToArray();
+    }
+
     /// <summary>所有角色本占用的来源 span。</summary>
     private static HashSet<string> RoleSpans(ScriptPackage package) =>
         package.Roles

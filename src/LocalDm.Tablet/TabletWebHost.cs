@@ -270,6 +270,12 @@ public static class TabletWebHost
                 : Results.NotFound();
         }
 
+        // 组织者手册原稿页（ADR 0009）：和角色本一样要求已认领角色，没认领就 404。
+        app.MapGet("/tablet/handbook/source/{page:int}", (int page, ITabletContent content, TabletSpikeState state, HttpContext context) =>
+            SessionRole(state, context) is not null && content.TryGetHandbookPage(page, out var bytes, out var contentType)
+                ? Results.File(bytes, contentType)
+                : Results.NotFound());
+
         // 平板发言：由平板服务处理合法性与频次校验，转发给主持宿主。
         app.MapPost("/tablet/say", async (TabletSpeechService service, HttpContext context) =>
         {

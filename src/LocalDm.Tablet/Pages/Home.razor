@@ -29,6 +29,10 @@
                 <button class="@(_tab == TabBook ? "active" : "")" @onclick="() => SwitchTab(TabBook)">我的角色本</button>
                 <button class="@(_tab == TabCards ? "active" : "")" @onclick="() => SwitchTab(TabCards)">全部线索卡</button>
                 <button class="@(_tab == TabPublic ? "active" : "")" @onclick="() => SwitchTab(TabPublic)">公共对话</button>
+                @if (State.Content.HandbookPageCount > 0)
+                {
+                    <button class="@(_tab == TabHandbook ? "active" : "")" @onclick="() => SwitchTab(TabHandbook)">组织者手册</button>
+                }
             </nav>
         }
         <div class="shell-right">
@@ -111,6 +115,13 @@
                 <RoleReader @key="session.RoleId" Book="Book" RoleName="@RoleName" Settings="session.Settings"
                             Offset="session.ReadingOffset" OnProgress="ProgressCallback" />
             }
+            else if (_tab == TabHandbook && Handbook is { } handbook)
+            {
+                @* 手册只读、不记进度：页码只留在这一页的内存里，刷新就回第 1 页。 *@
+                <RoleReader @key="handbook" Book="handbook" RoleName="组织者手册" Settings="_handbookSettings"
+                            SourceUrlPrefix="/tablet/handbook/source/" SourceOnly="true"
+                            OnProgress="update => _handbookSettings = update.Settings" />
+            }
             else if (_tab == "cards")
             {
                 <section class="cards">
@@ -170,6 +181,7 @@
     private const string TabBook = "book";
     private const string TabCards = "cards";
     private const string TabPublic = "public";
+    private const string TabHandbook = "handbook";
 
     private string _tab = TabBook;
     private bool _claimFailed;
@@ -191,6 +203,30 @@
         && State.Content.RoleBooks.ContainsKey(id);
 
     private RoleBookText Book => State.Content.RoleBooks[State.Session(_sessionKey).RoleId!];
+
+    private ReadingSettings _handbookSettings = new();
+    private RoleBookText? _handbook;
+
+    // 阅读器按引用判断换没换书，所以页数不变时复用同一个对象，免得每次重绘都跳回第 1 页。
+    private RoleBookText? Handbook
+    {
+        get
+        {
+            var count = State.Content.HandbookPageCount;
+            if (count == 0) return null;
+            if (_handbook?.SourcePageAssetIds.Count != count)
+            {
+                _handbook = new RoleBookText
+                {
+                    RoleId = string.Empty,
+                    Chapters = [],
+                    SourcePageAssetIds = [.. Enumerable.Range(1, count).Select(page => $"handbook-{page}")],
+                };
+                _handbookSettings = new();
+            }
+            return _handbook;
+        }
+    }
 
     private string RoleName => State.Roles.FirstOrDefault(r => r.RoleId == State.Session(_sessionKey).RoleId)?.DisplayName ?? string.Empty;
 
