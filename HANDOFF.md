@@ -1,38 +1,26 @@
-# HANDOFF · 2026-10-23 · 主持台语音按钮（本地识别）
+# HANDOFF · 2026-10-23 · 语音按钮已合入，下一件事是平板发言
 
 ## 现在
-- 已验证：平板入口改造全部完成并推送（`d212ea2`），启动器 `启动本局测试.cmd` 会自动重新发布最新版。
-- 语音按钮：设计已经和用户逐条定完，写进 `docs/decisions/0006-in-app-dictation-local-asr.md`。引擎卡 `docs/orch/2026-10-23-dictation-engine/card.md` 已派给 agy（后台任务名 `dictation-engine`，worktree 隔离，看汇报：`~/.claude/agent-live/orch-runner/dictation-engine.json`）。
-- 未验证：Qwen3-ASR 在本机 C# 里真的能识别、速度和准确率（引擎卡完成后跑 `dotnet run --project tools/LocalDm.Probe -- --dictation-check`，把结果写进 `docs/evidence/us4/` 新文件）。
+- 已验证：语音按钮全部合入 main（引擎 `f4e729a`、界面 `c82a6d1`）。`dotnet build` 0 警告 0 错误；`LocalDm.Tests` 407 项（401 通过 / 6 项人工授权跳过的语音用例 / 0 失败）；`LocalDm.UiTests` 48 项通过。`--dictation-check` 在本机识别合成语音逐字一致，加载 5.4 秒、识别 0.8 秒（`docs/evidence/us4/dictation-check.md`）。引擎卡的 4 条 P1 已修并合入，不要再按旧纸条重修。
+- 未验证：真人麦克风实机点按钮（NAudio 录音路径、首次复制约 0.9 GB 模型的进度显示、右 Alt 的实际按键）。
+- 已知没修（P2/P3）：`DictationService.Dispose` 与识别同时发生时识别器可能被中途释放；`ToggleDictationAsync` 里 `StartAsync` 抛异常时 `_dictationBusy` 不复位。
+- 平板实时对话与界面镜像：设计已逐条确认，没有代码，见 `docs/plans/2026-10-23-tablet-live-chat.md`。
 
 ## 下一步
-1. **引擎卡已跑完，outcome=review_fail（Check 通过，审查 4 条 P1，都成立，要修）**，worktree 在 `~/.claude/agent-live/orch-runner/wt/dictation-engine`，在那里直接改（小改自己修）：
-   - `DictationService.Dispose()` 先置 `_disposed` 再 `Cancel()`，而 `Cancel()` 见 `_disposed` 就返回 → 听的时候释放会让麦克风一直录。改成：先做麦克风/缓冲清理，再置 `_disposed`（或抽一个不受保护的内部清理方法）。
-   - `Cancel()` 无条件 `SetState(Idle)`，识别还在跑时会被放行开始新录音、旧识别的 finally 还会覆盖新状态。改成：只在 `Listening` 时才改状态，否则直接返回。
-   - `DictationModelStore.EnsureAsync` 里目录枚举（约第 54、79 行）在异常处理之外，权限被拒会抛出并让 `StartAsync` 卡在 `Preparing`。把就绪判断和来源校验放进同一个异常边界，`StartAsync` 在准备失败路径上要恢复到 `Idle`。
-   - 闲置释放用的是一次性定时器，只在 `Idle` 才释放；录音期间触发就不再重装 → 模型可能一直留在内存。改成：每次回到 `Idle` 时重新安排 5 分钟后释放。
-   改完在主仓库根跑 `node D:/2/dev/orch-runner/orchestrate/runner/run-card.mjs --recheck --name dictation-engine`，卡的 `## Acceptance` 末尾加一行 `- claude fix: …`，再 `--commit --name dictation-engine --message "…" --accept accepted --findings "4 real / 0 false positive (scope 0, card 0, wrong 0) / 0 missed"`。
-   （原第 1 条：看引擎卡结果的通用流程见下。）
-   1. 看引擎卡结果：`ORCH-RUNNER dictation-engine outcome=…`；review_fail 先核对每条 finding 的 file:line，小改自己修，再 `run-card.mjs --recheck --name dictation-engine`，然后 `--commit … --accept accepted --findings …`（流程见 `D:/2/dev/orch-runner/orchestrate/SKILL.md`）。
-2. 引擎合入后写并派**界面卡** `docs/orch/2026-10-23-dictation-ui/card.md`（agy，medium）：
-   - `src/LocalDm.App/ViewModels/HostViewModel.cs`：构造函数加 `IDictationService? dictation = null`；加 `ToggleDictationCommand`、`IsListening`/`DictationHint`（「正在听…」「正在准备语音…」+ 进度）；点开始时先 `_tts?.Stop()`；开始失败把返回文案当提示显示；结束后把文字追加进 `InputText`（已有内容后加一个空格或换行），不发送；VM 自己用 `DispatcherTimer` 60 秒后自动结束。
-   - `src/LocalDm.App/Views/HostView.xaml`（输入框 Grid 的按钮区，约第 430–450 行，发送/停止按钮同一格）：加麦克风按钮，`AutomationProperties.AutomationId="DictationButton"`，录音时变印章红并显示「正在听…」；`HostView.xaml.cs` 在 `OnInputPreviewKeyDown` 旁加窗口级 `PreviewKeyDown`：右 Alt（`e.Key == Key.System ? e.SystemKey : e.Key` 等于 `Key.RightAlt`）触发同一命令，`e.Handled = true`，仅本窗口生效。
-   - `src/LocalDm.App/AppComposition.cs`：`new DictationService(new DictationModelStore(_context.DataRoot))` 传给 `HostViewModel`，`Dispose` 里释放。
-   - UI 测试用假 `IDictationService`（不碰真麦克风）：点按钮→开始→再点→文字进输入框且没发送；开始时朗读被停止；右 Alt 触发；失败文案显示。
-3. 再写并派**文档卡**（low）：`PRODUCT.md` 与 `docs/user-guide.md` 去掉「不碰麦克风」改成 ADR 0006 第 8 条；宪章 `.specify/memory/constitution.md` 升版本号并记这条；第三方许可说明（`packaging/windows/THIRD-PARTY-NOTICES.txt`）补 sherpa-onnx、NAudio、Qwen3-ASR（Apache-2.0）。
-4. 全部合入后：`dotnet build LocalDm.slnx`、两个测试项目全过 → 用启动器实机点一次麦克风（模型复制约 0.9 GB，首次要等）→ 提交推送。
+1. 用户用 `启动本局测试.cmd` 在主持台实机点麦克风说几句，把结果补进 `docs/evidence/us4/dictation-check.md` 的「待做」。
+2. 新对话做平板发言（第一期）：先写 ADR 0007，宪章再升主版本。
 
 ## 先读
-- `docs/decisions/0006-in-app-dictation-local-asr.md`（决定与否掉的方案）
-- `docs/orch/2026-10-23-dictation-engine/card.md`
-- 平板改造的卡与做法可参考 `docs/orch/2026-10-23-tablet-*/`；`docs/project-state.md` 末尾
-- 记忆：`tablet-entry-done-2026-10-23`（含用户偏好：按推荐直接推进，大改动先出 HTML 原型）
+- `docs/decisions/0006-in-app-dictation-local-asr.md`
+- `docs/plans/2026-10-23-tablet-live-chat.md`
+- 派活流程：`D:/2/dev/orch-runner/orchestrate/SKILL.md`
 
 ## 坑
-- 卡片 lint：Don't 段必须有「Reuse existing functions」；`read-only` 不能列会被构建改动的目录（`src/LocalDm.Tablet/` 之类会触发 readonly_violated）。
+- 卡片 lint：Don't 段必须有「Reuse existing functions」；`read-only` 不能列会被构建改动的目录。
 - 一条 Bash 命令里同时放多个大 heredoc 容易解析失败：卡片用 Write 工具写。
 - 并行整套测试偶发 `EdgeTtsTests` 探针超时、`HostConversationTests.Replay_holds_the_session_busy_gate`，单跑稳定通过。
 - OpenLess 源码是 AGPL-3.0：不能复制它的代码。
+- 派活后的完成通知可能不会唤醒会话：派完去看 `~/.claude/agent-live/orch-runner/<name>.json` 的 `outcome`。
 
 ## 等用户回答
-- 晚上用户回来要**导入新剧本**：整版多卡剧本导入时还没有逐组确认版式的界面（见 `docs/project-state.md`）。回来先问新剧本是不是整版多卡。
+- 晚上用户导入新剧本：先问是不是整版多卡（一张图多张卡）。导入时还没有逐组确认版式的界面（见 `docs/project-state.md`）。
