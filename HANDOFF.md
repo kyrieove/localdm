@@ -6,7 +6,14 @@
 - 未验证：Qwen3-ASR 在本机 C# 里真的能识别、速度和准确率（引擎卡完成后跑 `dotnet run --project tools/LocalDm.Probe -- --dictation-check`，把结果写进 `docs/evidence/us4/` 新文件）。
 
 ## 下一步
-1. 看引擎卡结果：`ORCH-RUNNER dictation-engine outcome=…`；review_fail 先核对每条 finding 的 file:line，小改自己修，再 `run-card.mjs --recheck --name dictation-engine`，然后 `--commit … --accept accepted --findings …`（流程见 `D:/2/dev/orch-runner/orchestrate/SKILL.md`）。
+1. **引擎卡已跑完，outcome=review_fail（Check 通过，审查 4 条 P1，都成立，要修）**，worktree 在 `~/.claude/agent-live/orch-runner/wt/dictation-engine`，在那里直接改（小改自己修）：
+   - `DictationService.Dispose()` 先置 `_disposed` 再 `Cancel()`，而 `Cancel()` 见 `_disposed` 就返回 → 听的时候释放会让麦克风一直录。改成：先做麦克风/缓冲清理，再置 `_disposed`（或抽一个不受保护的内部清理方法）。
+   - `Cancel()` 无条件 `SetState(Idle)`，识别还在跑时会被放行开始新录音、旧识别的 finally 还会覆盖新状态。改成：只在 `Listening` 时才改状态，否则直接返回。
+   - `DictationModelStore.EnsureAsync` 里目录枚举（约第 54、79 行）在异常处理之外，权限被拒会抛出并让 `StartAsync` 卡在 `Preparing`。把就绪判断和来源校验放进同一个异常边界，`StartAsync` 在准备失败路径上要恢复到 `Idle`。
+   - 闲置释放用的是一次性定时器，只在 `Idle` 才释放；录音期间触发就不再重装 → 模型可能一直留在内存。改成：每次回到 `Idle` 时重新安排 5 分钟后释放。
+   改完在主仓库根跑 `node D:/2/dev/orch-runner/orchestrate/runner/run-card.mjs --recheck --name dictation-engine`，卡的 `## Acceptance` 末尾加一行 `- claude fix: …`，再 `--commit --name dictation-engine --message "…" --accept accepted --findings "4 real / 0 false positive (scope 0, card 0, wrong 0) / 0 missed"`。
+   （原第 1 条：看引擎卡结果的通用流程见下。）
+   1. 看引擎卡结果：`ORCH-RUNNER dictation-engine outcome=…`；review_fail 先核对每条 finding 的 file:line，小改自己修，再 `run-card.mjs --recheck --name dictation-engine`，然后 `--commit … --accept accepted --findings …`（流程见 `D:/2/dev/orch-runner/orchestrate/SKILL.md`）。
 2. 引擎合入后写并派**界面卡** `docs/orch/2026-10-23-dictation-ui/card.md`（agy，medium）：
    - `src/LocalDm.App/ViewModels/HostViewModel.cs`：构造函数加 `IDictationService? dictation = null`；加 `ToggleDictationCommand`、`IsListening`/`DictationHint`（「正在听…」「正在准备语音…」+ 进度）；点开始时先 `_tts?.Stop()`；开始失败把返回文案当提示显示；结束后把文字追加进 `InputText`（已有内容后加一个空格或换行），不发送；VM 自己用 `DispatcherTimer` 60 秒后自动结束。
    - `src/LocalDm.App/Views/HostView.xaml`（输入框 Grid 的按钮区，约第 430–450 行，发送/停止按钮同一格）：加麦克风按钮，`AutomationProperties.AutomationId="DictationButton"`，录音时变印章红并显示「正在听…」；`HostView.xaml.cs` 在 `OnInputPreviewKeyDown` 旁加窗口级 `PreviewKeyDown`：右 Alt（`e.Key == Key.System ? e.SystemKey : e.Key` 等于 `Key.RightAlt`）触发同一命令，`e.Handled = true`，仅本窗口生效。
