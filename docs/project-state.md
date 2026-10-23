@@ -171,3 +171,11 @@ tasks.md 的完成状态见其末尾「实施状态」表（59 已完成 / 5 部
 - 平板材料用 `assets/<包标识>.tablet.json` 旁路文件保存，不新增版本、不改包标识：导入时备好，旧包在软件启动后台补。准备失败一律不拦导入与开局。
 - 仍未做：整版多卡剧本（如 K7）导入时人逐组确认版式的界面（目前按「一张卡一个文件」整组确认，配不上的组暂停）；真实平板验收；公共对话在真实局的长时间联调。
 - 实测：构建 0 警告 0 错误；`LocalDm.Tests` 404 项（398 通过 / 6 项人工授权跳过 / 0 失败）；`LocalDm.UiTests` 42 项通过。真实《孽岛疑云》开局后平板目录 5 角色、54 张卡（49 可看）。`HostConversationTests.Replay_holds_the_session_busy_gate...` 与 `EdgeTtsTests` 探针用例在并行负载下偶发失败，单跑稳定通过。
+
+## 2026-10-23 平板发言（第一期，ADR 0007）
+
+- 已做：ADR 0007、宪章 7.0.0、规格同步；`HostViewModel.SubmitTabletSpeech`（与电脑输入框共用 `AskCoreAsync` 和 `IsBusy`，署名「【角色名】」，推进/揭秘只提议，整句压缩上下文当普通话）；平板服务 `TabletSpeechService`（认领、300 字、2 秒间隔、忙碌）与 `POST /tablet/say`、`POST /tablet/say/stop`、`/tablet/public` 带 `host.busy/speaking`；`TabletSpeechBridge` 经 WPF 调度器接进主持台；网页底部输入条（`SpeechBar.razor`）。
+- 测试：构建 0 警告 0 错误；`LocalDm.Tests` 428 项（422 通过 / 6 项人工授权跳过 / 0 失败）；`LocalDm.UiTests` 53 项通过，其中 5 个端到端并发用例（两块平板同时、电脑与平板同时、朗读中、6 块平板同时、提议）都只放行 1 个请求。输入条在合成探针里用浏览器实点过一次（未认领灰掉、发送后清空并显示「主持正在回应」）。
+- 未验证：真实 iPad 和安卓平板上发言（设备型号、系统、浏览器版本都没记录），ADR 0007 要求通过前不能说功能完成；真实剧本局里平板发言走模型的整条链路没人试过。
+- 已知没修：平板「主持正在回应」靠 2 秒轮询刷新，最多滞后 2 秒（服务端仍按真实状态拒绝）；Enter 在平板文本框里是换行，只能点「发送」（Blazor 里按键清空会和后到的 input 事件打架，见 `docs/orch/2026-10-23-tablet-speech-ui/card.md` 的 claude fix）；电脑输入框里输入「进入下一环节」仍直接发给模型，没有「待确认提案」界面（`HostIntentRouter` 的提案结果只有平板发言在用）。
+- 第二期（完整界面镜像）没做。
