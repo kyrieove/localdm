@@ -127,5 +127,6 @@ public static class TabletMaterials
 
 ## Don't
 - No commits, no other files, no refactors beyond the steps.
+- Reuse existing functions; don't copy existing logic.
 - Run scripts in the foreground and wait; before replying, stop any background task still running.
 - No rm, no git push, no git checkout . / restore . / reset --hard.
