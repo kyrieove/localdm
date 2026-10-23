@@ -26,6 +26,7 @@ public sealed class TabletJoinViewModel : ObservableObject, IAsyncDisposable
 
     private readonly IPublicFeedSource _feed;
     private readonly string _webRoot;
+    private readonly ITabletSpeech? _speech;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly SwitchableTabletContent _content = new();
     private ScriptPackage? _package;
@@ -38,10 +39,11 @@ public sealed class TabletJoinViewModel : ObservableObject, IAsyncDisposable
     private BitmapImage? _qrCode;
     private volatile bool _disposed;
 
-    public TabletJoinViewModel(IPublicFeedSource feed, string? contentRoot = null)
+    public TabletJoinViewModel(IPublicFeedSource feed, string? contentRoot = null, ITabletSpeech? speech = null)
     {
         _feed = feed;
         _webRoot = contentRoot ?? AppContext.BaseDirectory;
+        _speech = speech;
         ToggleCommand = new RelayCommand(() => IsRunning ? StopAsync() : StartAsync());
         OpenCommand = new RelayCommand(() =>
         {
@@ -155,7 +157,7 @@ public sealed class TabletJoinViewModel : ObservableObject, IAsyncDisposable
                 WebApplication? server = null;
                 try
                 {
-                    server = TabletWebHost.Create(_content, _feed, ["--urls", $"http://0.0.0.0:{port}"], _webRoot);
+                    server = TabletWebHost.Create(_content, _feed, ["--urls", $"http://0.0.0.0:{port}"], _webRoot, _speech);
                     await server.StartAsync();
                     started = server;
                     fellBack = port == 0;
