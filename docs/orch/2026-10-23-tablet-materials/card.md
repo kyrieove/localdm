@@ -130,3 +130,11 @@ public static class TabletMaterials
 - Reuse existing functions; don't copy existing logic.
 - Run scripts in the foreground and wait; before replying, stop any background task still running.
 - No rm, no git push, no git checkout . / restore . / reset --hard.
+
+## Acceptance
+- verdict: accepted
+- files: src/LocalDm.App/ViewModels/LibraryViewModel.cs, src/LocalDm.Infrastructure/Import/ScriptImportService.Extract.cs, src/LocalDm.Infrastructure/Import/TabletMaterials.cs, tests/LocalDm.Tests/TabletPackageModeTests.cs
+- check: `dotnet test tests/LocalDm.Tests --filter-method "*Tablet_materials_ensure*"` → exit 0 (run by run-card)
+- tokens:
+  - round 1: exec custom-local:antigravity/gemini-3.8-flash: fresh 170k, cached 907k, out 6k  (agy-tablet-materials.jsonl) · review gpt-6.1-sol: fresh 66k, cached 200k, out 1k  (codex-review-tablet-materials.jsonl)
+- review findings: 0 real / 0 false positive (scope 0, card 0, wrong 0) / 0 missed (medium, gpt-6.1-sol)

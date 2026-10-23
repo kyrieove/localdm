@@ -201,6 +201,16 @@ public sealed partial class ScriptImportService
             JsonSerializer.Serialize(flow, options),
             cancellationToken);
 
+        // 第一次导入就把平板材料备好；失败不拦导入，开局时还会再补一次。
+        try
+        {
+            await Task.Run(() => TabletMaterials.Ensure(built.Package, packagePath), cancellationToken);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            System.Diagnostics.Debug.WriteLine("[Tablet] 导入时备平板材料失败：" + ex.GetType().Name);
+        }
+
         return new ScriptImportResult { Build = built, PackagePath = packagePath, FlowPath = flowPath };
     }
 

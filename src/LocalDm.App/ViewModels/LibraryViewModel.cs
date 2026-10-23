@@ -329,5 +329,5 @@ public sealed record LibraryPackageRow(
     string FilePath,
     ScriptPackage Package)
 {
-    public string Summary => $"v{Version} · {PlayerCount} 人 · {PageCount} 页来源 · {Readiness}";
+    public string Summary => $"{PlayerCount} 人 · {PageCount} 页来源 · {Readiness}";
 }

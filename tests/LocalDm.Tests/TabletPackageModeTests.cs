@@ -154,6 +154,27 @@ public sealed class TabletPackageModeTests : IDisposable
         Assert.Equal(0, feedDocument.RootElement.GetProperty("messages").GetArrayLength());
     }
 
+    [Fact]
+    public void Tablet_materials_ensure_writes_a_sidecar_without_changing_package_identity()
+    {
+        var (packagePath, _) = PrepareSyntheticPackage();
+        var original = JsonSerializer.Deserialize<ScriptPackage>(File.ReadAllText(packagePath))!;
+        var bare = original with { Tablet = null };
+
+        var first = TabletMaterials.Ensure(bare, packagePath);
+        var sidecar = Path.Combine(_root, "assets", bare.PackageId + ".tablet.json");
+
+        Assert.NotNull(first.Tablet);
+        Assert.Equal(bare.PackageId, first.PackageId);
+        Assert.Equal(bare.Version, first.Version);
+        Assert.Equal(bare.ContentHash, first.ContentHash);
+        Assert.True(File.Exists(sidecar));
+
+        var second = TabletMaterials.Ensure(bare, packagePath);
+        Assert.Equal(first.Tablet!.AssetRootFingerprint, second.Tablet!.AssetRootFingerprint);
+        Assert.Same(original, TabletMaterials.Ensure(original, packagePath));
+    }
+
     private const string SyntheticRoleBookPageText = "这是合成角色本第一页的文字。";
 
     /// <summary>
