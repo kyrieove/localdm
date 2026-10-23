@@ -30,6 +30,13 @@ UninstallDisplayIcon={app}\LocalDm.exe
 SetupIconFile=..\..\src\LocalDm.App\Assets\app.ico
 ; 安装目录只放程序，不放用户数据
 UsePreviousAppDir=yes
+; 改名后不沿用旧的「本局主持」开始菜单文件夹
+UsePreviousGroup=no
+
+[InstallDelete]
+; 改名前留下的快捷方式（开始菜单旧文件夹与桌面）
+Type: filesandordirs; Name: "{userprograms}\本局主持"
+Type: files; Name: "{autodesktop}\本局主持.lnk"
 
 [Languages]
 Name: "chinesesimplified"; MessagesFile: "compiler:Default.isl"
