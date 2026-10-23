@@ -13,6 +13,8 @@ public interface ITabletContent
     /// <summary>剧本名，显示在阅读器顶部。</summary>
     string StoryTitle { get; }
 
+    TabletStoryState StoryState => TabletStoryState.Ready;
+
     /// <summary>本局可以认领的角色。</summary>
     IReadOnlyList<TabletRole> Roles { get; }
 

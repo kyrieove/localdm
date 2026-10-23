@@ -181,3 +181,12 @@ public sealed class SwitchableTabletContent : ITabletContent
 - Reuse existing functions; don't copy existing logic.
 - Run scripts in the foreground and wait; before replying, stop any background task still running.
 - No rm, no git push, no git checkout . / restore . / reset --hard.
+
+## Acceptance
+- verdict: accepted
+- files: src/LocalDm.Tablet/ITabletContent.cs, src/LocalDm.Tablet/Pages/Home.razor, src/LocalDm.Tablet/SwitchableTabletContent.cs, src/LocalDm.Tablet/TabletSpikeState.cs, src/LocalDm.Tablet/wwwroot/reader.css, tests/LocalDm.Tests/TabletSwitchableTests.cs
+- check: `dotnet test tests/LocalDm.Tests --filter-class "LocalDm.Tests.TabletSwitchableTests"` → exit 0 (run by run-card)
+- tokens:
+  - round 1: review gpt-6.1-sol: fresh 55k, cached 209k, out 2k  (codex-review-tablet-switchable.jsonl) · exec deepseek-v4.1-flash: fresh 45k, cached 1088k, out 6k  (codex-tablet-switchable.jsonl)
+- review findings: 1 real / 0 false positive (scope 0, card 0, wrong 0) / 0 missed (medium, gpt-6.1-sol)
+- claude fix: Home.razor 用 HasRole/RoleName 空安全，换剧本时内容先于认领清空也不抛异常（review P1）

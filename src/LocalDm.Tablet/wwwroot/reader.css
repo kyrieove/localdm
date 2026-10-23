@@ -383,3 +383,11 @@ html, body { font-size: 16px; -webkit-text-size-adjust: 100%; }
 .foot-left { font-size: 14px; }
 .foot-left .muted { font-size: 12px; }
 .reader-chapters .tool { font-size: 14px; }
+
+/* ===== 等待页 / 准备中页 ===== */
+.wait { max-width: 520px; margin: 0 auto; padding: 72px 24px; text-align: center; }
+.wait h1 { font: 500 26px/1.4 var(--serif); margin: 0 0 8px; }
+.wait .lead { margin: 0 auto; }
+.wait .pulse { width: 54px; height: 54px; border-radius: 50%; margin: 0 auto 20px; border: 2px solid var(--seal); animation: wait-pulse 1.8s ease-in-out infinite; }
+@keyframes wait-pulse { 0%, 100% { transform: scale(.85); opacity: .4; } 50% { transform: scale(1.1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .wait .pulse { animation: none; } }

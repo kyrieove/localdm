@@ -14,7 +14,36 @@ public sealed class TabletSpikeState
     private readonly ConcurrentDictionary<string, SessionEntry> _sessions = new(StringComparer.Ordinal);
     private readonly object _claimGate = new();
 
-    public TabletSpikeState(ITabletContent content) => Content = content;
+    public TabletSpikeState(ITabletContent content)
+    {
+        Content = content;
+        if (content is SwitchableTabletContent switchable)
+        {
+            // 换剧本：所有设备的认领与阅读状态一并清掉，页面自动回到选角色页或等待页。
+            switchable.Changed += () =>
+            {
+                ResetAll();
+                TabletSessions.RaiseChanged();
+            };
+        }
+    }
+
+    /// <summary>当前剧本状态；合成探针与真实包始终是 Ready。</summary>
+    public TabletStoryState StoryState => Content.StoryState;
+
+    private void ResetAll()
+    {
+        lock (_claimGate)
+        {
+            foreach (var session in _sessions.Values)
+            {
+                session.RoleId = null;
+                session.SelectedCardId = null;
+                session.ReadingOffset = 0;
+                session.Settings = session.Settings with { SourcePageNumber = 1 };
+            }
+        }
+    }
 
     /// <summary>内容来源：合成探针或真实剧本包。</summary>
     public ITabletContent Content { get; }
