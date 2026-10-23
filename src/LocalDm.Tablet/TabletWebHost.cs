@@ -7,7 +7,13 @@ namespace LocalDm.Tablet;
 
 public static class TabletWebHost
 {
-    public static WebApplication Create(ITabletContent content, IPublicFeedSource source, string[] args, string contentRoot)
+    public static WebApplication Create(
+        ITabletContent content,
+        IPublicFeedSource source,
+        string[] args,
+        string contentRoot,
+        ITabletSpeech? speech = null,
+        TimeProvider? time = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -27,6 +33,9 @@ public static class TabletWebHost
         builder.Services.AddSingleton<TabletSpikeState>();
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddSingleton(source);
+        builder.Services.AddSingleton(speech ?? new NoTabletSpeech());
+        builder.Services.AddSingleton(time ?? TimeProvider.System);
+        builder.Services.AddSingleton<TabletSpeechService>();
         var app = builder.Build();
         app.Use(async (context, next) =>
         {
@@ -250,9 +259,54 @@ public static class TabletWebHost
                 : Results.NotFound();
         }
 
+        // 平板发言：由平板服务处理合法性与频次校验，转发给主持宿主。
+        app.MapPost("/tablet/say", async (TabletSpeechService service, HttpContext context) =>
+        {
+            SayRequest? request = null;
+            try
+            {
+                request = await context.Request.ReadFromJsonAsync<SayRequest>();
+            }
+            catch
+            {
+                // body 缺失或不是 JSON → 当作 Text = null
+            }
+
+            var result = await service.SayAsync(TabletSessions.KeyFor(context), request?.Text);
+            return Results.Json(
+                new
+                {
+                    ok = result.Code is TabletSayCode.Accepted or TabletSayCode.Proposed,
+                    code = result.CodeText,
+                    message = result.Message,
+                },
+                statusCode: result.HttpStatus);
+        });
+
+        // 停止主持朗读。
+        app.MapPost("/tablet/say/stop", (TabletSpeechService service, HttpContext context) =>
+        {
+            var stopped = service.Stop(TabletSessions.KeyFor(context), out var failure);
+            if (failure is TabletSayCode.NoSessionKey)
+            {
+                return Results.Json(
+                    new { ok = false, code = "NO_SESSION_KEY", message = "请先从电脑上的二维码或网址重新打开本页。" },
+                    statusCode: 401);
+            }
+
+            if (failure is TabletSayCode.NoRole)
+            {
+                return Results.Json(
+                    new { ok = false, code = "NO_ROLE", message = "请先认领角色" },
+                    statusCode: 403);
+            }
+
+            return Results.Json(new { stopped });
+        });
+
         // 公开消息：按序号取。断线重连时带着上次的序号来要，就只拿新的。
         // 没有浏览器会话就拒绝：平板必须先加入这一局，不能凭猜来读。
-        app.MapGet("/tablet/public", async (IPublicFeedSource source, HttpContext context) =>
+        app.MapGet("/tablet/public", async (IPublicFeedSource source, TabletSpeechService speechService, HttpContext context) =>
         {
             if (TabletSessions.KeyFor(context) is null)
             {
@@ -290,6 +344,7 @@ public static class TabletWebHost
                     createdAt = m.CreatedAt.ToString("O"),
                 }),
                 nextSequence = snapshot.NextSequence,
+                host = new { busy = speechService.HostBusy, speaking = speechService.HostSpeaking },
             });
         });
 
@@ -311,4 +366,6 @@ public static class TabletWebHost
             return roleId is null ? null : state.Roles.FirstOrDefault(r => r.RoleId == roleId);
         }
     }
+
+    private sealed record SayRequest(string? Text);
 }
