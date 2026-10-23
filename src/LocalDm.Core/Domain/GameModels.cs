@@ -175,6 +175,8 @@ public enum GameCommandType
     Pause = 5,
     Resume = 6,
     Complete = 7,
+    /// <summary>退回上一环节：只由主持人点确认触发（ADR 0010）。</summary>
+    RevertPhase = 8,
 }
 
 public sealed record GameEvent

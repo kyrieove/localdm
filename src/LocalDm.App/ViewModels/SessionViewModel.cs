@@ -21,6 +21,7 @@ public sealed class SessionViewModel : ObservableObject
     private string _voteInput = string.Empty;
     private bool _busy;
     private bool _narrationBusy;
+    private bool _correctingVote;
 
     public SessionViewModel(CommandDispatcher dispatcher)
     {
@@ -293,7 +294,7 @@ public sealed class SessionViewModel : ObservableObject
     // ===== 投票 =====
 
     /// <summary>只有投票环节、且还没汇总时才出现录入入口。</summary>
-    public bool IsVoteVisible => IsPlaying && IsCurrentPhaseVote && !HasVoteSummary;
+    public bool IsVoteVisible => IsPlaying && IsCurrentPhaseVote && (!HasVoteSummary || _correctingVote);
 
     public bool CanSubmitVote => !Busy && IsVoteVisible && TryParseVoteInput(out _, out _);
 
@@ -324,6 +325,32 @@ public sealed class SessionViewModel : ObservableObject
         : null;
 
     public bool HasVoteSummary => !string.IsNullOrEmpty(VoteSummaryDisplay);
+
+    /// <summary>改票（ADR 0010）：重新打开投票录入，预填当前生效的票数。</summary>
+    public void BeginVoteCorrection()
+    {
+        if (_projection?.VoteSummary is not { Counts.Count: > 0 } vs) return;
+        _correctingVote = true;
+        VoteInput = string.Join(", ", vs.Counts.Select(c => $"{c.Option}={c.Count}"));
+        OnPropertyChanged(nameof(IsVoteVisible));
+        OnPropertyChanged(nameof(CanSubmitVote));
+    }
+
+    /// <summary>这一轮是改票：提交后不再请 DM 重新组织投票。</summary>
+    public bool LastVoteWasCorrection { get; private set; }
+
+    public Task RevertPhaseAsync() => ExecuteAsync(GameCommandType.RevertPhase);
+
+    /// <summary>上一环节的标题；第一个环节或没装载时为 null。</summary>
+    public string? PreviousPhaseTitle
+    {
+        get
+        {
+            if (_package is null || _projection is null) return null;
+            var i = _package.Phases.ToList().FindIndex(p => p.PhaseId == _projection.CurrentPhase.PhaseId);
+            return i <= 0 ? null : _package.Phases[i - 1].Title;
+        }
+    }
 
     // ===== 揭秘与复盘 =====
 
@@ -456,6 +483,7 @@ public sealed class SessionViewModel : ObservableObject
 
     public void Attach(ScriptPackage package, Session session)
     {
+        _correctingVote = false;
         _package = package;
         _projection = PublicSessionProjector.Project(package, session);
         RefreshView(package, _projection);
@@ -503,6 +531,7 @@ public sealed class SessionViewModel : ObservableObject
             {
                 case DispatchOutcome.Committed when result.Projection is not null:
                     _projection = result.Projection;
+                    if (type != GameCommandType.SubmitVoteSummary) { _correctingVote = false; }
                     RefreshView(_package, _projection);
                     Status = CommandStatus(type, _projection);
 
@@ -539,6 +568,7 @@ public sealed class SessionViewModel : ObservableObject
             GameCommandType.Pause => "本局已暂停，进度已保存。",
             GameCommandType.Resume => $"已继续，仍停在「{phase}」。",
             GameCommandType.Complete => "已进入复盘。",
+            GameCommandType.RevertPhase => $"已退回「{phase}」。",
             _ => "已提交。",
         };
     }
@@ -551,7 +581,14 @@ public sealed class SessionViewModel : ObservableObject
             return;
         }
 
+        LastVoteWasCorrection = _correctingVote;
+        var before = Revision;
         await ExecuteAsync(GameCommandType.SubmitVoteSummary, votes: votes);
+        if (Revision != before)
+        {
+            _correctingVote = false;
+            OnPropertyChanged(nameof(IsVoteVisible));
+        }
     }
 
     private async Task ReleaseMaterialsAsync()

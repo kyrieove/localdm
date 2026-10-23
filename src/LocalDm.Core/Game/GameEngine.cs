@@ -31,6 +31,7 @@ public static class GameEngine
             GameCommandType.Pause => Pause(current),
             GameCommandType.Resume => Resume(current, package),
             GameCommandType.Complete => Complete(current, package),
+            GameCommandType.RevertPhase => RevertPhase(current, package),
             _ => throw new DomainRuleException(DomainErrorCode.INVALID_INPUT, "未知命令类型。"),
         };
 
@@ -128,6 +129,26 @@ public static class GameEngine
         };
     }
 
+    /// <summary>
+    /// 退回上一环节（ADR 0010）：只在游戏中；已揭秘（Revealed/Completed）与暂停都不行。
+    /// 已发放的材料和票数记录不动：实体卡已经发到桌上了，票数改正另走重新提交。
+    /// </summary>
+    private static Session RevertPhase(Session current, ScriptPackage package)
+    {
+        if (current.State != SessionState.Playing)
+        {
+            throw new DomainRuleException(DomainErrorCode.PHASE_CONDITION_UNMET, "当前不在游戏中，不能退回。");
+        }
+
+        var index = IndexOfPhase(package, CurrentPhase(current, package).PhaseId);
+        if (index <= 0)
+        {
+            throw new DomainRuleException(DomainErrorCode.PHASE_CONDITION_UNMET, "已经是第一个环节，不能再退回。");
+        }
+
+        return current with { CurrentPhaseId = package.Phases[index - 1].PhaseId };
+    }
+
     private static Session ReleaseMaterials(Session current, ScriptPackage package, GameCommand command)
     {
         if (current.State != SessionState.Playing)
@@ -177,15 +198,16 @@ public static class GameEngine
             .Validate(package.PlayerCount);
 
         // 汇总绑定到这一轮：下一轮投票必须重新提交，历史按顺序留着。
+        var record = new PhaseVoteRecord { PhaseId = phase.PhaseId, Summary = votes };
+        var replaced = current.VoteHistory.Any(r => r.PhaseId == phase.PhaseId);
+        // 同一轮重新提交是改正：原位替换，历史里每一轮只留一条。
         return current with
         {
             VoteSummary = votes,
             VoteSummaryPhaseId = phase.PhaseId,
-            VoteHistory =
-            [
-                .. current.VoteHistory,
-                new PhaseVoteRecord { PhaseId = phase.PhaseId, Summary = votes },
-            ],
+            VoteHistory = replaced
+                ? [.. current.VoteHistory.Select(r => r.PhaseId == phase.PhaseId ? record : r)]
+                : [.. current.VoteHistory, record],
         };
     }
 

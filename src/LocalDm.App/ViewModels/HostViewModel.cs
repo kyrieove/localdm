@@ -57,6 +57,18 @@ public sealed class HostViewModel : ObservableObject, IDisposable
     private bool _isGenerating;
     private bool _isSpeaking;
     private bool _showMaterials;
+    private CorrectionKind? _pendingCorrection;
+    private int _pendingRevision;
+
+    public bool HasPendingCorrection => _pendingCorrection is not null;
+    public string PendingCorrectionText => _pendingCorrection switch
+    {
+        CorrectionKind.RevertPhase => $"DM 提议：回到上一环节「{_session.PreviousPhaseTitle}」。",
+        CorrectionKind.CorrectVote => "DM 提议：重新录入这一轮票数。",
+        _ => string.Empty,
+    };
+    public RelayCommand ConfirmCorrectionCommand { get; }
+    public RelayCommand DismissCorrectionCommand { get; }
 
     /// <summary>
     /// 当前这一轮请求的序号。停止时自增，让已经在飞的请求认输出局：
@@ -165,6 +177,8 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         ShowMaterialsCommand = new RelayCommand(() => { ShowMaterials = true; return Task.CompletedTask; });
         ShowConversationCommand = new RelayCommand(() => { ShowMaterials = false; return Task.CompletedTask; });
         CompactCommand = new RelayCommand(() => ManualCompactAsync(), () => CanCompact, allowReentry: true);
+        ConfirmCorrectionCommand = new RelayCommand(ConfirmCorrectionAsync, () => HasPendingCorrection && !_session.Busy);
+        DismissCorrectionCommand = new RelayCommand(() => { SetPendingCorrection(null); return Task.CompletedTask; });
 
         // 公开消息：桌上每落一条消息就往存档写一条，平板按序号取。
         // 存储不支持公开消息时（比如未接线）就完全不接这条线，不影响主持。
@@ -669,6 +683,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
     /// </summary>
     public async Task RestartPackageAsync(ScriptPackage package)
     {
+        SetPendingCorrection(null);
         if (_store is not SessionStore store)
         {
             Status = "当前没有可用存档。";
@@ -701,6 +716,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         string loadedStatus,
         string loadedPublic)
     {
+        SetPendingCorrection(null);
         BindConversationSession(session.SessionId);
 
         if (session.State == SessionState.Prepared)
@@ -976,10 +992,13 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (type == GameCommandType.SubmitVoteSummary && _session.LastVoteWasCorrection) { return; }
+
         var intent = type switch
         {
             GameCommandType.Start => HostNarrationIntent.AnnouncePhase,
             GameCommandType.Advance => HostNarrationIntent.AnnouncePhase,
+            GameCommandType.RevertPhase => HostNarrationIntent.AnnouncePhase,
             GameCommandType.ReleaseMaterials => HostNarrationIntent.ReleaseMaterials,
             GameCommandType.SubmitVoteSummary => HostNarrationIntent.CallVote,
             GameCommandType.Reveal => HostNarrationIntent.RevealTruth,
@@ -1279,6 +1298,10 @@ public sealed class HostViewModel : ObservableObject, IDisposable
                 return;
             }
 
+            var (shown, correction) = CorrectionProposal.Extract(reply);
+            reply = string.IsNullOrWhiteSpace(shown) ? "好的，请在电脑上确认。" : shown;
+            OfferCorrection(correction);
+
             // 模型拥有完整主持资料，自主组织对外回复；不把内部提示词直接显示或朗读。
             var message = AppendHost(reply);
 
@@ -1354,6 +1377,57 @@ public sealed class HostViewModel : ObservableObject, IDisposable
                 }
             }
         }
+    }
+
+    private void OfferCorrection(CorrectionKind? kind)
+    {
+        if (kind is null) return;
+        var canApply = kind switch
+        {
+            CorrectionKind.RevertPhase => _session.SessionStateText == "Playing" && _session.PreviousPhaseTitle is not null,
+            CorrectionKind.CorrectVote => _session.IsVotePhase && _session.HasVoteSummary && _session.SessionStateText == "Playing",
+            _ => false,
+        };
+        if (canApply)
+        {
+            _pendingRevision = _session.Revision;
+            SetPendingCorrection(kind);
+        }
+        else
+        {
+            AppendLocalHint("DM 提议的改正现在不能做，请直接在左侧操作。");
+            SetPendingCorrection(null); // 新提议做不了时，旧提议也撤掉，免得「确认」执行的是上一条
+        }
+    }
+
+    private async Task ConfirmCorrectionAsync()
+    {
+        if (_session.Busy || _pendingCorrection is null) return;
+        if (_session.Revision != _pendingRevision)
+        {
+            SetPendingCorrection(null);
+            AppendLocalHint("DM 提议的改正现在不能做，请直接在左侧操作。");
+            return;
+        }
+
+        var kind = _pendingCorrection;
+        SetPendingCorrection(null);
+        if (kind == CorrectionKind.RevertPhase)
+        {
+            await _session.RevertPhaseAsync();
+        }
+        else if (kind == CorrectionKind.CorrectVote)
+        {
+            _session.BeginVoteCorrection();
+        }
+    }
+
+    private void SetPendingCorrection(CorrectionKind? kind)
+    {
+        _pendingCorrection = kind;
+        OnPropertyChanged(nameof(HasPendingCorrection));
+        OnPropertyChanged(nameof(PendingCorrectionText));
+        ConfirmCorrectionCommand.RaiseCanExecuteChanged();
     }
 
     /// <summary>
@@ -1731,6 +1805,11 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(MaterialsTitle));
             OnPropertyChanged(nameof(HasMaterialsTab));
             OnPropertyChanged(nameof(RevealedText));
+        }
+        if (e.PropertyName == nameof(SessionViewModel.Busy)) { ConfirmCorrectionCommand.RaiseCanExecuteChanged(); }
+        if (e.PropertyName == nameof(SessionViewModel.Revision) && _pendingCorrection is not null && _session.Revision != _pendingRevision)
+        {
+            SetPendingCorrection(null); // 手动推进、改票等让状态变了：旧提议不能再作用到新环节
         }
     }
 

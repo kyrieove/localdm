@@ -773,6 +773,68 @@ public sealed class DmConversationTests : IDisposable
         Assert.Equal(conversation.CompactionCount, restored.CompactionCount);
     }
 
+    [Fact]
+    public async Task Model_proposed_revert_waits_for_confirmation_then_moves_back()
+    {
+        var gateway = new ScriptedGateway();
+        using var host = await NewHostAsync(gateway);
+        await host.LoadDemoAsync();
+        await host.Session.ExecuteAsync(GameCommandType.Start);
+        await WaitUntilAsync(() => !host.Session.Busy);
+        await host.Session.ExecuteAsync(GameCommandType.Advance);
+        await WaitUntilAsync(() => !host.Session.Busy);
+        var first = host.Session.Package!.Phases[0].PhaseId;
+
+        gateway.NextReply = "好的，刚才推进早了。\n" + CorrectionProposal.RevertTag;
+        await SendAsync(host, "刚才点错了，推进早了");
+
+        Assert.DoesNotContain("〔", host.Messages.Last(m => m.Author == ChatAuthor.Host).Text);
+        Assert.True(host.HasPendingCorrection);
+        Assert.NotEqual(first, host.Session.Session!.CurrentPhaseId);
+
+        await WaitUntilAsync(() => !host.Session.Busy);
+        host.ConfirmCorrectionCommand.Execute(null);
+        await WaitUntilAsync(() => host.Session.Session!.CurrentPhaseId == first);
+
+        Assert.Equal(first, host.Session.Session!.CurrentPhaseId);
+        Assert.False(host.HasPendingCorrection);
+        await WaitUntilAsync(() => !host.Session.Busy);
+    }
+
+    [Fact]
+    public async Task Pending_correction_waits_while_busy_and_expires_when_state_changes()
+    {
+        var gateway = new ScriptedGateway();
+        using var host = await NewHostAsync(gateway);
+        await host.LoadDemoAsync();
+        await host.Session.ExecuteAsync(GameCommandType.Start);
+        await WaitUntilAsync(() => !host.Session.Busy);
+        await host.Session.ExecuteAsync(GameCommandType.Advance);
+        await WaitUntilAsync(() => !host.Session.Busy);
+        var first = host.Session.Package!.Phases[0].PhaseId;
+
+        gateway.NextReply = "好的，刚才推进早了。\n" + CorrectionProposal.RevertTag;
+        await SendAsync(host, "刚才点错了，推进早了");
+
+        Assert.DoesNotContain("〔", host.Messages.Last(m => m.Author == ChatAuthor.Host).Text);
+        Assert.True(host.HasPendingCorrection);
+        Assert.NotEqual(first, host.Session.Session!.CurrentPhaseId);
+
+        await WaitUntilAsync(() => !host.Session.Busy);
+        host.Session.SetNarrationBusy(true);
+        Assert.False(host.ConfirmCorrectionCommand.CanExecute(null));
+        Assert.True(host.HasPendingCorrection);
+        host.Session.SetNarrationBusy(false);
+        Assert.True(host.ConfirmCorrectionCommand.CanExecute(null));
+
+        // 暂停一定会生效（这一环节还有材料没发，推进会被拒）：状态变了，旧提议作废
+        var before = host.Session.Revision;
+        await host.Session.ExecuteAsync(GameCommandType.Pause);
+        await WaitUntilAsync(() => !host.Session.Busy);
+        Assert.NotEqual(before, host.Session.Revision);
+        Assert.False(host.HasPendingCorrection);
+    }
+
     // ===== 夹具 =====
 
     private async Task<HostViewModel> NewHostAsync(ScriptedGateway gateway) =>
@@ -895,6 +957,8 @@ public sealed class DmConversationTests : IDisposable
     /// <summary>可控的假网关：用量可调、整理可失败、每轮回复可指定。</summary>
     private sealed class ScriptedGateway : IMagpieGateway
     {
+        public string? NextReply { get; set; }
+
         public List<MagpieCompletionRequest> Requests { get; } = [];
 
         /// <summary>
@@ -984,8 +1048,16 @@ public sealed class DmConversationTests : IDisposable
             20,
             null);
 
-        private string ReplyFor(MagpieCompletionRequest request) =>
-            IsCompaction(request) ? CompactionMemo : "这是测试用的公开主持文字。";
+        private string ReplyFor(MagpieCompletionRequest request)
+        {
+            if (!IsCompaction(request) && NextReply is { } reply)
+            {
+                NextReply = null;
+                return reply;
+            }
+
+            return IsCompaction(request) ? CompactionMemo : "这是测试用的公开主持文字。";
+        }
     }
 
     private sealed class SilentTts : ITtsService

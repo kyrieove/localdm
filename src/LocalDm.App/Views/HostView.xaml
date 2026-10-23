@@ -373,10 +373,29 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
+                <Border Grid.Row="0" Margin="0,0,0,10" Padding="14,10" CornerRadius="6"
+                        Background="{StaticResource SealWash}" BorderBrush="#FFD8C8A7" BorderThickness="1"
+                        Visibility="{Binding HasPendingCorrection, Converter={StaticResource BoolToVisibility}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding PendingCorrectionText}" TextWrapping="Wrap" />
+                        <Button Grid.Column="1" x:Name="ConfirmCorrectionButton" Content="确认"
+                                Command="{Binding ConfirmCorrectionCommand}" Style="{StaticResource SealButton}"
+                                Padding="12,6" Margin="8,0,0,0" />
+                        <Button Grid.Column="2" Content="不用" Command="{Binding DismissCorrectionCommand}"
+                                Style="{StaticResource QuietButton}" Padding="12,6" Margin="6,0,0,0" />
+                    </Grid>
+                </Border>
+
                 <!-- 快捷意图：只在对话里用得上，待开局和忙碌时不摆 -->
-                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10"
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10"
                             Visibility="{Binding ShowSuggestions, Converter={StaticResource BoolToVisibility}}">
                     <Button x:Name="AskStatusButton" Content="现在该做什么？"
                             Command="{Binding AskStatusCommand}" Style="{StaticResource TopBarButton}"
@@ -386,7 +405,7 @@
                             BorderBrush="{StaticResource Rule}" BorderThickness="1" />
                 </StackPanel>
 
-                <Border Grid.Row="1" Style="{StaticResource ComposerFrame}">
+                <Border Grid.Row="2" Style="{StaticResource ComposerFrame}">
                     <StackPanel>
                         <Grid>
                             <TextBox x:Name="InputBox"
@@ -474,7 +493,7 @@
                     </StackPanel>
                 </Border>
 
-                <Grid Grid.Row="2" Margin="2,9,2,0">
+                <Grid Grid.Row="3" Margin="2,9,2,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />

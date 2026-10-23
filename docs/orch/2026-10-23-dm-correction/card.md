@@ -229,3 +229,15 @@ read-only: `stories/`, `.local/`
 - 系统提示词前 9 条一个字都不改；不为任何一本剧本写专属规则。
 - 不在左栏加常驻的「退回」或「改票」按钮。
 - 如果 `LocalDm.UiTests` 报 `address already in use` 端口 5188 被占用，不要改代码；在回复里写明是端口被占用。
+
+## Acceptance
+- verdict: accepted
+- files: .specify/memory/constitution.md, docs/decisions/0010-model-proposed-corrections.md, src/LocalDm.App/ViewModels/HostViewModel.cs, src/LocalDm.App/ViewModels/SessionViewModel.cs, src/LocalDm.App/Views/HostView.xaml, src/LocalDm.Core/Domain/GameModels.cs, src/LocalDm.Core/Game/GameEngine.cs, src/LocalDm.Core/Hosting/CorrectionProposal.cs, src/LocalDm.Core/Hosting/HostNarration.cs, tests/LocalDm.Tests/CorrectionProposalTests.cs, tests/LocalDm.Tests/DmConversationTests.cs, tests/LocalDm.Tests/PhaseFlowTests.cs
+- check: `pwsh -NoProfile -Command 'dotnet build LocalDm.slnx -nologo -v q -warnaserror; if ($LASTEXITCODE) { exit 1 }; dotnet test tests/LocalDm.Tests -nologo -v q; if ($LASTEXITCODE) { exit 1 }; dotnet test tests/LocalDm.UiTests -nologo -v q; exit $LASTEXITCODE'` → exit 1 (run by run-card)
+- tokens:
+  - round 1: exec gpt-6.1-sol: fresh 88k, cached 946k, out 11k  (codex-dm-correction.jsonl)
+- review findings: 1 real / 0 false positive / 1 missed (medium, no review)
+- claude fix: 卡片第 8 步新测试写错——演示剧本第 2 环节有未发材料，推进被拒、Revision 不变；改用 `Pause` 让状态一定变化，并断言 Revision 确实变了
+- claude fix: 按 sol 审查，`OfferCorrection` 新提议做不了时调 `SetPendingCorrection(null)` 撤掉旧提议，免得「确认」执行上一条
+- env: 工作树缺不入库的 fixtures/synthetic/.private/expected.json，用 scripts/sync-local-fixtures.ps1 补齐
+- recompute (Claude 独立，一次性测试，已删): 搜证环节发 M1、M2 → 推进到 phase-discuss → RevertPhase：CurrentPhaseId = phase-search、Revision +1、M1/M2 仍在、ReleasedMaterialIds 不变；揭秘后 RevertPhase 抛 PHASE_CONDITION_UNMET。通过。

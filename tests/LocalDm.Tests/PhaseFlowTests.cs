@@ -678,4 +678,64 @@ public sealed class PhaseFlowTests
         Assert.Contains(PublicAction.ReleaseMaterials, searchPhase.AllowedActions);
         Assert.Empty(searchPhase.MaterialIds);
     }
+    [Fact]
+    public void Revert_moves_back_one_phase_and_keeps_released_materials()
+    {
+        var current = AdvancedTo(3);
+        var reverted = GameEngine.Apply(current, Package,
+            SyntheticPackage.Command(GameCommandType.RevertPhase, current.Revision, "op-revert"));
+
+        Assert.Equal("phase-search", reverted.CurrentPhaseId);
+        Assert.Equal(current.Revision + 1, reverted.Revision);
+        Assert.Equal(current.ReleasedMaterialIds, reverted.ReleasedMaterialIds);
+    }
+
+    [Fact]
+    public void Revert_on_first_phase_is_rejected()
+    {
+        var current = Started();
+        var ex = Assert.Throws<DomainRuleException>(() => GameEngine.Apply(current, Package,
+            SyntheticPackage.Command(GameCommandType.RevertPhase, current.Revision, "op-revert-first")));
+
+        Assert.Equal(DomainErrorCode.PHASE_CONDITION_UNMET, ex.Code);
+    }
+
+    [Fact]
+    public void Revert_after_reveal_is_rejected()
+    {
+        var current = RevealPhase();
+        var ex = Assert.Throws<DomainRuleException>(() => GameEngine.Apply(current, Package,
+            SyntheticPackage.Command(GameCommandType.RevertPhase, current.Revision, "op-revert-revealed")));
+
+        Assert.Equal(DomainErrorCode.PHASE_CONDITION_UNMET, ex.Code);
+    }
+
+    [Fact]
+    public void Revert_while_paused_is_rejected()
+    {
+        var current = AdvancedTo(2);
+        var paused = GameEngine.Apply(current, Package,
+            SyntheticPackage.Command(GameCommandType.Pause, current.Revision, "op-pause-revert"));
+        var ex = Assert.Throws<DomainRuleException>(() => GameEngine.Apply(paused, Package,
+            SyntheticPackage.Command(GameCommandType.RevertPhase, paused.Revision, "op-revert-paused")));
+
+        Assert.Equal(DomainErrorCode.PHASE_CONDITION_UNMET, ex.Code);
+    }
+
+    [Fact]
+    public void Resubmitting_votes_in_the_same_phase_replaces_that_round()
+    {
+        var current = AdvancedTo(4);
+        current = GameEngine.Apply(current, Package,
+            SyntheticPackage.Command(GameCommandType.SubmitVoteSummary, current.Revision, "op-first-votes",
+                votes: Votes(("A", 3), ("B", 2))));
+        var corrected = GameEngine.Apply(current, Package,
+            SyntheticPackage.Command(GameCommandType.SubmitVoteSummary, current.Revision, "op-correct-votes",
+                votes: Votes(("A", 2), ("B", 3))));
+
+        var record = Assert.Single(corrected.VoteHistory);
+        Assert.Equal("phase-vote", record.PhaseId);
+        Assert.Equal(new[] { ("A", 2), ("B", 3) }, record.Summary.Counts.Select(c => (c.Option, c.Count)));
+        Assert.Equal(new[] { ("A", 2), ("B", 3) }, corrected.VoteSummary!.Counts.Select(c => (c.Option, c.Count)));
+    }
 }
