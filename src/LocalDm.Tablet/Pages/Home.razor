@@ -163,7 +163,7 @@
                     @if (session.SelectedCardId is not null)
                     {
                         <figure class="shot">
-                            <img src="/tablet/cards/@Uri.EscapeDataString(session.SelectedCardId)/front" alt="线索卡" />
+                            <img src="/tablet/cards/@Uri.EscapeDataString(session.SelectedCardId)/front" alt="线索卡" @onclick="() => OpenCardAsync(session.SelectedCardId!)" />
                         </figure>
                     }
                     else
@@ -259,12 +259,13 @@
     }
 
     /// <summary>读公开消息。空的一段就说实话：还没有公开消息。</summary>
-    private async Task LoadPublicFeedAsync()
+    private async Task LoadPublicFeedAsync(bool notify = false)
     {
         try
         {
             var generation = State.ContentGeneration;
             var snapshot = await Feed.ReadAsync(_publicSequence, _feedCancellation.Token);
+            var reset = false;
             if (snapshot.SessionId != _publicSessionId || generation != _feedGeneration)
             {
                 _publicSessionId = snapshot.SessionId;
@@ -272,11 +273,24 @@
                 _publicSequence = 0;
                 PublicFeed.Clear();
                 snapshot = await Feed.ReadAsync(0, _feedCancellation.Token);
+                reset = true;
             }
-            PublicFeed.AddRange(snapshot.Messages.Where(m => m.Sequence > _publicSequence)
-                .Select(m => (Kind: KindOf(m.Kind), Text: m.Text)));
+            var fresh = snapshot.Messages.Where(m => m.Sequence > _publicSequence)
+                .Select(m => (Kind: KindOf(m.Kind), Text: m.Text)).ToList();
+            PublicFeed.AddRange(fresh);
             _publicSequence = snapshot.NextSequence;
             _feedFailed = false;
+
+            if (notify && !reset)
+            {
+                var candidate = fresh.LastOrDefault(m => m.Kind is "host" or "event");
+                if (candidate.Text is { } text)
+                {
+                    try { await Js.InvokeVoidAsync("tabletViewer.notify", text); }
+                    catch (JSDisconnectedException) { }
+                    catch (InvalidOperationException) { }
+                }
+            }
         }
         catch (OperationCanceledException) when (_feedCancellation.IsCancellationRequested) { }
         catch (Exception) { _feedFailed = true; }
@@ -300,7 +314,7 @@
         {
             while (await timer.WaitForNextTickAsync(_feedCancellation.Token))
             {
-                await InvokeAsync(LoadPublicFeedAsync);
+                await InvokeAsync(() => LoadPublicFeedAsync(notify: true));
             }
         }
         catch (OperationCanceledException) when (_feedCancellation.IsCancellationRequested) { }
@@ -348,6 +362,8 @@
         State.Session(_sessionKey).SelectedCardId = cardId;
         TabletSessions.RaiseChanged();
     }
+
+    private Task OpenCardAsync(string cardId) => Js.InvokeVoidAsync("tabletViewer.open", new[] { $"/tablet/cards/{Uri.EscapeDataString(cardId)}/front" }, 0, true, null).AsTask();
 
     private void SaveProgress(ReadingProgressUpdate update)
     {

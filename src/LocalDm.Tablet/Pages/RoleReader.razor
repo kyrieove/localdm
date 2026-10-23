@@ -60,7 +60,8 @@
                 <div class="source-pages @(SourcePageEnd == SourcePage ? "single" : "")">
                     @for (var pg = SourcePage; pg <= SourcePageEnd; pg++)
                     {
-                        <img src="@(SourceUrlPrefix + pg)" alt="@(SourceOnly ? RoleName : "本人角色本")原稿第 @pg 页" />
+                        var page = pg;
+                        <img src="@(SourceUrlPrefix + page)" alt="@(SourceOnly ? RoleName : "本人角色本")原稿第 @(page) 页" @onclick="() => OpenViewerAsync(page)" />
                     }
                 </div>
                 <figcaption>原稿第 @SourcePageLabel 页，保留原文文字、颜色与排版。</figcaption>
@@ -270,9 +271,29 @@
         _needsPagination = true;
     }
 
+    private async Task OpenViewerAsync(int page)
+    {
+        _reference ??= DotNetObjectReference.Create(this);
+        var urls = Enumerable.Range(1, SourcePageCount).Select(p => SourceUrlPrefix + p).ToArray();
+        await Js.InvokeVoidAsync("tabletViewer.open", urls, page - 1, false, _reference);
+    }
+
+    [JSInvokable]
+    public Task ViewerClosed(int page) => InvokeAsync(async () =>
+    {
+        var start = SourceSpread.StartFor(SourcePage, page, _activeSettings.Columns, SourcePageCount);
+        if (start != SourcePage)
+        {
+            _activeSettings = _activeSettings with { SourcePageNumber = start };
+            await OnProgress.InvokeAsync(new ReadingProgressUpdate(_offset, _activeSettings));
+        }
+        StateHasChanged();
+    });
+
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
+        try { await Js.InvokeVoidAsync("tabletViewer.close"); } catch (JSDisconnectedException) { }
         if (_mounted)
         {
             try { await Js.InvokeVoidAsync("tabletReader.reset"); }
