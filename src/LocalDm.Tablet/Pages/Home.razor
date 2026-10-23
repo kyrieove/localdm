@@ -7,6 +7,7 @@
 @inject IJSRuntime Js
 @inject IPublicFeedSource Feed
 @inject TabletSpeechService Speech
+@inject ITabletUiSource Ui
 @implements IAsyncDisposable
 @* 交互渲染模式必须显式声明：只注册 AddInteractiveServerComponents 不会让按钮生效。 *@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
@@ -142,24 +143,7 @@
             }
             else
             {
-                <section class="public">
-                    <h2>公共对话</h2>
-                    <p class="lead">全桌可见。推进、投票和揭秘在电脑上完成。</p>
-                    @if (PublicFeed.Count == 0)
-                    {
-                        <p class="lead">@(_publicSessionId.Length == 0 ? "电脑尚未接入本局公开对话。" : "本局还没有公开消息，电脑上的公开发言会自动显示在这里。")</p>
-                    }
-                    @if (_feedFailed)
-                    {
-                        <p class="lead">公开对话暂时未同步，正在重试。</p>
-                    }
-                    <ol class="feed">
-                        @foreach (var line in PublicFeed)
-                        {
-                            <li class="@line.Kind">@line.Text</li>
-                        }
-                    </ol>
-                </section>
+                <LiveBoard Ui="_ui" Lines="PublicFeed" FeedConnected="@(_publicSessionId.Length != 0)" FeedFailed="_feedFailed" />
             }
         </div>
     }
@@ -177,6 +161,8 @@
     private bool _claimFailed;
     private bool _copied;
     private bool _copyFailed;
+
+    private TabletUiProjection? _ui;
 
     private string _sessionKey = string.Empty;
     private bool _hostBusy;
@@ -231,6 +217,13 @@
         }
         catch (OperationCanceledException) when (_feedCancellation.IsCancellationRequested) { }
         catch (Exception) { _feedFailed = true; }
+        // 界面投影只取环节与按钮状态；公开消息已由上面的来源累积，这里不再用 Messages。
+        try
+        {
+            _ui = await Ui.ReadAsync(_publicSequence, Speech.HostBusy, Speech.HostSpeaking, _feedCancellation.Token);
+        }
+        catch (OperationCanceledException) when (_feedCancellation.IsCancellationRequested) { }
+        catch (Exception) { _ui = null; }
         // 输入条在所有页签都显示，每轮轮询都顺手刷新主持状态并重画。
         _hostBusy = Speech.HostBusy;
         _hostSpeaking = Speech.HostSpeaking;

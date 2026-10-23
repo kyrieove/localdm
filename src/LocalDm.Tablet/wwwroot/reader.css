@@ -479,3 +479,27 @@ html, body { font-size: 16px; -webkit-text-size-adjust: 100%; }
     .speech-row { flex-direction: column; align-items: stretch; }
     .speech-actions button { flex: 1; }
 }
+
+/* ===== 公共对话镜像 ===== */
+.board { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 24px; align-items: start; }
+.board-main { min-width: 0; }
+.board-rail { position: sticky; top: 120px; border: 1px solid var(--rule); background: var(--paper); border-radius: 10px; padding: 16px; }
+.board-oneline { display: none; margin: 0; font: 500 15px/1.6 var(--serif); }
+.board-title { font: 500 16px/1.5 var(--serif); margin: 0 0 10px; }
+.board-phases { list-style: none; margin: 0 0 12px; padding: 0; }
+.board-phases li { padding: 8px 0 8px 12px; border-left: 2px solid var(--rule); color: var(--muted); font-size: 14px; }
+.board-phases li.done { color: var(--ink-soft); }
+.board-phases li.current { color: var(--ink); font-weight: 600; border-left-color: var(--seal); }
+.board-hint, .board-meta { font-size: 13px; color: var(--ink-soft); line-height: 1.8; margin: 0 0 10px; }
+.board-controls { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.board-control { min-height: 44px; border: 1px solid var(--rule); background: var(--paper-deep); color: var(--muted); border-radius: 8px; padding: 0 14px; text-align: left; opacity: 1; cursor: default; }
+.board-note { font-size: 12px; color: var(--muted); margin: 0; }
+.board-reveal { border-top: 1px solid var(--rule); margin-top: 10px; padding-top: 10px; font-size: 14px; line-height: 1.9; }
+.board-wait { margin-top: 8px; }
+@media (max-width: 900px) {
+    .board { grid-template-columns: 1fr; gap: 12px; }
+    .board-rail { position: static; padding: 10px 14px; }
+    .board-oneline { display: block; }
+    .board-full { display: none; }
+}
+

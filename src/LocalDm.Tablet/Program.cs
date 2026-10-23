@@ -33,7 +33,8 @@ var app = TabletWebHost.Create(
     source,
     args,
     Directory.GetCurrentDirectory(),
-    content is SpikeTabletContent ? new SpikeTabletSpeech() : null);
+    content is SpikeTabletContent ? new SpikeTabletSpeech() : null,
+    ui: content is SpikeTabletContent ? new SpikeTabletUiSource(source) : (ITabletUiSource?)null);
 app.Run();
 // 合成材料：6 个角色、6 张卡（含两张同名卡，用来验证同名不串图）。
 static TabletSpikeData BuildSpikeData()

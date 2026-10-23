@@ -1,0 +1,93 @@
+@using LocalDm.Core.Domain
+@using LocalDm.Core.Tablet
+
+<section class="public">
+    <h2>公共对话</h2>
+    @if (Ui is null)
+    {
+        <p class="lead board-wait">等待主持人开始这一局</p>
+    }
+    else
+    {
+        <div class="board">
+            <aside class="board-rail" aria-label="本局进度">
+                <p class="board-oneline">@Ui.PhaseTitle · 第 @Ui.PhaseIndex/@Ui.PhaseCount 环节</p>
+                <div class="board-full">
+                    <p class="board-title">@Ui.Title</p>
+                    <ol class="board-phases">
+                        @foreach (var phase in Ui.Phases)
+                        {
+                            <li class="@PhaseClass(phase.Status)" aria-current="@(phase.Status == TabletUiPhaseStatus.Current ? "step" : null)">@phase.Title</li>
+                        }
+                    </ol>
+                    @if (!string.IsNullOrWhiteSpace(Ui.Hint))
+                    {
+                        <p class="board-hint">@Ui.Hint</p>
+                    }
+                    <div class="board-controls">
+                        @foreach (var control in Ui.Controls.Where(c => c.Visible))
+                        {
+                            <button type="button" class="board-control" disabled>@control.Label</button>
+                        }
+                        <p class="board-note">@Ui.ControlsNote</p>
+                    </div>
+                    @if (Ui.PendingMaterialCount > 0 || Ui.ReleasedMaterialCount > 0)
+                    {
+                        <p class="board-meta">待放出材料 @Ui.PendingMaterialCount · 已放出 @Ui.ReleasedMaterialCount</p>
+                    }
+                    @if (Ui.VoteSummary is { } vote)
+                    {
+                        <p class="board-meta">投票汇总：@string.Join("，", vote.Counts.Select(c => $"{c.Option} {c.Count} 票")) · 共 @vote.TotalVotes 票</p>
+                    }
+                    @if (Ui.RevealedTexts is { Count: > 0 } revealed)
+                    {
+                        <div class="board-reveal">
+                            @foreach (var text in revealed)
+                            {
+                                <p>@text</p>
+                            }
+                        </div>
+                    }
+                </div>
+            </aside>
+            <div class="board-main">
+                @FeedBlock
+            </div>
+        </div>
+    }
+    @if (Ui is null)
+    {
+        @FeedBlock
+    }
+</section>
+
+@code {
+    [Parameter] public TabletUiProjection? Ui { get; set; }
+    [Parameter] public IReadOnlyList<(string Kind, string Text)> Lines { get; set; } = [];
+    [Parameter] public bool FeedConnected { get; set; }
+    [Parameter] public bool FeedFailed { get; set; }
+
+    private static string PhaseClass(TabletUiPhaseStatus status) => status switch
+    {
+        TabletUiPhaseStatus.Done => "done",
+        TabletUiPhaseStatus.Current => "current",
+        _ => "upcoming",
+    };
+
+    private RenderFragment FeedBlock => @<text>
+        @if (Lines.Count == 0)
+        {
+            <p class="lead">@(FeedConnected ? "本局还没有公开消息，电脑上的公开发言会自动显示在这里。" : "电脑尚未接入本局公开对话。")</p>
+        }
+        @if (FeedFailed)
+        {
+            <p class="lead">公开对话暂时未同步，正在重试。</p>
+        }
+        <ol class="feed">
+            @foreach (var line in Lines)
+            {
+                <li class="@line.Kind">@line.Text</li>
+            }
+        </ol>
+    </text>;
+}
