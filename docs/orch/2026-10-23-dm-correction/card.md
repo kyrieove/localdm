@@ -8,7 +8,7 @@
 5. 构建 0 警告，`LocalDm.Tests` 与 `LocalDm.UiTests` 全部通过，含下面新增的测试。
 
 ## Risk
-high — 改的是规则核心的状态迁移（`GameEngine`），后面每一局都依赖它。Claude 验收时独立核对：用 `SyntheticPackage` 从 `AdvancedTo(3)` 退回，`CurrentPhaseId` 必须是 `phase-search`、Revision 加 1、`ReleasedMaterialIds` 不变；还要核对 `phase-reveal` 揭秘后退回被拒绝。
+medium — （用户 2026-10-24 要求跳过第三次审卡，按 medium 派；验收仍按 high 独立核对）改的是规则核心的状态迁移（`GameEngine`），后面每一局都依赖它。Claude 验收时独立核对：用 `SyntheticPackage` 从 `AdvancedTo(3)` 退回，`CurrentPhaseId` 必须是 `phase-search`、Revision 加 1、`ReleasedMaterialIds` 不变；还要核对 `phase-reveal` 揭秘后退回被拒绝。
 
 ## Parameters
 - 新枚举值：`GameCommandType.RevertPhase = 8`（`src/LocalDm.Core/Domain/GameModels.cs:168` 的枚举末尾）。
