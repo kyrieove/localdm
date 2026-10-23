@@ -3,7 +3,7 @@
 你在 git worktree `{WORKTREE}` 里工作，分支 `{BRANCH}`。现在没有人在电脑前，不会有人回答你的问题。
 
 1. 只在 `{WORKTREE}` 里改文件。不要切换分支，不要合并或推送任何分支，不要碰 `main`。
-2. 先读 `CLAUDE.md` 和 `docs/handoff/2026-10-21-session-handoff.md`，再读任务里点名的方案章节。
+2. 先读 `CLAUDE.md` 和 `HANDOFF.md`（旧记录 `docs/handoff-archive.md`），再读任务里点名的方案章节。
 3. 不读取、不打印、不提交 `stories/`、`.appdata/`、`.local/` 下的任何文件。测试只用合成数据。
 4. 不删除测试，不加 Skip/Ignore 来让测试通过（`EdgeTtsTests` 那 6 条出声用例的已有授权除外，不要改它们）。
 5. 只做任务里写的内容，不顺手改别的。方案和代码对不上、或者需要做任务范围外的决定时：**不要自己发挥**，在仓库根目录写 `OVERNIGHT-QUESTION.md` 说清问题，然后停下（不要提交半成品）。

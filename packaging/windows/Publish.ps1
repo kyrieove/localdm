@@ -19,6 +19,10 @@ $publishDir = Join-Path $repo 'artifacts\publish\win-x64'
 $artifacts = Join-Path $repo 'artifacts'
 $zipPath = Join-Path $artifacts 'LocalDm-win-x64.zip'
 
+# -r win-x64 会往 packages.lock.json 加一个 target 弄脏主树，发布后还原。
+$locks = Get-ChildItem -Path $repo -Recurse -Filter packages.lock.json | Where-Object { $_.FullName -notmatch '[\\/](bin|obj|node_modules)[\\/]' }
+$lockBytes = @{}
+foreach ($l in $locks) { $lockBytes[$l.FullName] = [IO.File]::ReadAllBytes($l.FullName) }
 Write-Host "==> dotnet publish (self-contained win-x64)" -ForegroundColor Cyan
 dotnet publish (Join-Path $repo 'src\LocalDm.App\LocalDm.App.csproj') `
     -c $Configuration `
@@ -27,6 +31,7 @@ dotnet publish (Join-Path $repo 'src\LocalDm.App\LocalDm.App.csproj') `
     -p:PublishProfile=WinX64 `
     -p:PublishDir="$publishDir\" | Out-Host
 
+foreach ($k in $lockBytes.Keys) { [IO.File]::WriteAllBytes($k, $lockBytes[$k]) }
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE" }
 if (-not (Test-Path (Join-Path $publishDir 'LocalDm.exe'))) { throw 'LocalDm.exe missing from publish output' }
 

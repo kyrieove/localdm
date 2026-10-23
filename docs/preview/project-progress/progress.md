@@ -54,4 +54,4 @@ lang: zh
 
 > 🧠 **From Hindsight memory (Initiatives and enhancements)** — 五步导入、对话记忆和独立平板服务已有历史记录。本页以当前源码和交接记录核对状态。
 
-来源：docs/handoff/2026-10-21-session-handoff.md、docs/project-state.md、docs/reviews/2026-10-22-three-agent-acceptance.md、平板验收记录。
+来源：docs/handoff-archive.md、docs/project-state.md、docs/reviews/2026-10-22-three-agent-acceptance.md、平板验收记录。

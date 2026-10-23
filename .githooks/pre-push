@@ -1,0 +1,6 @@
+#!/bin/sh
+# 推送前全绿：构建 + 两个测试项目（与 CLAUDE.md「提交前」同一套）。启用：git config core.hooksPath .githooks
+set -e
+dotnet build LocalDm.slnx --nologo -v q
+dotnet test tests/LocalDm.Tests --nologo -v q
+dotnet test tests/LocalDm.UiTests --nologo -v q

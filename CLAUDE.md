@@ -2,7 +2,7 @@
 
 Windows 单电脑剧本杀 AI 主持软件（.NET 10 + WPF），通过本机 Windows Magpie 调用模型。
 
-**接手前先读 `docs/handoff/2026-10-21-session-handoff.md`**：里面有用户已确认的需求、工作方式、已完成的工作和下一步要做的事。
+**接手前先读根目录 `HANDOFF.md`**（从哪接着干）；用户已确认的需求和旧记录在 `docs/handoff-archive.md`，踩过的坑在 `LESSONS.md`。
 
 ## 必须遵守
 
