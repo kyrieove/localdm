@@ -47,7 +47,7 @@ medium — 只新增探针工具和测试，不动软件本体。
 
 ## Files
 may change: `tools/LocalDm.Probe/PlaytestProbe.cs`, `tools/LocalDm.Probe/Program.cs`, `tools/LocalDm.Probe/DmAcceptanceProbe.cs`, `tests/LocalDm.Tests/PlaytestProbeTests.cs`
-read-only: `stories/`, `.local/`, `src/`
+read-only: `stories/`, `.local/`
 
 ## Steps (N = 6)
 1. `tools/LocalDm.Probe/DmAcceptanceProbe.cs`：只改可见性，函数体一字不动。把下列方法的 `private static` 改成 `internal static`：
