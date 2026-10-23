@@ -60,3 +60,12 @@ may change: `src/LocalDm.App/ViewModels/HostViewModel.cs`, `src/LocalDm.App/View
 - 不装全局键盘钩子；不碰设置页、发送链路、朗读链路。
 - Run scripts in the foreground and wait; before replying, stop any background task still running.
 - No rm, no git push, no git checkout . / restore . / reset --hard.
+
+## Acceptance
+- verdict: accepted
+- files: src/LocalDm.App/AppComposition.cs, src/LocalDm.App/ViewModels/HostViewModel.cs, src/LocalDm.App/Views/HostView.xaml, src/LocalDm.App/Views/HostView.xaml.cs, src/LocalDm.Core/Domain/ToolSettings.cs, tests/LocalDm.UiTests/DictationUiTests.cs
+- check: `dotnet test tests/LocalDm.UiTests --filter-class "LocalDm.UiTests.DictationUiTests"` → exit 0 (run by run-card)
+- claude fix: 测试等待上限 3 秒改为按真实时间 2 秒（DictationUiTests.WaitUntilAsync）。recheck exit=0。deferred: ToggleDictationAsync 里 StartAsync 若抛异常 _dictationBusy 不会复位（服务已自行捕获，P3）。
+- tokens:
+  - round 1: exec custom-local:antigravity/gemini-3.8-flash: fresh 266k, cached 5428k, out 15k  (agy-dictation-ui.jsonl) · review gpt-6.1-sol: fresh 86k, cached 683k, out 2k  (codex-review-dictation-ui.jsonl)
+- review findings: 1 real / 0 false positive / 0 missed (medium, gpt-6.1-sol)

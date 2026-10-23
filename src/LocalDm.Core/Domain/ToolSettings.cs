@@ -66,7 +66,7 @@ public sealed record ToolSettings
     /// <summary>加减一次的步长。</summary>
     public const double UiScaleStep = 0.1;
 
-    public const string DefaultInputHint = "聚焦本框后使用 OpenLess 转写，回车发送，Shift+Enter 换行。";
+    public const string DefaultInputHint = "回车发送，Shift+Enter 换行；点右侧麦克风或按右 Alt 语音输入。";
 
     public static readonly Uri DefaultMagpieUri = new("http://127.0.0.1:3425/");
 

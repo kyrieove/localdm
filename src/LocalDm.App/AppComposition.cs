@@ -11,6 +11,7 @@ using LocalDm.Infrastructure.Import;
 using LocalDm.Infrastructure.Magpie;
 using LocalDm.Infrastructure.Storage;
 using LocalDm.Infrastructure.Voice;
+using LocalDm.Infrastructure.Voice.Dictation;
 
 namespace LocalDm.App;
 
@@ -22,6 +23,7 @@ public sealed class AppComposition : IDisposable
 {
     private readonly SessionContext _context;
     private readonly Task _ttsWarmup;
+    private IDictationService? _dictation;
     private HostViewModel? _host;
     private TabletJoinViewModel? _tablet;
     private LibraryViewModel? _library;
@@ -101,6 +103,7 @@ public sealed class AppComposition : IDisposable
 
         var setup = new SetupViewModel(Settings, Magpie, Tts, Director);
         var dispatcher = new LocalDm.Core.Game.CommandDispatcher(_context.Store);
+        _dictation = new DictationService(new DictationModelStore(_context.DataRoot));
         var host = new HostViewModel(
             Director,
             // 每次都从磁盘读当前设置：设置页刚保存的 model ID 立刻生效
@@ -124,7 +127,8 @@ public sealed class AppComposition : IDisposable
                     System.Diagnostics.Debug.WriteLine("[Settings] 保存音色失败：" + ex.Message);
                     return "设置文件写入失败";
                 }
-            });
+            },
+            _dictation);
         var library = new LibraryViewModel(Path.Combine(_context.DataRoot, "packages"));
         _host = host;
         var tablet = new TabletJoinViewModel(new CurrentSessionPublicFeedSource(
@@ -366,6 +370,7 @@ public sealed class AppComposition : IDisposable
             Task.Run(async () => await _tablet.DisposeAsync()).GetAwaiter().GetResult();
         }
         _host?.Dispose();
+        _dictation?.Dispose();
         Tts.Dispose();
         Magpie.Dispose();
         _context.Dispose();

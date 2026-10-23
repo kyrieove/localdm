@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows.Threading;
 using LocalDm.App.Demo;
 using LocalDm.Core.Domain;
 using LocalDm.Core.Game;
@@ -40,6 +41,11 @@ public sealed class HostViewModel : ObservableObject, IDisposable
     /// 落盘失败必须由调用方展示给主持人，不能静默吞掉。
     /// </summary>
     private readonly Func<string, string?>? _onVoiceChanged;
+    private readonly IDictationService? _dictation;
+    private bool _dictationBusy;
+    private DispatcherTimer? _dictationTimer;
+    private bool _isListening;
+    private string _dictationHint = "";
 
     private string? _selectedVoiceId;
 
@@ -68,7 +74,8 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         CommandDispatcher? dispatcher = null,
         ISessionStore? store = null,
         ITtsService? tts = null,
-        Func<string, string?>? onVoiceChanged = null)
+        Func<string, string?>? onVoiceChanged = null,
+        IDictationService? dictation = null)
     {
         _director = director;
         _settingsProvider = settingsProvider;
@@ -77,6 +84,12 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         _store = store;
         _tts = tts;
         _onVoiceChanged = onVoiceChanged;
+        _dictation = dictation;
+
+        if (_dictation is not null)
+        {
+            _dictation.Progress += text => DictationHint = text;
+        }
 
         // 枚举音色可能因为语音组件异常而失败：不能让整个主持台构造不出来。
         try
@@ -170,6 +183,11 @@ public sealed class HostViewModel : ObservableObject, IDisposable
                 return Task.CompletedTask;
             },
             () => HasPublicSyncError);
+
+        ToggleDictationCommand = new RelayCommand(
+            ToggleDictationAsync,
+            () => _dictation is not null,
+            allowReentry: true);
     }
 
     public ObservableCollection<VoiceOption> AvailableVoices { get; } = [];
@@ -265,6 +283,32 @@ public sealed class HostViewModel : ObservableObject, IDisposable
     public bool ShowStop => IsBusy;
 
     public bool CanSend => !IsBusy && !string.IsNullOrWhiteSpace(InputText);
+
+    public bool DictationAvailable => _dictation is not null;
+
+    public bool IsListening
+    {
+        get => _isListening;
+        private set => SetProperty(ref _isListening, value);
+    }
+
+    public string DictationHint
+    {
+        get => _dictationHint;
+        private set
+        {
+            if (SetProperty(ref _dictationHint, value))
+            {
+                OnPropertyChanged(nameof(HasDictationHint));
+            }
+        }
+    }
+
+    public bool HasDictationHint => DictationHint.Length > 0;
+
+    public TimeSpan DictationLimit { get; set; } = TimeSpan.FromSeconds(60);
+
+    public RelayCommand ToggleDictationCommand { get; }
 
     /// <summary>回复生成后是否自动朗读；读的是设置页那一份，改了立刻生效。</summary>
     public bool AutoRead => _settingsProvider()?.AutoRead ?? true;
@@ -1620,11 +1664,72 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         AppendLocalHint(message);
     }
 
+    private async Task ToggleDictationAsync()
+    {
+        if (_dictation is null || _dictationBusy)
+        {
+            return;
+        }
+
+        if (!IsListening)
+        {
+            _tts?.Stop();
+            DictationHint = "";
+            _dictationBusy = true;
+            var problem = await _dictation.StartAsync(CancellationToken.None);
+            _dictationBusy = false;
+            if (problem is not null)
+            {
+                DictationHint = problem;
+                return;
+            }
+
+            IsListening = true;
+            DictationHint = "正在听…";
+            _dictationTimer = new DispatcherTimer { Interval = DictationLimit };
+            _dictationTimer.Tick += (_, _) => _ = StopDictationAsync();
+            _dictationTimer.Start();
+        }
+        else
+        {
+            await StopDictationAsync();
+        }
+    }
+
+    private async Task StopDictationAsync()
+    {
+        if (!IsListening)
+        {
+            return;
+        }
+
+        _dictationTimer?.Stop();
+        _dictationTimer = null;
+        IsListening = false;
+        _dictationBusy = true;
+        DictationHint = "正在识别…";
+        var result = await _dictation!.StopAsync(CancellationToken.None);
+        _dictationBusy = false;
+        if (!string.IsNullOrEmpty(result.Text))
+        {
+            InputText = string.IsNullOrWhiteSpace(InputText)
+                ? result.Text
+                : InputText.TrimEnd() + " " + result.Text;
+            DictationHint = "";
+        }
+        else
+        {
+            DictationHint = result.Problem ?? "";
+        }
+    }
+
     /// <summary>
     /// 释放状态条的计时器。
     /// </summary>
     public void Dispose()
     {
+        _dictationTimer?.Stop();
+        _dictationTimer = null;
         Activity.Dispose();
     }
 

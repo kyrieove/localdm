@@ -11,12 +11,64 @@ namespace LocalDm.App.Views;
 public partial class HostView : UserControl
 {
     private HostViewModel? _host;
+    private Window? _window;
 
     public HostView()
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
-        Unloaded += (_, _) => Detach();
+        Loaded += (_, _) => AttachWindowKeys();
+        Unloaded += (_, _) =>
+        {
+            Detach();
+            DetachWindowKeys();
+        };
+    }
+
+    private void AttachWindowKeys()
+    {
+        _window = Window.GetWindow(this);
+        if (_window is not null)
+        {
+            _window.PreviewKeyDown += OnWindowPreviewKeyDown;
+            _window.PreviewKeyUp += OnWindowPreviewKeyUp;
+        }
+    }
+
+    private void DetachWindowKeys()
+    {
+        if (_window is not null)
+        {
+            _window.PreviewKeyDown -= OnWindowPreviewKeyDown;
+            _window.PreviewKeyUp -= OnWindowPreviewKeyUp;
+            _window = null;
+        }
+    }
+
+    private static bool IsRightAlt(KeyEventArgs e) => (e.Key == Key.System ? e.SystemKey : e.Key) == Key.RightAlt;
+
+    private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (IsRightAlt(e))
+        {
+            if (!e.IsRepeat && DataContext is HostViewModel vm && vm.ToggleDictationCommand.CanExecute(null))
+            {
+                e.Handled = true;
+                vm.ToggleDictationCommand.Execute(null);
+            }
+            else
+            {
+                e.Handled = true;
+            }
+        }
+    }
+
+    private void OnWindowPreviewKeyUp(object sender, KeyEventArgs e)
+    {
+        if (IsRightAlt(e))
+        {
+            e.Handled = true;
+        }
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)

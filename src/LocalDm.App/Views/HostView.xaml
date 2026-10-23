@@ -425,20 +425,48 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
 
                             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding ComposerHint}" Style="{StaticResource ChatMeta}"
                                            VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding DictationHint}" Style="{StaticResource ChatMeta}"
+                                           Margin="12,0,0,0" Foreground="{StaticResource Seal}"
+                                           VerticalAlignment="Center"
+                                           AutomationProperties.AutomationId="DictationHint"
+                                           Visibility="{Binding HasDictationHint, Converter={StaticResource BoolToVisibility}}" />
                             </StackPanel>
 
+                            <Button x:Name="DictationButton" Grid.Column="1"
+                                    Margin="0,0,8,0" FontFamily="Segoe MDL2 Assets"
+                                    Content="&#xE720;" Command="{Binding ToggleDictationCommand}"
+                                    AutomationProperties.AutomationId="DictationButton"
+                                    ToolTip="语音输入（右 Alt）"
+                                    Visibility="{Binding DictationAvailable, Converter={StaticResource BoolToVisibility}}">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource SendButton}">
+                                        <Setter Property="Background" Value="{StaticResource PaperDim}" />
+                                        <Setter Property="BorderBrush" Value="{StaticResource Silver}" />
+                                        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsListening}" Value="True">
+                                                <Setter Property="Background" Value="{StaticResource Seal}" />
+                                                <Setter Property="BorderBrush" Value="{StaticResource Seal}" />
+                                                <Setter Property="Foreground" Value="White" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
                             <!-- 停止随忙碌出现；空输入时发送不可点 -->
-                            <Button x:Name="StopButton" Grid.Column="1" Content="■"
+                            <Button x:Name="StopButton" Grid.Column="2" Content="■"
                                     Command="{Binding StopCommand}" Style="{StaticResource SendButton}"
                                     Background="{StaticResource Ink}" BorderBrush="{StaticResource Ink}"
                                     ToolTip="停止生成或朗读"
                                     Visibility="{Binding ShowStop, Converter={StaticResource BoolToVisibility}}" />
-                            <Button x:Name="SendButton" Grid.Column="1" Content="↑"
+                            <Button x:Name="SendButton" Grid.Column="2" Content="↑"
                                     Command="{Binding SendCommand}" Style="{StaticResource SendButton}"
                                     IsEnabled="{Binding CanSend}" ToolTip="发送（Enter）"
                                     Visibility="{Binding ShowStop, Converter={StaticResource InverseBoolToVisibility}}" />
