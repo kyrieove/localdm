@@ -8,8 +8,7 @@
 
 ## 下一步
 1. 实机（只有用户能做）：`启动本局测试.cmd` 开一局，iPad 和安卓平板各扫码，验证发言和整套界面（「公共对话」页签），把设备型号、系统、浏览器版本、结果写进 `docs/evidence/tablet/` 新文件。
-2. 修 `tools/tablet-qr/verify-reader.mjs`：它假定阅读器默认是文字重排，现在合成数据带原稿页、默认显示原稿，第 26 行 `tabletReader.total()>0` 超时（HEAD 上同样失败，与本卡无关）。
-3. 探针怎么跑：在 `src/LocalDm.Tablet` 目录里 `ASPNETCORE_ENVIRONMENT=Development dotnet run --no-build -- --urls http://127.0.0.1:5099`（Production 下不映射 Blazor 脚本，页面空白；从仓库根目录启动内容根不对，静态文件 404），再 `node tools/tablet-qr/verify-ui.mjs --playwright-module <playwright 目录>`；每次探针要重启服务以释放已认领角色。
+2. 探针怎么跑（`verify-reader.mjs` 已改为先确认原稿模式再点「文字重排」，11 项全过）：在 `src/LocalDm.Tablet` 目录里 `ASPNETCORE_ENVIRONMENT=Development dotnet run --no-build -- --urls http://127.0.0.1:5099`（Production 下不映射 Blazor 脚本，页面空白；从仓库根目录启动内容根不对，静态文件 404），再 `node tools/tablet-qr/verify-ui.mjs`（或 `verify-reader.mjs`）`--playwright-module <playwright 目录>`；每次探针要重启服务以释放已认领角色。
 
 ## 先读
 - `docs/decisions/0008-tablet-ui-mirror.md`、`docs/decisions/0007-tablet-live-chat.md`

@@ -23,6 +23,10 @@ try {
   const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
   await page.goto(base.href, { waitUntil: 'domcontentloaded' });
   await page.locator('.role-list button').first().click();
+  // 有原稿页的角色本默认显示原稿；先确认原稿模式，再切到文字重排验证排版。
+  await page.locator('.reader.source-mode').waitFor();
+  await page.getByRole('button', { name: '文字重排', exact: true }).click();
+  await page.locator('.reader.text-mode').waitFor();
   await page.waitForFunction(() => window.tabletReader?.total() > 0);
   assert.match(await page.locator('.crumb').innerText(), /合成角色 1/);
   const book = await page.evaluate(() => fetch('/tablet/role/book').then(r => r.json()));
@@ -68,7 +72,7 @@ try {
   const otherPage = await other.newPage(); await otherPage.goto(base.href, { waitUntil: 'domcontentloaded' });
   await otherPage.locator('.role-list button').first().waitFor();
   assert(await otherPage.locator('.role-list button').first().isDisabled());
-  await otherPage.locator('.role-list button').nth(1).click(); await otherPage.waitForFunction(() => window.tabletReader?.total() > 0);
+  await otherPage.locator('.role-list button').nth(1).click(); await otherPage.locator('.reader.source-mode').waitFor();
   const source = p => p.evaluate(() => fetch('/tablet/role/source/2').then(r => r.arrayBuffer()).then(b => Array.from(new Uint8Array(b))));
   assert.notDeepEqual(await source(page), await source(otherPage));
   assert.equal((await otherPage.evaluate(() => fetch('/tablet/role/progress').then(r => r.json()))).characterOffset, 0);
