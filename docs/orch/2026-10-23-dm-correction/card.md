@@ -189,7 +189,7 @@ read-only: `stories/`, `.local/`
      - `ScriptedGateway` 加 `public string? NextReply { get; set; }`。`ReplyFor`（第 987 行）改成：不是整理请求、且 `NextReply` 不为 null 时，返回它并把它置回 null；否则保持原样。
      - 新增 `[Fact] Model_proposed_revert_waits_for_confirmation_then_moves_back`：
        1. `NewHostAsync(gateway)`，`await host.LoadDemoAsync()`。
-       2. `await host.Session.ExecuteAsync(GameCommandType.Start)`，再 `await host.Session.ExecuteAsync(GameCommandType.Advance)`。
+       2. `await host.Session.ExecuteAsync(GameCommandType.Start)`，`await WaitUntilAsync(() => !host.Session.Busy);`（开局播报是异步的，忙着时推进会被拒绝），再 `await host.Session.ExecuteAsync(GameCommandType.Advance)`。
        3. `await WaitUntilAsync(() => !host.Session.Busy)`，记下 `var first = host.Session.Package!.Phases[0].PhaseId;`。
        4. `gateway.NextReply = "好的，刚才推进早了。\n" + CorrectionProposal.RevertTag;`，然后 `await SendAsync(host, "刚才点错了，推进早了");`。
        5. 断言：最后一条 `Author == ChatAuthor.Host` 的消息 `Text` 不含 `"〔"`；`host.HasPendingCorrection` 为 true；`host.Session.Session!.CurrentPhaseId` 还不等于 `first`（确认前没动）。
