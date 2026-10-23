@@ -20,7 +20,8 @@ public static class ScriptValidator
         IReadOnlyList<CanonicalSegment> segments,
         IReadOnlyList<KeyFact> keyFacts,
         bool toolComplete,
-        bool continuationPending)
+        bool continuationPending,
+        IReadOnlySet<(string FileId, int PageNumber)>? declaredIgnoredPages = null)
     {
         var issues = new List<string>();
         var coverage = new List<FilePageCoverage>();
@@ -32,11 +33,14 @@ public static class ScriptValidator
 
         foreach (var file in files)
         {
-            var processed = spans
+            var textPages = spans
                 .Where(s => s.FileId == file.FileId)
                 .Select(s => s.PageNumber)
-                .Distinct()
-                .Count();
+                .ToHashSet();
+            // 人明确声明「不入包」的页（封底、纯插图）没有文字也算覆盖到了：是人确认过它不属于剧本。
+            var declared = Enumerable.Range(1, file.PageCount)
+                .Count(page => !textPages.Contains(page) && declaredIgnoredPages?.Contains((file.FileId, page)) == true);
+            var processed = textPages.Count + declared;
             coverage.Add(new FilePageCoverage
             {
                 FileId = file.FileId,

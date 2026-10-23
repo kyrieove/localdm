@@ -86,6 +86,28 @@ public sealed class PdfPageImportTests : IDisposable
         Assert.Equal(3, coverage.ProcessedPages);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_page_without_text_blocks_start_until_it_is_declared_not_in_the_package(bool declared)
+    {
+        var story = NewStory();
+        WritePdf(Path.Combine(story, "组织", "手册.pdf"), pages: 3);
+        var service = NewService(new FakeExtractor(blankPage: 3));
+
+        var extraction = await service.ExtractAsync(story, service.Scan(story).Groups, null, TestContext.Current.CancellationToken);
+        var result = await service.BuildAsync(
+            extraction,
+            "合成测试剧本",
+            4,
+            MinimalFlow(organizerGroup: "手册", ignoredPages: declared ? [3] : []),
+            TestContext.Current.CancellationToken);
+
+        var readiness = result.Build.Readiness;
+        Assert.Equal(declared, readiness.CanStart);
+        Assert.Equal(!declared, readiness.IssueCategories.Contains("PAGE_COVERAGE_INCOMPLETE"));
+    }
+
     [Fact]
     public void Group_page_count_sums_pdf_pages_and_image_pages()
     {
@@ -277,14 +299,14 @@ public sealed class PdfPageImportTests : IDisposable
         return path;
     }
 
-    private ScriptFlow MinimalFlow(string organizerGroup) =>
+    private ScriptFlow MinimalFlow(string organizerGroup, IReadOnlyList<int>? ignoredPages = null) =>
         new()
         {
             Layering = new ScriptLayering
             {
                 OrganizerGroup = organizerGroup,
                 TruthPages = [1],
-                IgnoredPages = [],
+                IgnoredPages = ignoredPages ?? [],
                 PublicPages = [],
             },
             Steps =
@@ -324,7 +346,7 @@ public sealed class PdfPageImportTests : IDisposable
     /// 假识别：PDF 每页回两段文字（块 0、块 1），图片一页回一段。
     /// 页号从 1 开始，与真实识别一致；文字里带页号，便于断言「跨页没有混在一起」。
     /// </summary>
-    private sealed class FakeExtractor : IPageExtractor
+    private sealed class FakeExtractor(int? blankPage = null) : IPageExtractor
     {
         public Task<ToolIdentity> GetIdentityAsync(CancellationToken cancellationToken) =>
             Task.FromResult(new ToolIdentity { Tool = "fake-mineru", Version = "1.0", AppOwnedHome = "fake-home" });
@@ -348,6 +370,11 @@ public sealed class PdfPageImportTests : IDisposable
             var spans = new List<SourceSpan>();
             for (var page = 1; page <= pageCount; page++)
             {
+                if (page == blankPage)
+                {
+                    continue;
+                }
+
                 var blocks = isPdf ? 2 : 1;
                 for (var block = 0; block < blocks; block++)
                 {

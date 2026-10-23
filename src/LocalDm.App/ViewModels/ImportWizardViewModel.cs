@@ -248,6 +248,8 @@ public sealed class ImportLayeringPageRow : ObservableObject
 {
     private string _layer;
 
+    public event EventHandler? Changed;
+
     public ImportLayeringPageRow(int pageNumber, string layer)
     {
         PageNumber = pageNumber;
@@ -255,6 +257,9 @@ public sealed class ImportLayeringPageRow : ObservableObject
     }
 
     public int PageNumber { get; }
+
+    /// <summary>这一页没有识别到文字；只有人把它改成「不入包」才算确认过。</summary>
+    public bool HasNoText { get; init; }
 
     public string PageLabel => $"第 {PageNumber} 页";
 
@@ -264,7 +269,13 @@ public sealed class ImportLayeringPageRow : ObservableObject
     public string Layer
     {
         get => _layer;
-        set => SetProperty(ref _layer, value);
+        set
+        {
+            if (SetProperty(ref _layer, value))
+            {
+                Changed?.Invoke(this, EventArgs.Empty);
+            }
+        }
     }
 }
 
@@ -437,6 +448,21 @@ public sealed class ImportWizardViewModel : ObservableObject
     {
         get => _layeringSummary;
         private set => SetProperty(ref _layeringSummary, value);
+    }
+
+    /// <summary>没识别到文字、还没确认的手册页；全部确认后为空。</summary>
+    public string LayeringNotice
+    {
+        get
+        {
+            var pending = LayeringPages
+                .Where(page => page.HasNoText && page.Layer != "不入包")
+                .Select(page => page.PageNumber)
+                .ToArray();
+            return pending.Length == 0
+                ? string.Empty
+                : $"{RangeText(pending)}没有识别到文字：确认没有内容的话，把它改成「不入包」，否则这本不能开局。";
+        }
     }
 
     /// <summary>⑤ 页的就绪结论：只列类别与分组名。</summary>
@@ -796,6 +822,22 @@ public sealed class ImportWizardViewModel : ObservableObject
             .Select(page => page.PageNumber)
             .OrderBy(page => page)
             .ToArray() ?? [];
+
+        // 没识别到文字的页（封底、纯插图）也列出来，由人改成「不入包」确认放行；默认不放行。
+        // shortcut: 只对 PDF 手册按文件内页号补页；手册是多个图片文件时没有这样的页号。
+        var organizerFileIds = _extraction?.Pages
+            .Where(page => string.Equals(page.Group, OrganizerGroupName, StringComparison.Ordinal))
+            .Select(page => page.FileId)
+            .ToHashSet(StringComparer.Ordinal) ?? [];
+        var noTextPages = _extraction?.Sources
+            .Where(file => organizerFileIds.Contains(file.FileId) && ScriptFileTypes.IsPdf(file.PrivatePath))
+            .SelectMany(file => Enumerable.Range(1, file.PageCount))
+            .Except(organizerPages)
+            .Distinct()
+            .OrderBy(page => page)
+            .ToArray() ?? [];
+        organizerPages = [.. organizerPages.Concat(noTextPages).OrderBy(page => page)];
+
         foreach (var page in organizerPages)
         {
             var layer = truthPages.Contains(page)
@@ -803,10 +845,13 @@ public sealed class ImportWizardViewModel : ObservableObject
                 : ignoredPages.Contains(page)
                     ? "不入包"
                     : "主持人专用";
-            LayeringPages.Add(new ImportLayeringPageRow(page, layer));
+            var row = new ImportLayeringPageRow(page, layer) { HasNoText = noTextPages.Contains(page) };
+            row.Changed += (_, _) => OnPropertyChanged(nameof(LayeringNotice));
+            LayeringPages.Add(row);
         }
 
         LayeringSummary = BuildLayeringSummary(organizerPages.Length, truthPages, ignoredPages);
+        OnPropertyChanged(nameof(LayeringNotice));
     }
 
     private static string BuildLayeringSummary(

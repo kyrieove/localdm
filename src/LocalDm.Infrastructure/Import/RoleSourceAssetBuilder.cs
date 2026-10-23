@@ -94,19 +94,10 @@ public static class RoleSourceAssetBuilder
 
             if (extension == ".pdf")
             {
-                using var stream = new InMemoryRandomAccessStream();
-                await stream.WriteAsync(sourceBytes.AsBuffer());
-                stream.Seek(0);
-                var document = await PdfDocument.LoadFromStreamAsync(stream);
-                if (document.PageCount != file.PageCount)
+                var rendered = await RenderPagesAsync(file, sourceBytes, filePages.Select(page => page.PageNumber));
+                foreach (var (pageNumber, png) in rendered)
                 {
-                    throw new InvalidDataException($"角色来源文件 {file.FileId} 的页数与冻结记录不符。");
-                }
-
-                foreach (var page in filePages)
-                {
-                    var png = await RenderPdfPageAsync(document, page.PageNumber - 1);
-                    assets.Add(WriteAsset(assetRoot, file, page.PageNumber, ".png", png));
+                    assets.Add(WriteAsset(assetRoot, file, pageNumber, ".png", png));
                 }
             }
             else if (extension is ".png" or ".jpg" or ".jpeg" or ".webp")
@@ -128,6 +119,45 @@ public static class RoleSourceAssetBuilder
         }
 
         return assets;
+    }
+
+    /// <summary>
+    /// Renders the given pages of a frozen PDF to PNG (same recipe as role pages), verifying the source hash first.
+    /// </summary>
+    internal static IReadOnlyList<(int PageNumber, byte[] Png)> RenderPdfPages(
+        SourceFile file,
+        IReadOnlyList<int> pageNumbers)
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763))
+        {
+            throw new PlatformNotSupportedException("PDF 原稿需要 Windows 10 1809 或更新版本。");
+        }
+
+        var sourceBytes = ReadAndVerify(file);
+        return Task.Run(() => RenderPagesAsync(file, sourceBytes, pageNumbers)).GetAwaiter().GetResult();
+    }
+
+    private static async Task<IReadOnlyList<(int PageNumber, byte[] Png)>> RenderPagesAsync(
+        SourceFile file,
+        byte[] sourceBytes,
+        IEnumerable<int> pageNumbers)
+    {
+        using var stream = new InMemoryRandomAccessStream();
+        await stream.WriteAsync(sourceBytes.AsBuffer());
+        stream.Seek(0);
+        var document = await PdfDocument.LoadFromStreamAsync(stream);
+        if (document.PageCount != file.PageCount)
+        {
+            throw new InvalidDataException($"来源文件 {file.FileId} 的页数与冻结记录不符。");
+        }
+
+        var rendered = new List<(int, byte[])>();
+        foreach (var pageNumber in pageNumbers)
+        {
+            rendered.Add((pageNumber, await RenderPdfPageAsync(document, pageNumber - 1)));
+        }
+
+        return rendered;
     }
 
     private static byte[] ReadAndVerify(SourceFile file)

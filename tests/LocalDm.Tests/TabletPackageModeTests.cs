@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Text.Json;
 using LocalDm.Core.Domain;
 using LocalDm.Core.Import;
+using LocalDm.Core.Tablet;
 using LocalDm.Infrastructure.Import;
 
 namespace LocalDm.Tests;
@@ -175,7 +176,22 @@ public sealed class TabletPackageModeTests : IDisposable
         Assert.Same(original, TabletMaterials.Ensure(original, packagePath));
     }
 
-    private const string SyntheticRoleBookPageText = "这是合成角色本第一页的文字。";
+    [Fact]
+    public void An_old_version_sidecar_is_prepared_again()
+    {
+        var (packagePath, _) = PrepareSyntheticPackage();
+        var bare = JsonSerializer.Deserialize<ScriptPackage>(File.ReadAllText(packagePath))! with { Tablet = null };
+        TabletMaterials.Ensure(bare, packagePath);
+        var sidecar = Path.Combine(_root, "assets", bare.PackageId + ".tablet.json");
+        var stale = JsonSerializer.Deserialize<TabletManifest>(File.ReadAllText(sidecar))! with { ManifestVersion = 1 };
+        File.WriteAllText(sidecar, JsonSerializer.Serialize(stale));
+
+        var again = TabletMaterials.Ensure(bare, packagePath);
+
+        Assert.Equal(TabletManifest.CurrentManifestVersion, again.Tablet!.ManifestVersion);
+    }
+
+    private const string SyntheticRoleBookPageText ="这是合成角色本第一页的文字。";
 
     /// <summary>
     /// 造一份合成冻结包：1 个角色（2 页）、1 组线索卡（1 张卡，正反面各一个文件），

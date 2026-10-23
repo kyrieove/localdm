@@ -213,7 +213,8 @@ public static class RealScriptPackageBuilder
             segments,
             keyFacts,
             toolComplete: true,
-            continuationPending: false);
+            continuationPending: false,
+            DeclaredIgnoredPages(pages, flow));
 
         // 流程没有来源依据就不许开局：宁可停在 NeedsReview，也不要替剧本编一个默认流程。
         // 这里不给 ScriptValidator 加新参数，是因为「流程是否已声明」是装配阶段的事实。
@@ -407,6 +408,29 @@ public static class RealScriptPackageBuilder
     }
 
     /// <summary>把一条阻塞问题并进就绪报告：CanStart 归零，状态降为 NeedsReview。</summary>
+    /// <summary>
+    /// 流程声明里手册的「不入包」页，换算成（文件, 页号）交给校验：这些页没有文字也不算漏页。
+    /// shortcut: 页号按 PDF 文件内的页号对；手册是多个图片文件时页号是文件名编号，这里对不上，不会放行。
+    /// </summary>
+    private static HashSet<(string FileId, int PageNumber)> DeclaredIgnoredPages(
+        IReadOnlyList<ExtractedPage> pages,
+        ScriptFlow? flow)
+    {
+        if (flow?.Layering is not { OrganizerGroup: { } group } layering || layering.IgnoredPages.Count == 0)
+        {
+            return [];
+        }
+
+        return
+        [
+            .. pages
+                .Where(page => string.Equals(page.Group, group, StringComparison.Ordinal))
+                .Select(page => page.FileId)
+                .Distinct(StringComparer.Ordinal)
+                .SelectMany(fileId => layering.IgnoredPages.Select(page => (fileId, page))),
+        ];
+    }
+
     private static ReadinessReport Blocked(ReadinessReport report, string issue) => report with
     {
         CanStart = false,

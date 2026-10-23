@@ -14,7 +14,7 @@ namespace LocalDm.Core.Tablet;
 /// </summary>
 public sealed record TabletManifest
 {
-    public const int CurrentManifestVersion = 1;
+    public const int CurrentManifestVersion = 2;
 
     public required int ManifestVersion { get; init; }
 

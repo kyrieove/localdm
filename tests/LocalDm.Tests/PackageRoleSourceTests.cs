@@ -354,7 +354,7 @@ public sealed class PackageRoleSourceTests : IDisposable
         return TestPngWriter.Encode(pixels, 20, 12);
     }
 
-    private static void WriteTwoPagePdf(string path)
+    internal static void WriteTwoPagePdf(string path)
     {
         var builder = new StringBuilder("%PDF-1.4\n");
         var offsets = new List<long> { 0, builder.Length };

@@ -51,6 +51,50 @@ public sealed class TabletPackagePreparerTests : IDisposable
     }
 
     [Fact]
+    public void A_pdf_group_becomes_one_ready_card_per_page_without_confirmation()
+    {
+        var pdfPath = Path.Combine(_root, "round.pdf");
+        PackageRoleSourceTests.WriteTwoPagePdf(pdfPath);
+        var package = CreatePackage(("round", "1.png", 1));
+        var pdf = package.SourceFiles[0] with
+        {
+            FileId = "pdf-file",
+            PrivatePath = pdfPath,
+            ContentHash = TabletAssetBuilder.ComputeFileHash(pdfPath),
+            PageCount = 2,
+        };
+        // 识别只在第 1 页找到两块文字：材料里同一个 PDF 重复出现，第 2 页没有 span，也必须出卡。
+        var first = package.Spans[0] with { FileId = pdf.FileId };
+        var second = first with { SpanId = "span-1", BlockNumber = 2 };
+        package = package with
+        {
+            SourceFiles = [pdf],
+            Spans = [first, second],
+            Materials = [package.Materials[0] with { SourceSpanIds = [first.SpanId, second.SpanId] }],
+        };
+
+        var manifest = TabletPackagePreparer.Prepare(package, Path.Combine(_root, "assets"));
+
+        Assert.True(manifest.Groups["round"].IsReady);
+        Assert.Equal(["第 1 页", "第 2 页"], manifest.Cards.Values.OrderBy(c => c.SourceOrder).Select(c => c.DisplayName));
+        Assert.All(manifest.Cards.Values, card =>
+        {
+            Assert.Equal(TabletCardPreparationState.Ready, card.PreparationState);
+            Assert.Null(card.BackAssetId);
+        });
+        var assets = manifest.Assets.Values.OrderBy(a => a.SourcePageNumber).ToArray();
+        Assert.Equal([1, 2], assets.Select(a => a.SourcePageNumber));
+        Assert.All(assets, asset =>
+        {
+            Assert.Equal(TabletAssetKind.CardFront, asset.Kind);
+            Assert.EndsWith(".png", asset.RelativePath);
+        });
+        var bytes = assets.Select(a => File.ReadAllBytes(Path.Combine(
+            _root, "assets", manifest.AssetRootFingerprint, a.RelativePath.Replace('/', Path.DirectorySeparatorChar)))).ToArray();
+        Assert.False(bytes[0].SequenceEqual(bytes[1]));
+    }
+
+    [Fact]
     public void Confirmed_single_card_group_materializes_its_card()
     {
         var package = CreatePackage(("clues", "1.png", 7));

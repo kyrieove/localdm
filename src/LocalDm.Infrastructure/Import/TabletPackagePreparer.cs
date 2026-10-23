@@ -16,6 +16,9 @@ namespace LocalDm.Infrastructure.Import;
 /// </summary>
 public static class TabletPackagePreparer
 {
+    /// <summary>PDF 页卡的渲染配方，进资产指纹：换配方就换资产目录。</summary>
+    private const string PdfPageRecipe = "pdf-page-card-v1|Windows.Data.Pdf-192dpi-PNG";
+
     /// <summary>
     /// 准备清单并把资产落盘。
     ///
@@ -58,6 +61,14 @@ public static class TabletPackagePreparer
                 .Where(f => f is not null)
                 .Select(f => f!)
                 .ToArray();
+
+            // shortcut: 只有整组都是 PDF 才按页出卡；PDF 与图片混放的组仍走下面的配对，会判配不上，遇到再拆。
+            var distinctFiles = groupFiles.DistinctBy(f => f.FileId).ToArray();
+            if (distinctFiles.Length > 0 && distinctFiles.All(f => ScriptFileTypes.IsPdf(f.PrivatePath)))
+            {
+                PlanPdfPages(material.MaterialId, distinctFiles, plans, cards, groups);
+                continue;
+            }
 
             var candidates = TabletAssetBuilder.PairSingleCards(groupFiles.Select(f => f.PrivatePath).ToArray());
             var notReady = 0;
@@ -248,14 +259,27 @@ public static class TabletPackagePreparer
             assets.Add(roleAsset.AssetId, roleAsset);
         }
 
+        // PDF 每个文件只打开一次，把用到的页一起渲染。
+        var renderedPages = plans
+            .Where(plan => plan.PdfSource is not null)
+            .GroupBy(plan => plan.PdfSource!.FileId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => RoleSourceAssetBuilder
+                    .RenderPdfPages(group.First().PdfSource!, [.. group.Select(plan => plan.PdfPage)])
+                    .ToDictionary(page => page.PageNumber, page => page.Png),
+                StringComparer.Ordinal);
+
         foreach (var plan in plans)
         {
-            var front = TabletAssetBuilder.MaterializeSingle(
-                assetRoot,
-                plan.FrontAssetId,
-                plan.SourceFileId,
-                plan.FrontPath,
-                TabletAssetKind.CardFront);
+            var front = plan.PdfSource is { } pdf
+                ? WritePdfPageAsset(assetRoot, plan, pdf, renderedPages[pdf.FileId][plan.PdfPage])
+                : TabletAssetBuilder.MaterializeSingle(
+                    assetRoot,
+                    plan.FrontAssetId,
+                    plan.SourceFileId,
+                    plan.FrontPath,
+                    TabletAssetKind.CardFront);
             assets.Add(plan.FrontAssetId, front);
 
             if (plan.BackAssetId is not null
@@ -314,6 +338,98 @@ public static class TabletPackagePreparer
 
         lines.Sort(StringComparer.Ordinal);
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', lines))));
+    }
+
+    /// <summary>
+    /// 整组都是 PDF 的材料组：每一页就是一张单页卡，没有卡背，也没有切片要确认。
+    /// 卡名只用页序，不取识别出来的文字，避免泄露内容。
+    /// </summary>
+    private static void PlanPdfPages(
+        string materialId,
+        IReadOnlyList<SourceFile> pdfs,
+        List<CardPlan> plans,
+        Dictionary<string, TabletCard> cards,
+        Dictionary<string, TabletGroupPreparationState> groups)
+    {
+        var order = 0;
+        var notReady = 0;
+        foreach (var pdf in pdfs)
+        {
+            // 源文件被换过就不能分发：包里记的是旧 hash。
+            var intact = File.Exists(pdf.PrivatePath)
+                && string.Equals(
+                    TabletAssetBuilder.ComputeFileHash(pdf.PrivatePath),
+                    pdf.ContentHash,
+                    StringComparison.OrdinalIgnoreCase);
+
+            for (var page = 1; page <= pdf.PageCount; page++)
+            {
+                order++;
+                var cardId = CardId(materialId, order);
+                var frontAssetId = cardId + "-front";
+                var sourceName = Path.GetFileNameWithoutExtension(pdf.PrivatePath);
+                if (!intact)
+                {
+                    notReady++;
+                    cards[cardId] = new TabletCard
+                    {
+                        CardId = cardId,
+                        DisplayName = $"第 {order} 页",
+                        GroupName = materialId,
+                        SourceOrder = order,
+                        FrontAssetId = frontAssetId,
+                        BackAssetId = null,
+                        PreparationState = TabletCardPreparationState.NotReady,
+                        NotReadyReason = TabletNotReadyReason.AssetMissing,
+                        SourceFileName = sourceName,
+                    };
+                    continue;
+                }
+
+                plans.Add(new CardPlan
+                {
+                    CardId = cardId,
+                    GroupName = materialId,
+                    SourceOrder = order,
+                    DisplayName = $"第 {order} 页",
+                    SourceFileId = pdf.FileId,
+                    SourceFileName = sourceName,
+                    FrontAssetId = frontAssetId,
+                    FrontPath = pdf.PrivatePath,
+                    FrontHash = $"{pdf.ContentHash}#p{page}|{PdfPageRecipe}",
+                    FrontRelativePath = TabletAssetBuilder.SingleAssetRelativePath(frontAssetId, "png"),
+                    FrontExtension = "png",
+                    PdfSource = pdf,
+                    PdfPage = page,
+                });
+            }
+        }
+
+        groups[materialId] = new TabletGroupPreparationState
+        {
+            GroupName = materialId,
+            Readiness = notReady == 0 && order > 0 ? TabletGroupReadiness.Ready : TabletGroupReadiness.NotReady,
+            Reason = notReady == 0 && order > 0 ? null : TabletNotReadyReason.AssetMissing,
+            NotReadyCardCount = notReady,
+        };
+    }
+
+    private static TabletAsset WritePdfPageAsset(string assetRoot, CardPlan plan, SourceFile pdf, byte[] png)
+    {
+        var file = Path.Combine(assetRoot, plan.FrontRelativePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllBytes(file, png);
+
+        return new TabletAsset
+        {
+            AssetId = plan.FrontAssetId,
+            RelativePath = plan.FrontRelativePath,
+            ContentHash = PngCodec.Sha256(png),
+            Kind = TabletAssetKind.CardFront,
+            SourceFileId = pdf.FileId,
+            SourceContentHash = pdf.ContentHash,
+            SourcePageNumber = plan.PdfPage,
+        };
     }
 
     private static void EnsureUniqueRelativePaths(IReadOnlyList<string> paths)
@@ -385,5 +501,7 @@ public static class TabletPackagePreparer
         public string? BackHash { get; set; }
         public string? BackRelativePath { get; set; }
         public string? BackExtension { get; set; }
+        public SourceFile? PdfSource { get; init; }
+        public int PdfPage { get; init; }
     }
 }

@@ -110,6 +110,10 @@
                 <TextBlock x:Name="LayeringSummaryLabel" Text="{Binding LayeringSummary}"
                            Style="{StaticResource ChatMeta}" Margin="0,14,0,0" TextWrapping="Wrap" />
 
+                <TextBlock x:Name="LayeringNoticeLabel" Text="{Binding LayeringNotice}"
+                           Style="{StaticResource ChatMeta}" Foreground="#FF9A4A2E" Margin="0,6,0,0"
+                           TextWrapping="Wrap" />
+
                 <ItemsControl x:Name="FlowStepList" ItemsSource="{Binding FlowSteps}" Margin="0,10,0,0">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>

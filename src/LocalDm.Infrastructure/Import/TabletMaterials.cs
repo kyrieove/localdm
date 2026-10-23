@@ -52,7 +52,9 @@ public static class TabletMaterials
         try
         {
             var manifest = JsonSerializer.Deserialize<TabletManifest>(File.ReadAllText(sidecar));
-            return manifest is not null && Directory.Exists(Path.Combine(assetsDir, manifest.AssetRootFingerprint))
+            // 旧版本的旁路文件不认：准备规则变过（版本 2 起线索 PDF 按页出卡），要重新准备。
+            return manifest is { ManifestVersion: TabletManifest.CurrentManifestVersion }
+                && Directory.Exists(Path.Combine(assetsDir, manifest.AssetRootFingerprint))
                 ? manifest
                 : null;
         }
