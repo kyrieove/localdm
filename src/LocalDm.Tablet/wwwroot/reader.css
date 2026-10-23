@@ -391,3 +391,91 @@ html, body { font-size: 16px; -webkit-text-size-adjust: 100%; }
 .wait .pulse { width: 54px; height: 54px; border-radius: 50%; margin: 0 auto 20px; border: 2px solid var(--seal); animation: wait-pulse 1.8s ease-in-out infinite; }
 @keyframes wait-pulse { 0%, 100% { transform: scale(.85); opacity: .4; } 50% { transform: scale(1.1); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .wait .pulse { animation: none; } }
+
+/* ===== 底部发言条：所有页面状态都在，触控目标不小于 44px ===== */
+.speech-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 6;
+    background: var(--paper);
+    border-top: 1px solid var(--rule);
+    padding: 10px 22px 12px;
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.speech-panel {
+    list-style: none;
+    margin: 0 0 8px;
+    padding: 8px 12px;
+    max-height: 36vh;
+    overflow-y: auto;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    background: var(--paper-deep);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.speech-panel li { font-size: 14px; line-height: 1.7; color: var(--ink); }
+.speech-panel li.host { color: var(--ink-soft); }
+.speech-panel li.event { font-size: 12px; color: var(--muted); }
+
+.speech-row { display: flex; align-items: flex-end; gap: 8px; }
+.speech-input {
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+    font: inherit;
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--ink);
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 10px 12px;
+    resize: vertical;
+}
+
+.speech-actions { display: flex; gap: 8px; }
+.speech-actions button {
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 10px;
+    padding: 0 18px;
+    font-size: 15px;
+    min-height: 44px;
+    min-width: 44px;
+}
+.speech-actions button:disabled { opacity: .35; }
+.speech-actions button:hover:not(:disabled) { background: var(--seal); border-color: var(--seal); }
+.speech-actions .speech-stop {
+    background: var(--paper);
+    color: var(--ink);
+    border-color: var(--rule);
+}
+.speech-actions .speech-toggle {
+    background: none;
+    color: var(--ink-soft);
+    border-color: var(--rule);
+}
+
+.speech-hint {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 6px 2px 0;
+    font-size: 13px;
+    color: var(--ink-soft);
+    min-height: 18px;
+}
+.speech-hint.error { color: var(--seal); }
+.speech-count { font-size: 12px; color: var(--muted); }
+
+@media (max-width: 640px) {
+    .speech-bar { padding: 8px 14px 10px; }
+    .speech-row { flex-direction: column; align-items: stretch; }
+    .speech-actions button { flex: 1; }
+}

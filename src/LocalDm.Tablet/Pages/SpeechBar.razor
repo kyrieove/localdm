@@ -1,0 +1,78 @@
+@using LocalDm.Core.Tablet
+@using LocalDm.Tablet
+@inject TabletSpeechService Speech
+
+<div class="speech-bar">
+    @if (_open && ShowPanelToggle)
+    {
+        <ol class="speech-panel">
+            @foreach (var line in RecentLines)
+            {
+                <li class="@line.Kind">@line.Text</li>
+            }
+        </ol>
+    }
+
+    <div class="speech-row">
+        <textarea class="speech-input" rows="2" maxlength="300" placeholder="对大家说点什么…"
+                  @bind="_text" @bind:event="oninput" disabled="@(!HasRole)"></textarea>
+        <div class="speech-actions">
+            <button class="speech-send" disabled="@(!CanSend)" @onclick="SendAsync">发送</button>
+            @if (HostSpeaking)
+            {
+                <button class="speech-stop" @onclick="StopAsync">停止朗读</button>
+            }
+            @if (ShowPanelToggle)
+            {
+                <button class="speech-toggle" @onclick="() => _open = !_open">@(_open ? "收起" : "对话")</button>
+            }
+        </div>
+    </div>
+
+    <p class="speech-hint @(_noticeError ? "error" : "")">
+        @(!HasRole ? "请先认领角色" : HostBusy ? "主持正在回应" : _notice)
+        <span class="speech-count">@_text.Length/@TabletSpeechService.MaxLength</span>
+    </p>
+</div>
+
+@code {
+    [Parameter] public string SessionKey { get; set; } = string.Empty;
+    [Parameter] public bool HasRole { get; set; }
+    [Parameter] public bool HostBusy { get; set; }
+    [Parameter] public bool HostSpeaking { get; set; }
+    [Parameter] public bool ShowPanelToggle { get; set; } = true;
+    [Parameter] public IReadOnlyList<(string Kind, string Text)> RecentLines { get; set; } = [];
+
+    private string _text = "";
+    private string _notice = "";
+    private bool _noticeError;
+    private bool _sending;
+    private bool _open;
+
+    private bool CanSend => HasRole && !HostBusy && !_sending && !string.IsNullOrWhiteSpace(_text);
+
+    private async Task SendAsync()
+    {
+        _sending = true;
+        try
+        {
+            var result = await Speech.SayAsync(SessionKey, _text);
+            _notice = result.Message;
+            _noticeError = result.Code is not (TabletSayCode.Accepted or TabletSayCode.Proposed);
+            if (!_noticeError)
+            {
+                _text = "";
+            }
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+
+    private Task StopAsync()
+    {
+        Speech.Stop(SessionKey, out _);
+        return Task.CompletedTask;
+    }
+}

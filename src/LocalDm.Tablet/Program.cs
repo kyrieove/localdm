@@ -28,7 +28,12 @@ else
 
 // 独立探针无桌面局对话：包模式用空来源，合成模式使用合成对话。
 IPublicFeedSource source = content is SpikeTabletContent ? new SpikePublicFeedSource() : new EmptyPublicFeedSource();
-var app = TabletWebHost.Create(content, source, args, Directory.GetCurrentDirectory());
+var app = TabletWebHost.Create(
+    content,
+    source,
+    args,
+    Directory.GetCurrentDirectory(),
+    content is SpikeTabletContent ? new SpikeTabletSpeech() : null);
 app.Run();
 // 合成材料：6 个角色、6 张卡（含两张同名卡，用来验证同名不串图）。
 static TabletSpikeData BuildSpikeData()

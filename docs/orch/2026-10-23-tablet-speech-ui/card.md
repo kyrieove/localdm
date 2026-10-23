@@ -49,3 +49,12 @@ may change: `src/LocalDm.Tablet/Pages/Home.razor`, `src/LocalDm.Tablet/Pages/Spe
 - 发送逻辑只调用 `TabletSpeechService.SayAsync`；页面里不要自己判断长度、频率或忙碌之外的规则（按钮灰掉只是提示，规则以服务为准）。
 - Run scripts in the foreground and wait; before replying, stop any background task still running.
 - No rm, no git push, no git checkout . / restore . / reset --hard.
+
+## Acceptance
+- verdict: accepted
+- files: src/LocalDm.Tablet/Pages/Home.razor, src/LocalDm.Tablet/Pages/SpeechBar.razor, src/LocalDm.Tablet/Program.cs, src/LocalDm.Tablet/SpikeTabletSpeech.cs, src/LocalDm.Tablet/wwwroot/reader.css, tests/LocalDm.Tests/TabletSpeechTests.cs
+- check: `dotnet test tests/LocalDm.Tests --filter-class "LocalDm.Tests.TabletSpeechTests"` → exit 0 (run by run-card)
+- tokens:
+  - round 1: review gpt-6.1-sol: fresh 81k, cached 311k, out 2k  (codex-review-tablet-speech-ui.jsonl) · exec deepseek-v4.1-flash: fresh 64k, cached 1283k, out 9k  (codex-tablet-speech-ui.jsonl)
+- claude fix: 去掉 Enter 发送（SpeechBar.razor 的 @onkeydown/OnKeyDown）——sol P1 属实：Blazor 里 keydown 清空后，紧随的 input 事件会把「原文+换行」写回，卡里「清空覆盖换行」的设计有竞态；改为只用发送键，Enter 在文本框里就是换行。recheck exit=0。浏览器实测（合成探针，发布产物）：未认领时条灰掉「请先认领角色」；认领后输入、点发送→文本框清空、提示「主持正在回应」→约 5 秒后「已发送」。
+- deferred: 真实 iPad/安卓平板未测；2 秒轮询导致「主持正在回应」状态最多滞后 2 秒（服务端仍以真实状态为准）。

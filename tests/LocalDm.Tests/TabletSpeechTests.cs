@@ -445,6 +445,23 @@ public sealed class TabletSpeechTests
         }
     }
 
+    [Fact]
+    public async Task Spike_speech_accepts_once_then_is_busy_until_the_deadline()
+    {
+        var time = new ManualTime(DateTimeOffset.UtcNow);
+        var speech = new SpikeTabletSpeech(time);
+
+        var first = await speech.SubmitAsync("角色甲", "第一句");
+        Assert.Equal(TabletSpeechOutcome.Accepted, first.Outcome);
+
+        var second = await speech.SubmitAsync("角色甲", "第二句");
+        Assert.Equal(TabletSpeechOutcome.Busy, second.Outcome);
+
+        time.Advance(TimeSpan.FromSeconds(3));
+        var third = await speech.SubmitAsync("角色甲", "第三句");
+        Assert.Equal(TabletSpeechOutcome.Accepted, third.Outcome);
+    }
+
     private static int FreePort()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
