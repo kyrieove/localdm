@@ -10,7 +10,8 @@
 - 新工作树缺不入库的 `fixtures/synthetic/.private/expected.json`，`ImportCoverageTests` 会红：跑 `scripts/sync-local-fixtures.ps1 -Source D:\2\dev\dm` 补。
 
 ## 下一步
-1. 问用户要不要发布。
+0. 试玩（2026-10-24，报告 `docs/playtest/2026-10-24-four-player-playtest.md`，含完整对话的本机版在 `.local/playtest/20261024-023234/report.md`）发现：玩家直接问 DM 时有 2 次没回复。推测是 `HostViewModel.SendAsync` 在忙的时候直接 `return`，把消息静默吞掉了。先在探针里记录发送那一刻的 `IsBusy` 来确认，确认后改成忙时给提示或排队。试玩命令：`dotnet run --project tools/LocalDm.Probe -- --playtest --model gpt-6.1-sol`（约 45 分钟）。
+1. 新版已发布到桌面（2026-10-24），开始菜单的旧图标和旧快捷方式已清理。
    发布：先 `pwsh -File packaging/windows/Publish.ps1`，再 `artifacts/LocalDm-Setup-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /CURRENTUSER /NORESTART /TASKS=desktopicon`。改名后快捷方式叫 Dungeon Master，桌面上旧的「本局主持.lnk」要请用户自己删。
 2. 实机（只有用户能做）：iPad 和安卓各扫码，验证发言、整套界面、线索卡、手册、双栏，结果写进 `docs/evidence/tablet/`。
 
