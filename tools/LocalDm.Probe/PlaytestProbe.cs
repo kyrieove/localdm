@@ -224,7 +224,7 @@ public static class PlaytestProbe
                     var roleDir = Path.Combine(playersDir, roleId);
                     Directory.CreateDirectory(roleDir);
 
-                    var releasedMaterialsText = GetReleasedMaterialsText(package, host.Session.Projection?.ReleasedMaterialIds);
+                    var releasedMaterialsText = GetReleasedMaterialsText(package, VisibleMaterialIds(package, host));
                     var recentPublicLog = string.Join("\n", publicLogs.TakeLast(60));
 
                     var prompt = BuildPlayerPrompt(
@@ -330,7 +330,7 @@ public static class PlaytestProbe
                 {
                     var roleId = role.RoleId;
                     var roleDir = Path.Combine(playersDir, roleId);
-                    var releasedMaterialsText = GetReleasedMaterialsText(package, host.Session.Projection?.ReleasedMaterialIds);
+                    var releasedMaterialsText = GetReleasedMaterialsText(package, VisibleMaterialIds(package, host));
                     var recentPublicLog = string.Join("\n", publicLogs.TakeLast(60));
 
                     var prompt = BuildPlayerPrompt(
@@ -407,6 +407,10 @@ public static class PlaytestProbe
                 await DmAcceptanceProbe.StepAsync(host, () => host.Session.ExecuteAsync(GameCommandType.Advance, null, null));
                 seen = AppendNewHostMessages(host, seen, publicLogs, transcript);
             }
+            else if (host.Session.SessionStateText == "Revealed")
+            {
+                break; // 揭秘后剧本已结束：不能再推进不算卡住
+            }
             else
             {
                 stuck.Add($"{phaseTitle}: {host.Session.Status}");
@@ -464,6 +468,21 @@ public static class PlaytestProbe
         Console.WriteLine($"卡面泄露：{cardLeaks.Count} | 困惑数：{confusedCount} | 玩家报错：{playerErrors} | 阻塞数：{stuck.Count}");
 
         return finalState == "Completed" || revealed ? 0 : 1;
+    }
+
+    /// <summary>
+    /// 玩家能看到的线索组：软件里已发放的，加上 DM 说话里点到名字的那组。
+    /// 平板上全部线索卡都在列表里，玩家按 DM 的指引去翻；探针用「DM 点名」模拟这一步。
+    /// shortcut: 按组编号做子串匹配，DM 提前顺口提到某组也会放出，要更准就让玩家显式翻卡。
+    /// </summary>
+    private static IReadOnlyList<string> VisibleMaterialIds(ScriptPackage package, HostViewModel host)
+    {
+        var released = host.Session.Projection?.ReleasedMaterialIds ?? [];
+        var said = string.Join('\n', host.Messages.Where(m => m.IsModelReply).Select(m => m.Text));
+        return package.Materials
+            .Where(m => released.Contains(m.MaterialId) || said.Contains(m.MaterialId, StringComparison.Ordinal))
+            .Select(m => m.MaterialId)
+            .ToArray();
     }
 
     private static string GetReleasedMaterialsText(ScriptPackage package, IReadOnlyList<string>? releasedIds)
