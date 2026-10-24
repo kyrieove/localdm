@@ -310,7 +310,8 @@
         "dependencies": {
           "LocalDm": "[1.0.0, )",
           "LocalDm.Core": "[1.0.0, )",
-          "LocalDm.Infrastructure": "[1.0.0, )"
+          "LocalDm.Infrastructure": "[1.0.0, )",
+          "LocalDm.Tablet": "[1.0.0, )"
         }
       },
       "localdm.tablet": {

@@ -16,6 +16,7 @@
     <ProjectReference Include="..\..\src\LocalDm.Infrastructure\LocalDm.Infrastructure.csproj" />
     <!-- 人工验收直接驱动真实的 HostViewModel，和软件走同一条代码路径。 -->
     <ProjectReference Include="..\..\src\LocalDm.App\LocalDm.App.csproj" />
+    <ProjectReference Include="..\..\src\LocalDm.Tablet\LocalDm.Tablet.csproj" />
   </ItemGroup>
 
 </Project>
