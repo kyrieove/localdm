@@ -12,3 +12,6 @@
 - 发布带 `-r win-x64` 会弄脏 `packages.lock.json` → `--isolation worktree` 被拒 → `Publish.ps1` 现已在发布后还原。
 - 旧 worktree/分支 `orch/tablet-speech-wiring`、`orch/tablet-speech-ui` 留在 `~/.claude/agent-live/orch-runner/wt/` → 内容已合入，删分支需用户确认。
 - Python 替换脚本里写 Windows 路径，`\a` 会变成控制字符 0x07（`Assets\app.ico` → `Assets<BEL>pp.ico`），构建报 MSB4025 才发现：路径里的反斜杠一律用 `chr(92)`，改完 `grep -c $'\a'` 查一遍。
+- 写卡时只 grep 了 `HostNarration*` 测试找「角色本不进 DM」断言 → 合入后全套测试 `PhaseFlowTests` 红了两条 → 改断言前对整个 `tests/` grep 断言里的常量和原句（`RoleBookText`、`合成角色的秘密`）。
+- 卡在跑基线 Check 时，Claude 改了卡里列为只读的文件 → `readonly_violated`，执行者没启动 → 派出卡后到它跑完前，不碰卡的只读和可改路径。
+- 试玩探针报「（无回复）」只认 `IsModelReply` → 模型报错时软件上屏的提示（`fromModel: false`）也被记成无回复，误以为消息被吞 → 探针现在用 `ReplyFor` 写清是忙时没发出、还是软件提示了什么。
