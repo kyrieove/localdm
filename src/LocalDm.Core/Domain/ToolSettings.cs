@@ -51,7 +51,8 @@ public sealed record ToolSettings
     /// <summary>对话与输入区的宽度档位。</summary>
     public ChatWidthMode ChatWidthMode { get; init; } = ChatWidthMode.Standard;
 
-    public const int DefaultContextWindowTokens = 65_536;
+    // 主持资料含全部角色本（ADR 0011），5 人本约 5 万 token，6.5 万的旧默认放不下对话。
+    public const int DefaultContextWindowTokens = 1_000_000;
 
     public const int MinContextWindowTokens = 8_192;
 
