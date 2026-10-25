@@ -1,0 +1,38 @@
+# 用 GitHub 免费 macOS 机器给平板 App 出未签名 ipa（ADR 0012 决定 5）。
+# 玩家用 iloader + 自己的 Apple ID 签名装到 iPad，7 天后重签。
+name: tablet-ipa
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - apps/tablet/**
+      - .github/workflows/tablet-ipa.yml
+
+jobs:
+  ipa:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: apps/tablet
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.8 # 与本机 .tools\flutter 同版本
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter test
+      - run: flutter build ios --release --no-codesign
+      - name: 打包成 ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qr localdm-tablet-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: localdm-tablet-ipa
+          path: apps/tablet/localdm-tablet-unsigned.ipa
+          retention-days: 30
