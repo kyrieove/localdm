@@ -87,7 +87,7 @@ public sealed class TabletJoinTests
     }
 
     [Fact]
-    public async Task Library_page_shows_join_card_before_any_script_is_opened()
+    public async Task Join_panel_shows_qr_before_any_script_is_opened()
     {
         await WpfRunner.RunAsync(async () =>
         {
@@ -98,8 +98,8 @@ public sealed class TabletJoinTests
                 using var composition = await AppComposition.CreateFromContextAsync(context, CancellationToken.None);
                 var shell = await composition.CreateShellAsync(CancellationToken.None);
                 await shell.Library.Tablet!.StartAsync();
-                var view = new LibraryView { DataContext = shell.Library };
-                var window = new Window { Content = view, Width = 1200, Height = 800 };
+                var view = new TabletJoinPanel { DataContext = shell.Library.Tablet };
+                var window = new Window { Content = view, SizeToContent = SizeToContent.WidthAndHeight };
                 WpfRunner.ShowOffscreen(window);
                 try
                 {

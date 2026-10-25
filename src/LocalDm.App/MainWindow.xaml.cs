@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using LocalDm.App.Themes;
 using LocalDm.App.ViewModels;
+using LocalDm.App.Views;
 using LocalDm.Core.Domain;
 using LocalDm.Infrastructure.Storage;
 
@@ -198,56 +199,11 @@ public partial class MainWindow
             return;
         }
 
-        var panel = new StackPanel { Margin = new Thickness(28), HorizontalAlignment = HorizontalAlignment.Center };
-        panel.Children.Add(new TextBlock
-        {
-            Text = "平板扫码加入",
-            FontSize = 20,
-            FontWeight = FontWeights.Bold,
-            FontFamily = (FontFamily)FindResource("DisplayFace"),
-            HorizontalAlignment = HorizontalAlignment.Center,
-        });
-        var qr = new Image { Source = tablet.QrCode, Width = 280, Height = 280 };
-        RenderOptions.SetBitmapScalingMode(qr, BitmapScalingMode.NearestNeighbor);
-        // 二维码底必须是纯白：那圈白是扫码要的静区，换成主题色 iPad 就扫不出来。
-        panel.Children.Add(new Border
-        {
-            Child = qr,
-            Background = Brushes.White,
-            Padding = new Thickness(14),
-            CornerRadius = new CornerRadius(12),
-            Margin = new Thickness(0, 16, 0, 12),
-        });
-        panel.Children.Add(new TextBlock
-        {
-            Text = tablet.SelectedAddress ?? tablet.Status,
-            TextWrapping = TextWrapping.Wrap,
-            MaxWidth = 280,
-            HorizontalAlignment = HorizontalAlignment.Center,
-        });
-        // 平板关了浏览器或换 App 扫码会认不回角色：在这里释放后让它重新认领。
-        foreach (var role in tablet.JoinedRoles)
-        {
-            var release = new Button
-            {
-                Content = $"释放「{role.DisplayName}」",
-                Style = (Style)FindResource("QuietButton"),
-                Margin = new Thickness(0, 8, 0, 0),
-                ToolTip = "平板认不回这个角色时点这里，再在平板上重新选它；翻开的页要重新翻",
-            };
-            release.Click += (_, _) =>
-            {
-                role.ReleaseCommand.Execute(null);
-                panel.Children.Remove(release);
-            };
-            panel.Children.Add(release);
-        }
-
         var dialog = new Window
         {
             Title = "平板入口",
             Owner = this,
-            Content = panel,
+            Content = new TabletJoinPanel { DataContext = tablet },
             SizeToContent = SizeToContent.WidthAndHeight,
             ResizeMode = ResizeMode.NoResize,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
