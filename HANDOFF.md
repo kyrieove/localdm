@@ -15,11 +15,10 @@
 - 未验证：以上都没在真软件、真平板里试过；桌面上装的还是旧版。
 
 ## 下一步
-1. 试玩问题已清：第 2 条用户决定先不做（先试玩看提示词例外够不够）；第 6 条用户要安卓 + iPad，**只出设计不做**，还没开始写设计。
-2. 2026-10-24 报告里还剩：主持台「已发放材料」在流程没发材料步骤时为空（低）。
-3. 用户说 OK 后：`dotnet build LocalDm.slnx`、`dotnet test tests/LocalDm.Tests`、`dotnet test tests/LocalDm.UiTests` 一次跑完，再提交。
-4. 发布（用户同意后）：`pwsh -File packaging/windows/Publish.ps1`，再 `artifacts/LocalDm-Setup-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /CURRENTUSER /NORESTART /TASKS=desktopicon`。
-5. 试玩确认「无回复」原因：`dotnet run --project tools/LocalDm.Probe -- --playtest --model gpt-6.1-sol`（约 45 分钟）。
+1. 10-24、10-25 两份试玩问题用户已确认结案，只剩第 6 条：平板做成安卓 + iPad App，**只出设计不做**，还没开始写设计。
+2. 可选小改：提示词里规定分段引导只能按顺序念（重放里点名第五段时模型愿意跳段），用户还没定。
+3. 发布（用户同意后）：`pwsh -File packaging/windows/Publish.ps1`，再 `artifacts/LocalDm-Setup-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /CURRENTUSER /NORESTART /TASKS=desktopicon`。
+4. 试玩确认「无回复」原因：`dotnet run --project tools/LocalDm.Probe -- --playtest --model gpt-6.1-sol`（约 45 分钟）。
 
 ## 先读
 - ADR `docs/decisions/0010`、`0011`；`LESSONS.md` 末尾三条；卡 `docs/orch/2026-10-25-*`
