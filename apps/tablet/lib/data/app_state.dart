@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -92,6 +93,13 @@ class AppState extends ChangeNotifier {
   void go(Stage s) {
     stage = s;
     notifyListeners();
+    // 原型没有真电脑：等待页几秒后自己往下走，模拟主持人开了剧本、材料准备好。
+    final next = {Stage.waitingStory: Stage.preparing, Stage.preparing: Stage.pickRole}[s];
+    if (next != null && showDebug) {
+      Timer(const Duration(seconds: 3), () {
+        if (stage == s) go(next);
+      });
+    }
   }
 
   /// 模拟 POST /tablet/claim：被别人抢先时返回 false（接口 409 TAKEN）。

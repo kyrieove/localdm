@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'data/app_state.dart';
 import 'screens/connect.dart';
@@ -10,6 +11,7 @@ import 'theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky); // 全屏：状态栏和导航条从边缘滑出才出现
   final state = AppState();
   await state.load();
   state.applyLink(Uri.base.queryParameters);

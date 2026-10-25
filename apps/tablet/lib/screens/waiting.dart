@@ -20,7 +20,7 @@ class WaitingScreen extends StatelessWidget {
           left: 24,
           child: Chip(
             avatar: Icon(Icons.link_rounded, color: scheme.primary, size: 18),
-            label: const Text('已连上 ${AppState.serverAddress}'),
+            label: Text('已连上 ${AppState.serverAddress}${app.showDebug ? '（原型假地址）' : ''}'),
           ),
         ),
         Center(

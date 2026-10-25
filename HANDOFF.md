@@ -16,13 +16,15 @@ minimax 那三个「书卷」方向用户否了（原话：「看起来像网页
 ## 工具链（都在 `.tools\`，已 gitignore）
 
 - Flutter 3.47.8 稳定版：`D:\2\dev\dm\.tools\flutter`（官方 zip，SHA256 已核对）。每次用前设 `PUB_CACHE=D:\2\dev\dm\.tools\pub-cache`。
-- 没装：Android SDK、JDK、Gradle。装的话 `ANDROID_HOME`、`GRADLE_USER_HOME` 也指到 `.tools\`。
+- Android SDK：`.tools\android-sdk`（cmdline-tools、platform-tools、platforms/android-36、build-tools/36.0.0、ndk/28.2.13676358；许可用户已同意）。新版 sdkmanager 包名用斜杠：`platforms/android-36`。
+- JDK 用本机 Zulu 17（`C:\Program Files\Zulu\zulu-17`，系统已装，不是本轮装的）。
+- 出 apk 前设：`ANDROID_HOME=D:\2\dev\dm\.tools\android-sdk`、`ANDROID_USER_HOME=…\.tools\android-home`、`GRADLE_USER_HOME=…\.tools\gradle`、`PUB_CACHE=…\.tools\pub-cache`，然后 `flutter build apk --release`（约 2 分钟，52.8MB，三种 CPU 架构合一）。
 - 本机 IPv6 不通：aria2 下载会失败，用 `curl -4`。
 
 ## 下一步
 
-1. 用户在浏览器里点原型（`.claude/launch.json` 的 `tablet-prototype`，或见设计文件 §1），给反馈。
-2. 用户决定真机路径：先装 Android SDK 出 apk（几 GB 进 `.tools\`），还是先配 GitHub Actions 出 ipa 用 iloader 装 iPad。
+1. 用户在浏览器里看过原型，评价「还不错」。原型 apk 已出：`artifacts\本局主持-原型.apk`（gitignore，不进仓库），等用户装到安卓平板上试手感并反馈。原型用假数据，不连电脑；右上角烧瓶按钮切状态。
+2. iPad：配 GitHub Actions 出未签名 ipa，用 iloader 装。
 3. 补四个接口缺口（设计文件 §8）：原稿页数、手册页数、剧本状态、卡片有无背面；加 JSON 契约测试。
 4. 更新 ADR 0012：写进用户对下面问题的回答。
 
