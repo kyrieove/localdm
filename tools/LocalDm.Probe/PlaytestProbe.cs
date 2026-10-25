@@ -266,12 +266,13 @@ public static class PlaytestProbe
                         var beforeCount = host.Messages.Count;
                         var dmSw = Stopwatch.StartNew();
                         host.InputText = $"{roleId}：{move.Text}";
+                        var busyAtSend = host.IsBusy;
                         await host.SendAsync();
                         await DmAcceptanceProbe.WaitIdleAsync(host);
                         dmSw.Stop();
                         dmLatencyMs.Add(dmSw.ElapsedMilliseconds);
 
-                        var reply = host.Messages.Skip(beforeCount).FirstOrDefault(m => m.IsModelReply)?.Text ?? "（无回复）";
+                        var reply = ReplyFor(host, beforeCount, busyAtSend);
                         publicLogs.Add($"{roleId}→DM：{move.Text}");
                         publicLogs.Add($"DM：{reply}");
 
@@ -372,12 +373,13 @@ public static class PlaytestProbe
                         var beforeCount = host.Messages.Count;
                         var dmSw = Stopwatch.StartNew();
                         host.InputText = $"{roleId}：{move.Text}";
+                        var busyAtSend = host.IsBusy;
                         await host.SendAsync();
                         await DmAcceptanceProbe.WaitIdleAsync(host);
                         dmSw.Stop();
                         dmLatencyMs.Add(dmSw.ElapsedMilliseconds);
 
-                        var reply = host.Messages.Skip(beforeCount).FirstOrDefault(m => m.IsModelReply)?.Text ?? "（无回复）";
+                        var reply = ReplyFor(host, beforeCount, busyAtSend);
                         publicLogs.Add($"{roleId}→DM：{move.Text}");
                         publicLogs.Add($"DM：{reply}");
 
@@ -483,6 +485,27 @@ public static class PlaytestProbe
             .Where(m => released.Contains(m.MaterialId) || said.Contains(m.MaterialId, StringComparison.Ordinal))
             .Select(m => m.MaterialId)
             .ToArray();
+    }
+
+    /// <summary>
+    /// 这一问的 DM 回复。没有模型回复时写清是哪种：发送时主持台在忙（没发出去），
+    /// 还是软件上屏了一条非模型提示（多半是模型报错或返回空内容）。
+    /// </summary>
+    private static string ReplyFor(HostViewModel host, int beforeCount, bool busyAtSend)
+    {
+        var added = host.Messages.Skip(beforeCount).ToArray();
+        if (added.FirstOrDefault(m => m.IsModelReply) is { } model)
+        {
+            return model.Text;
+        }
+
+        if (busyAtSend)
+        {
+            return "（无回复：发送时主持台在忙，没发出去）";
+        }
+
+        var local = added.LastOrDefault(m => m.Author == ChatAuthor.Host);
+        return local is null ? "（无回复：没有任何上屏）" : $"（无回复：软件提示「{local.Text}」）";
     }
 
     private static string GetReleasedMaterialsText(ScriptPackage package, IReadOnlyList<string>? releasedIds)
