@@ -54,6 +54,7 @@ public static class TabletQueries
                 NotReadyReason = card.PreparationState == TabletCardPreparationState.Ready
                     ? manifest.Groups.TryGetValue(card.GroupName, out var group) ? group.Reason : null
                     : card.NotReadyReason,
+                HasBack = card.BackAssetId is not null,
             })
             .ToArray();
     }
@@ -225,6 +226,9 @@ public sealed record TabletCatalogItem
     public required bool IsAvailable { get; init; }
 
     public TabletNotReadyReason? NotReadyReason { get; init; }
+
+    /// <summary>有没有卡背：平板 App 据此决定长按翻面，不必请求背面看是不是 404。</summary>
+    public bool HasBack { get; init; }
 }
 
 public enum TabletCardSide

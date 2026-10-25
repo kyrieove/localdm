@@ -35,7 +35,7 @@ class ConnectScreen extends StatelessWidget {
           icon: const Icon(Icons.keyboard_outlined),
           label: const Text('扫不了？手动输入地址'),
           style: OutlinedButton.styleFrom(minimumSize: const Size(0, 52), padding: const EdgeInsets.symmetric(horizontal: 20)),
-          onPressed: () => _manualAddress(context, scanned),
+          onPressed: () => _manualAddress(context),
         ),
       ],
     );
@@ -61,8 +61,9 @@ class ConnectScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _manualAddress(BuildContext context, VoidCallback done) async {
-    final controller = TextEditingController(text: AppState.serverAddress);
+  Future<void> _manualAddress(BuildContext context) async {
+    final app = AppScope.of(context);
+    final controller = TextEditingController(text: app.serverAddress);
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -83,7 +84,7 @@ class ConnectScreen extends StatelessWidget {
         ],
       ),
     );
-    if (ok == true) done();
+    if (ok == true) await app.connect(controller.text);
   }
 }
 

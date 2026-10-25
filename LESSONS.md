@@ -23,3 +23,4 @@
 - aria2 下 Flutter SDK 报「unreachable network」→ 本机 IPv6 不通 → 大文件用 `curl -4`；Bash 里直接写 curl 会被 context-mode 钩子拦，写成 node/python 脚本再跑。
 - 在浏览器面板里点 Flutter 网页版，截图总落后一帧、换屏后第一下点击常被吞 → 原型加网址参数直达各屏（`?stage=inGame&section=cards`），截图用本机 Chrome `--headless=new --screenshot --virtual-time-budget`，见 `apps/tablet/tool/shots.sh`。
 - 原型界面的颜色对比度靠人看会漏（半透明压暗、夜读矩阵）→ 每对文字/底色写进 `Palette.textPairs`，夜读矩阵和界面共用常量，由 `flutter test` 算出并卡 4.5。
+- Git Bash 里 `flutter build web --base-href /app/` 报「--base-href should start and end with /」→ MSYS 把 `/app/` 改写成了 `D:/…/Git/app/` → 这条命令在 PowerShell 里跑（或设 `MSYS_NO_PATHCONV=1`）。

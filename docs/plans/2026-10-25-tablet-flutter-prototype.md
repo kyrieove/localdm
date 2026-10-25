@@ -120,6 +120,15 @@ python -m http.server 8790 -d build/web      # 或用 .claude/launch.json 的 ta
 
 另：枚举在 JSON 里是字符串（`"status": "Current"`、`"kind": "Paragraph"`），契约测试要把这一点钉住。
 
+**2026-10-25 已补**（契约测试 `TabletAppTests.App_contract_fields_and_device_header_are_stable`）：
+- `/tablet/catalog` 加 `storyState`（`None` / `Preparing` / `Ready`），每张卡加 `hasBack`。
+- `/tablet/role/book` 加 `sourcePageCount`、`handbookPageCount`、`openedPages`。
+- 新增 `POST /tablet/role/open/{page}`：只能翻下一页，否则 409。
+- 设备身份先认请求头 `X-LocalDm-Device`（16–64 位字母数字），没有再认 Cookie。
+- 平板服务在 `/app/` 同源托管 `apps/tablet/build/web`（构建时 `--base-href /app/`，PowerShell 里跑，Git Bash 会把 `/app/` 改写成 Windows 路径）。只在源码目录里找，发布包不带。
+
+App 连上电脑后每 2 秒轮询 `catalog`、`public`、`ui`；没连电脑（带 `stage=` 网址参数或调试抽屉）仍用假数据。扫码还是假的，连电脑要「手动输入地址」。
+
 ## 9. 测试
 
 `cd apps/tablet && flutter test`，9 项全过：

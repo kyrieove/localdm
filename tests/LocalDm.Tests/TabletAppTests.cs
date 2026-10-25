@@ -378,6 +378,65 @@ public sealed class TabletAppTests : IDisposable
             (await anonymous.GetAsync(new Uri(client.BaseAddress!, "/tablet/role/source/2"), ct)).StatusCode);
     }
 
+    /// <summary>
+    /// 平板 App 的接口契约：App 不能像网页那样跟着改字段，字段名、类型、枚举写成字符串都钉在这里。
+    /// 设备身份走 <c>X-LocalDm-Device</c> 请求头，不带 Cookie。
+    /// </summary>
+    [Fact]
+    public async Task App_contract_fields_and_device_header_are_stable()
+    {
+        using var host = TabletBlazorHost.Start(RepoRoot("LocalDm.Tablet.csproj"));
+        var ct = TestContext.Current.CancellationToken;
+        HttpClient Device(string id)
+        {
+            var client = new HttpClient(new HttpClientHandler { UseCookies = false })
+            {
+                BaseAddress = new Uri($"http://127.0.0.1:{host.Port}"),
+            };
+            client.DefaultRequestHeaders.Add("X-LocalDm-Device", id);
+            _clients.Add(client);
+            return client;
+        }
+
+        var app = Device("device0123456789abcdef");
+        using var catalog = System.Text.Json.JsonDocument.Parse(await app.GetStringAsync("/tablet/catalog", ct));
+        var root = catalog.RootElement;
+        Assert.Equal("Ready", root.GetProperty("storyState").GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.String, root.GetProperty("storyTitle").ValueKind);
+        var card = root.GetProperty("cards")[0];
+        foreach (var name in new[] { "cardId", "displayName", "label", "groupName" })
+        {
+            Assert.Equal(System.Text.Json.JsonValueKind.String, card.GetProperty(name).ValueKind);
+        }
+
+        Assert.Equal(System.Text.Json.JsonValueKind.Number, card.GetProperty("sourceOrder").ValueKind);
+        Assert.True(card.GetProperty("isAvailable").GetBoolean());
+        Assert.False(card.GetProperty("hasBack").GetBoolean());
+        var roleId = root.GetProperty("roles")[0].GetProperty("roleId").GetString()!;
+
+        Assert.Equal(HttpStatusCode.OK, (await app.PostAsync($"/tablet/claim?roleId={roleId}", null, ct)).StatusCode);
+        // 同一个设备编号换一个连接（App 重启）还是同一台设备，角色本照样拿得到。
+        var restarted = Device("device0123456789abcdef");
+        using var book = System.Text.Json.JsonDocument.Parse(await restarted.GetStringAsync("/tablet/role/book", ct));
+        var bookRoot = book.RootElement;
+        Assert.Equal(roleId, bookRoot.GetProperty("roleId").GetString());
+        Assert.Equal(3, bookRoot.GetProperty("sourcePageCount").GetInt32());
+        Assert.Equal(2, bookRoot.GetProperty("handbookPageCount").GetInt32());
+        Assert.Equal(0, bookRoot.GetProperty("openedPages").GetInt32());
+        Assert.Equal("ChapterTitle", bookRoot.GetProperty("chapters")[0].GetProperty("blocks")[0].GetProperty("kind").GetString());
+
+        // 翻开只能翻下一页
+        Assert.Equal(HttpStatusCode.Conflict, (await restarted.PostAsync("/tablet/role/open/2", null, ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await restarted.PostAsync("/tablet/role/open/1", null, ct)).StatusCode);
+        using var after = System.Text.Json.JsonDocument.Parse(await app.GetStringAsync("/tablet/role/book", ct));
+        Assert.Equal(1, after.RootElement.GetProperty("openedPages").GetInt32());
+
+        // 别的设备抢同一个角色：409 TAKEN；格式不对的编号当作没带
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await Device("otherdevice0123456789").PostAsync($"/tablet/claim?roleId={roleId}", null, ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Device("short").GetAsync("/tablet/role/book", ct)).StatusCode);
+    }
+
     private static int PortOf(TabletBlazorHost host) => host.Port;
 
     private static string RepoRoot(string projectFileName)

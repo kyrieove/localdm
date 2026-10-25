@@ -8,6 +8,9 @@ public static class TabletSessions
 {
     public const string CookieName = "localdm-tablet-spike";
 
+    /// <summary>平板 App 自带的设备编号（ADR 0012 细节 1）：杀掉 App、隔天再开还是同一台设备。</summary>
+    public const string DeviceHeader = "X-LocalDm-Device";
+
     public static event Action? Changed;
 
     public static void RaiseChanged() => Changed?.Invoke();
@@ -22,6 +25,14 @@ public static class TabletSessions
         if (context is null)
         {
             return null;
+        }
+
+        // 请求头优先，没有再认 Cookie：网页客户端不受影响。
+        // 前缀把两种键分开，App 不能凭编号冒用某个网页会话。
+        if (context.Request.Headers[DeviceHeader].ToString() is { Length: >= 16 and <= 64 } device
+            && device.All(char.IsAsciiLetterOrDigit))
+        {
+            return "app-" + device;
         }
 
         if (context.Items.TryGetValue(CookieName, out var issued) && issued is string key)

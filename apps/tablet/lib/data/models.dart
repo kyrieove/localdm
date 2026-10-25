@@ -15,8 +15,10 @@ class ClueCard {
         groupName = j['groupName'] as String,
         sourceOrder = j['sourceOrder'] as int,
         isAvailable = j['isAvailable'] as bool,
-        notReadyReason = j['notReadyReason'] as String?;
+        notReadyReason = j['notReadyReason'] as String?,
+        hasBack = j['hasBack'] as bool? ?? false;
   final String cardId;
+  bool hasBack;
   final String displayName;
   final String groupName;
   final int sourceOrder;
@@ -27,10 +29,12 @@ class ClueCard {
 class Catalog {
   Catalog.fromJson(Map<String, dynamic> j)
       : storyTitle = j['storyTitle'] as String,
+        storyState = j['storyState'] as String? ?? 'Ready',
         roles = [for (final r in j['roles'] as List) Role.fromJson(r)],
         cards = [for (final c in j['cards'] as List) ClueCard.fromJson(c)],
         claimedRoles = {for (final r in j['claimedRoles'] as List) r as String};
   final String storyTitle;
+  final String storyState; // None / Preparing / Ready
   final List<Role> roles;
   final List<ClueCard> cards;
   final Set<String> claimedRoles;

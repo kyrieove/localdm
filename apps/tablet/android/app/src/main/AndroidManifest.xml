@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 连局域网里的主持电脑：明文 HTTP（ADR 0012 细节 2） -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
+        android:usesCleartextTraffic="true"
         android:label="Dungeon Master"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">

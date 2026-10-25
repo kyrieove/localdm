@@ -53,7 +53,7 @@ class _ShellState extends State<Shell> {
       Section.book,
       Section.cards,
       Section.talk,
-      if (AppState.handbookPageCount > 0) Section.handbook,
+      if (app.handbookPageCount > 0) Section.handbook,
     ];
     final body = switch (app.section) {
       Section.book => const RoleReader(),
@@ -244,7 +244,9 @@ class OfflineBanner extends StatelessWidget {
                       child: Text('和电脑断开了，正在重连。已经打开过的页还能看。',
                           style: TextStyle(color: scheme.onSurface, fontSize: 15)),
                     ),
-                    TextButton(onPressed: () => app.setOnline(true), child: const Text('重新扫码')),
+                    TextButton(
+                        onPressed: () => app.api == null ? app.setOnline(true) : app.go(Stage.connect),
+                        child: const Text('重新扫码')),
                   ]),
                 ),
               ),

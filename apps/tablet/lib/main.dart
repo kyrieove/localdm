@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'data/api.dart';
 import 'data/app_state.dart';
 import 'screens/connect.dart';
 import 'screens/debug_panel.dart';
@@ -14,8 +16,15 @@ void main() async {
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky); // 全屏：状态栏和导航条从边缘滑出才出现
   final state = AppState();
   await state.load();
-  state.applyLink(Uri.base.queryParameters);
+  final link = Uri.base.queryParameters;
+  state.applyLink(link);
   runApp(TabletApp(state: state));
+  // 电脑上的平板服务托管的网页版（/app/）同源直连；装在平板上的 App 连上次存下的地址。
+  // 带原型网址参数（stage=…）时留在原型假数据里。
+  if (!link.containsKey('stage')) {
+    final address = kIsWeb && Uri.base.path.startsWith('/app') ? Uri.base.authority : kIsWeb ? null : await TabletApi.savedAddress();
+    if (address != null) await state.connect(address);
+  }
 }
 
 /// 让任意一屏都能拿到 AppState，并在它变化时重建。

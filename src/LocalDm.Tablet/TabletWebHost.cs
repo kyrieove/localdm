@@ -89,6 +89,14 @@ public static class TabletWebHost
             app.UseStaticFiles(staticFileOptions);
         }
 
+        // 平板 App 的网页版（apps/tablet 用 --base-href /app/ 构建）同源托管在 /app/，不用开跨域。
+        // shortcut: 只在源码目录里找构建产物，发布包不带；要给朋友用网页版时再打进 publish。
+        if (FindFlutterWebBuild() is { } flutterWeb)
+        {
+            app.UseDefaultFiles(new DefaultFilesOptions { RequestPath = "/app", FileProvider = new PhysicalFileProvider(flutterWeb) });
+            app.UseStaticFiles(new StaticFileOptions { RequestPath = "/app", FileProvider = new PhysicalFileProvider(flutterWeb) });
+        }
+
         // 释放角色：让别的会话可以认领；同时清掉本会话的阅读状态。
         app.MapPost("/tablet/release", (TabletSpikeState state, HttpContext context) =>
         {
@@ -126,6 +134,7 @@ public static class TabletWebHost
         app.MapGet("/tablet/catalog", (ITabletContent content, TabletSpikeState state) => Results.Json(new
         {
             storyTitle = content.StoryTitle,
+            storyState = content.StoryState.ToString(),
             roles = content.Roles,
             cards = content.Cards,
             claimedRoles = state.ClaimedRoles,
@@ -191,7 +200,27 @@ public static class TabletWebHost
                     suspectBlocks = content.RoleBooks[role.RoleId].Confidence.EmptyOrSuspectBlocks,
                     hasSourcePages = content.RoleBooks[role.RoleId].Confidence.HasSourcePages,
                 },
+                sourcePageCount = content.RoleBooks[role.RoleId].SourcePageAssetIds.Count,
+                handbookPageCount = content.HandbookPageCount,
+                openedPages = state.Session(TabletSessions.KeyFor(context)!).OpenedPages,
             });
+        });
+
+        // 翻开原稿第 page 页：只能翻紧接着的下一页，否则 409。和网页上的「翻开」按钮是同一条规则。
+        app.MapPost("/tablet/role/open/{page:int}", (int page, TabletSpikeState state, HttpContext context) =>
+        {
+            if (SessionRole(state, context) is null)
+            {
+                return Results.NotFound();
+            }
+
+            var key = TabletSessions.KeyFor(context)!;
+            if (!state.OpenPage(key, page))
+            {
+                return Results.Conflict(new { opened = false, openedPages = state.Session(key).OpenedPages });
+            }
+
+            return Results.Json(new { opened = true, openedPages = page });
         });
 
         // 阅读进度：按角色与会话保存，刷新、改字号、横竖屏切换后都能回到读到的位置。
@@ -392,6 +421,20 @@ public static class TabletWebHost
             var roleId = state.Session(key).RoleId;
             return roleId is null ? null : state.Roles.FirstOrDefault(r => r.RoleId == roleId);
         }
+    }
+
+    private static string? FindFlutterWebBuild()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            var build = Path.Combine(dir.FullName, "apps", "tablet", "build", "web");
+            if (File.Exists(Path.Combine(build, "index.html")))
+            {
+                return build;
+            }
+        }
+
+        return null;
     }
 
     private static bool TryParseAfter(HttpContext context, out long after)

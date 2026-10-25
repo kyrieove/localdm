@@ -143,7 +143,7 @@ Future<void> showRoleSheet(BuildContext context) => _sheet(context, (context) {
       final scheme = Theme.of(context).colorScheme;
       return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         _title(context, '你是「${app.myRole?.displayName ?? ''}」'),
-        Text('《${app.catalog.storyTitle}》 · 连在 ${AppState.serverAddress}', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 15)),
+        Text('《${app.catalog.storyTitle}》 · 连在 ${app.serverAddress}', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 15)),
         const SizedBox(height: 24),
         OutlinedButton.icon(
           style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52), foregroundColor: scheme.error),

@@ -3,10 +3,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../data/app_state.dart';
 import '../data/models.dart';
 import '../main.dart';
 import 'reader.dart';
+
+String cardPath(String cardId, String side) => '/tablet/cards/${Uri.encodeComponent(cardId)}/$side';
 
 /// 线索卡：按分组排成卡墙。宽屏（≥840，iPad 横屏）左墙右详情；窄屏点卡全屏打开（Hero 飞过去）。
 class CardsScreen extends StatefulWidget {
@@ -140,7 +141,7 @@ class _CardTile extends StatelessWidget {
                 child: card.isAvailable
                     ? Hero(
                         tag: card.cardId,
-                        child: nightFilter(app.night, Image(image: ResizeImage(AssetImage('assets/fake/${card.cardId}_front.jpg'), width: 480), fit: BoxFit.cover)),
+                        child: nightFilter(app.night, Image(image: ResizeImage(app.image(cardPath(card.cardId, 'front'), 'assets/fake/${card.cardId}_front.jpg'), width: 480), fit: BoxFit.cover)),
                       )
                     : Container(
                         color: scheme.surfaceContainerHigh,
@@ -198,13 +199,16 @@ class FlipCard extends StatefulWidget {
 class _FlipCardState extends State<FlipCard> with SingleTickerProviderStateMixin {
   late final _flip = AnimationController(vsync: this, duration: const Duration(milliseconds: 360));
 
-  bool get _hasBack => AppState.cardsWithBack.contains(widget.card.cardId);
+  bool get _hasBack => widget.card.hasBack;
+
+  ImageProvider _face(String side) =>
+      pageImage(AppScope.of(context).image(cardPath(widget.card.cardId, side), 'assets/fake/${widget.card.cardId}_$side.jpg'));
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     // 打开卡就先解码背面，翻到一半时背面已就绪，不闪空白。
-    if (_hasBack) precacheImage(pageImage('assets/fake/${widget.card.cardId}_back.jpg'), context);
+    if (_hasBack) precacheImage(_face('back'), context);
   }
 
   @override
@@ -228,10 +232,9 @@ class _FlipCardState extends State<FlipCard> with SingleTickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
-    final id = widget.card.cardId;
     Widget face(String side) => ClipRRect(
           borderRadius: BorderRadius.circular(16),
-          child: nightFilter(app.night, Image(image: pageImage('assets/fake/${id}_$side.jpg'), fit: BoxFit.contain)),
+          child: nightFilter(app.night, Image(image: _face(side), fit: BoxFit.contain)),
         );
 
     final card = GestureDetector(
@@ -247,7 +250,7 @@ class _FlipCardState extends State<FlipCard> with SingleTickerProviderStateMixin
               ..setEntry(3, 2, 0.0012)
               ..rotateY(math.pi * t),
             child: back ? Transform(alignment: Alignment.center, transform: Matrix4.rotationY(math.pi), child: face('back')) : widget.zoomable
-                    ? Hero(tag: id, child: face('front')) // 只有全屏看卡才和卡墙配对飞过去，宽屏详情同屏有同 tag 会冲突
+                    ? Hero(tag: widget.card.cardId, child: face('front')) // 只有全屏看卡才和卡墙配对飞过去，宽屏详情同屏有同 tag 会冲突
                     : face('front'),
           );
         },

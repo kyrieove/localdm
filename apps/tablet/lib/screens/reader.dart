@@ -11,7 +11,7 @@ import 'sheets.dart';
 /// 再大只在放大时有用；真实扫描页 1754 宽解码要 17MB/页，压到 1100 后约 7MB。
 const decodeWidth = 1100;
 
-ImageProvider pageImage(String asset) => ResizeImage(AssetImage(asset), width: decodeWidth);
+ImageProvider pageImage(ImageProvider image) => ResizeImage(image, width: decodeWidth);
 
 /// 夜读：原稿是白纸黑字，暗房间里刺眼。压暗＝整体降亮偏暖；反白＝纸变深、字变浅。
 const identityMatrix = <double>[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0];
@@ -41,10 +41,10 @@ class RoleReader extends StatelessWidget {
           : PageReader(
               key: const ValueKey('pages'),
               title: '${app.myRole?.displayName ?? ''} 的角色本',
-              pageCount: AppState.rolePageCount,
+              pageCount: app.rolePageCount,
               page: app.page,
               onPage: app.setPage,
-              asset: (n) => 'assets/fake/role_$n.jpg',
+              asset: (n) => app.image('/tablet/role/source/$n', 'assets/fake/role_$n.jpg'),
               allowText: true,
               openedPages: app.openedPages,
               onOpen: app.openPage,
@@ -61,10 +61,10 @@ class HandbookReader extends StatelessWidget {
     final app = AppScope.of(context);
     return PageReader(
       title: '组织者手册',
-      pageCount: AppState.handbookPageCount,
+      pageCount: app.handbookPageCount,
       page: app.handbookPage,
       onPage: app.setHandbookPage,
-      asset: (n) => 'assets/fake/handbook_$n.jpg',
+      asset: (n) => app.image('/tablet/handbook/source/$n', 'assets/fake/handbook_$n.jpg'),
       allowText: false,
     );
   }
@@ -91,7 +91,7 @@ class PageReader extends StatefulWidget {
   final int pageCount;
   final int page;
   final ValueChanged<int> onPage;
-  final String Function(int page) asset;
+  final ImageProvider Function(int page) asset;
   final bool allowText;
   final int? openedPages; // null：不盖页（手册）
   final bool Function(int page)? onOpen;
@@ -304,7 +304,7 @@ class _ZoomablePageState extends State<_ZoomablePage> with SingleTickerProviderS
 /// 横屏点开的单页全屏：黑底，只有这一页；双击/双指放大，下拉或点关闭回去。
 class PageViewer extends StatefulWidget {
   const PageViewer({super.key, required this.asset, required this.page});
-  final String asset;
+  final ImageProvider asset;
   final int page;
 
   @override
@@ -372,7 +372,7 @@ class _PageViewerState extends State<PageViewer> {
 
 class _Page extends StatelessWidget {
   const _Page({super.key, required this.asset, required this.page, required this.available, required this.night});
-  final String asset;
+  final ImageProvider asset;
   final int page;
   final bool available;
   final NightMode night;

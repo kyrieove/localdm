@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 
+import 'api.dart';
 import 'models.dart';
 
 /// App 从打开到进入本局要经过的几步。每一步都是一整屏，不在同一页里插提示。
@@ -13,18 +14,23 @@ enum NightMode { off, dim, invert }
 
 enum Section { book, cards, talk, handbook }
 
-/// 原型的全部状态。真 App 里这里换成 HTTP 客户端，字段不变。
+/// App 的全部状态。连上电脑后（[api] 不为空）数据都来自 /tablet/* 接口；
+/// 没连电脑时用 assets/fixtures 的假数据，给原型调试抽屉和 flutter test 用。
 class AppState extends ChangeNotifier {
-  // 接口缺口：/tablet/role/book 没给原稿页数、也没有手册页数，原型先写死；真 App 需要接口补字段。
-  static const rolePageCount = 12;
-  static const handbookPageCount = 4;
-  static const cardsWithBack = {'card-1', 'card-3', 'card-5'};
-  static const serverAddress = '192.168.1.23:5188';
+  static const pollEvery = Duration(seconds: 2);
+
+  TabletApi? api;
+  String serverAddress = '192.168.1.23:5188'; // 原型假地址；连上后换成真地址
+  int rolePageCount = 12;
+  int handbookPageCount = 4;
 
   late Catalog catalog;
   late RoleBook book;
   late TableUi ui;
   final List<PublicMessage> messages = [];
+  int _nextSequence = 0;
+  String? _sessionId;
+  Timer? _poller;
 
   Stage stage = Stage.connect;
   String? myRoleId;
@@ -33,7 +39,6 @@ class AppState extends ChangeNotifier {
   int page = 1; // 角色本当前原稿页（1 起）
   int handbookPage = 1;
   // 已按住翻开的原稿页数：后面的页盖着，只能按顺序翻开（与网页端 TabletSpikeState.OpenedPages 同规则）。
-  // 接口缺口：现在只有 Blazor 在进程内拿得到，HTTP 没有。
   int openedPages = 0;
   bool textMode = false;
   bool immersive = false; // 阅读时隐藏导航栏与控件
@@ -50,13 +55,17 @@ class AppState extends ChangeNotifier {
   bool curtain = false;
   bool nextClaimTaken = false;
   String? pendingToast;
-  bool showDebug = true; // 原型调试把手；截图时用 clean=1 隐藏
+  bool showDebug = true; // 原型调试把手；截图时用 clean=1 隐藏，连真电脑时不出现
   String? pendingSheet; //原型网址参数：进来就打开 phase / reading / role 面板
 
   Future<void> load() async {
     Future<Map<String, dynamic>> read(String name) async =>
         jsonDecode(await rootBundle.loadString('assets/fixtures/$name.json')) as Map<String, dynamic>;
     catalog = Catalog.fromJson(await read('catalog'));
+    // 合成服务没有带背面的卡；原型给三张配上假背面，好看翻面。
+    for (final c in catalog.cards) {
+      c.hasBack = const {'card-1', 'card-3', 'card-5'}.contains(c.cardId);
+    }
     book = RoleBook.fromJson(await read('role_book'));
     ui = TableUi.fromJson(await read('ui'));
     final pub = await read('public');
@@ -94,20 +103,138 @@ class AppState extends ChangeNotifier {
 
   Role? get myRole => catalog.roles.where((r) => r.roleId == myRoleId).firstOrNull;
 
+  /// 连上电脑：地址存在本机，之后每 2 秒问一次电脑现在是什么状态。
+  Future<void> connect(String address) async {
+    final trimmed = address.trim().replaceFirst(RegExp(r'^https?://'), '').replaceAll(RegExp(r'/+$'), '');
+    serverAddress = trimmed;
+    api = TabletApi(Uri.parse('http://$trimmed/'), await TabletApi.deviceId());
+    await TabletApi.saveAddress(trimmed);
+    showDebug = false;
+    page = 1;
+    openedPages = 0;
+    myRoleId = null;
+    messages.clear();
+    _nextSequence = 0;
+    _sessionId = null;
+    stage = Stage.waitingStory;
+    notifyListeners();
+    _poller?.cancel();
+    await _poll();
+    _poller = Timer.periodic(pollEvery, (_) => _poll());
+  }
+
+  bool _polling = false;
+
+  Future<void> _poll() async {
+    final api = this.api;
+    if (api == null || _polling) return;
+    _polling = true;
+    try {
+      final cat = await api.json('/tablet/catalog');
+      if (cat == null) throw StateError('catalog');
+      final previousTitle = catalog.storyTitle;
+      catalog = Catalog.fromJson(cat);
+      if (!online) setOnline(true);
+      if (catalog.storyState == 'None') {
+        _leaveRole(Stage.waitingStory);
+      } else if (catalog.storyState == 'Preparing') {
+        _leaveRole(Stage.preparing);
+      } else if (stage == Stage.waitingStory || stage == Stage.preparing || previousTitle != catalog.storyTitle) {
+        // 电脑上换了剧本或刚准备好：认领还在（App 重启）就直接回到阅读页。
+        stage = await _loadBook() ? Stage.inGame : Stage.pickRole;
+      } else if (stage == Stage.inGame && !catalog.claimedRoles.contains(myRoleId)) {
+        _leaveRole(Stage.pickRole); // 电脑上释放了这个角色
+      }
+      if (stage == Stage.inGame) await _pollTable(api);
+      notifyListeners();
+    } catch (_) {
+      if (online) setOnline(false);
+      reconnectAttempt++;
+      notifyListeners();
+    } finally {
+      _polling = false;
+    }
+  }
+
+  Future<void> _pollTable(TabletApi api) async {
+    final pub = await api.json('/tablet/public?after=$_nextSequence');
+    if (pub != null) {
+      if (pub['sessionId'] != _sessionId) {
+        // 电脑上重新开了一局：序号从头数，旧对话清掉，下一轮从 0 取。
+        _sessionId = pub['sessionId'] as String?;
+        messages.clear();
+        if (_nextSequence != 0) {
+          _nextSequence = 0;
+          return;
+        }
+      }
+      final fresh = [for (final m in pub['messages'] as List) PublicMessage.fromJson(m)];
+      messages.addAll(fresh);
+      if (fresh.isNotEmpty && section != Section.talk) unreadTalk += fresh.length;
+      _nextSequence = pub['nextSequence'] as int;
+      final host = pub['host'] as Map<String, dynamic>;
+      hostBusy = host['busy'] as bool;
+      hostSpeaking = host['speaking'] as bool;
+    }
+    final table = await api.json('/tablet/ui');
+    if (table != null) ui = TableUi.fromJson(table);
+  }
+
+  void _leaveRole(Stage next) {
+    if (stage == Stage.connect || stage == Stage.localNetwork || stage == Stage.localNetworkDenied) return;
+    myRoleId = null;
+    openedPages = 0;
+    page = 1;
+    stage = next;
+  }
+
+  /// 取本人角色本和阅读进度；没认领（404）返回 false。
+  Future<bool> _loadBook() async {
+    final api = this.api!;
+    final j = await api.json('/tablet/role/book');
+    if (j == null) return false;
+    book = RoleBook.fromJson(j);
+    myRoleId = j['roleId'] as String;
+    rolePageCount = j['sourcePageCount'] as int;
+    handbookPageCount = j['handbookPageCount'] as int;
+    openedPages = j['openedPages'] as int;
+    final settings = (await api.json('/tablet/role/progress'))?['settings'] as Map<String, dynamic>?;
+    if (settings != null) {
+      fontSize = (settings['fontSize'] as num).toDouble();
+      lineSpacing = double.tryParse(settings['lineSpacing'] as String) ?? lineSpacing;
+      textMode = settings['preferText'] as bool;
+      page = (settings['sourcePageNumber'] as int).clamp(1, rolePageCount < 1 ? 1 : rolePageCount);
+      if (page > 1) pendingToast = '已回到第 $page 页，上次读到这里';
+    }
+    return true;
+  }
+
+  /// 原稿页、卡面的图片：连着电脑走接口，原型走打包进 App 的假图。
+  ImageProvider image(String apiPath, String fakeAsset) => api?.image(apiPath) ?? AssetImage(fakeAsset);
+
   void go(Stage s) {
     stage = s;
     notifyListeners();
     // 原型没有真电脑：等待页几秒后自己往下走，模拟主持人开了剧本、材料准备好。
     final next = {Stage.waitingStory: Stage.preparing, Stage.preparing: Stage.pickRole}[s];
-    if (next != null && showDebug) {
+    if (next != null && showDebug && api == null) {
       Timer(const Duration(seconds: 3), () {
         if (stage == s) go(next);
       });
     }
   }
 
-  /// 模拟 POST /tablet/claim：被别人抢先时返回 false（接口 409 TAKEN）。
+  /// POST /tablet/claim：被别人抢先时返回 false（接口 409 TAKEN）。
   Future<bool> claim(String roleId) async {
+    final api = this.api;
+    if (api != null) {
+      final response = await api.post('/tablet/claim?roleId=${Uri.encodeQueryComponent(roleId)}');
+      catalog.claimedRoles.add(roleId);
+      final ok = response.statusCode == 200 && await _loadBook();
+      if (ok) stage = Stage.inGame;
+      notifyListeners();
+      return ok;
+    }
     await Future<void>.delayed(const Duration(milliseconds: 450));
     if (nextClaimTaken || catalog.claimedRoles.contains(roleId)) {
       nextClaimTaken = false;
@@ -124,6 +251,7 @@ class AppState extends ChangeNotifier {
   }
 
   void release() {
+    api?.post('/tablet/release').ignore();
     catalog.claimedRoles.remove(myRoleId);
     myRoleId = null;
     page = 1;
@@ -141,13 +269,27 @@ class AppState extends ChangeNotifier {
 
   void setPage(int p) {
     page = p.clamp(1, rolePageCount);
+    _saveProgress();
     notifyListeners();
+  }
+
+  /// 阅读进度存到电脑上：杀掉 App 再开，从 /tablet/role/progress 取回。
+  void _saveProgress() {
+    api?.post('/tablet/role/progress', {
+      'characterOffset': 0,
+      'fontSize': fontSize.round(),
+      'lineSpacing': lineSpacing.toString(),
+      'focusMode': false,
+      'preferText': textMode,
+      'sourcePageNumber': page,
+    }).ignore();
   }
 
   /// 按住翻开：只有下一页能翻，返回是否翻开。
   bool openPage(int p) {
     if (p != openedPages + 1) return false;
     openedPages = p;
+    api?.post('/tablet/role/open/$p').ignore();
     notifyListeners();
     return true;
   }
