@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>角色本翻页预览</title>
+<style>
+:root {
+    --paper: #fbfaf7;
+    --paper-deep: #efede7;
+    --ink: #292823;
+    --ink-soft: #5b564c;
+    --rule: #dedbd2;
+    --seal: #943f32;
+    --muted: #716d63;
+    --gold: #b8924a;
+    --desk: #e7e3da;
+    --serif: "Noto Serif SC", "Songti SC", "SimSun", "Source Han Serif SC", serif;
+    --sans: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --paper: #23221e; --paper-deep: #1a1916; --ink: #ece8de; --ink-soft: #b9b3a5;
+        --rule: #3a382f; --seal: #d6806f; --muted: #988f7e; --gold: #d2b06a; --desk: #141310;
+    }
+}
+:root[data-theme="dark"] {
+    --paper: #23221e; --paper-deep: #1a1916; --ink: #ece8de; --ink-soft: #b9b3a5;
+    --rule: #3a382f; --seal: #d6806f; --muted: #988f7e; --gold: #d2b06a; --desk: #141310;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+    background: var(--desk);
+    color: var(--ink);
+    font-family: var(--sans);
+    display: flex; flex-direction: column;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* 顶栏：和平板「书卷」一样的纸色细线 */
+.bar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px 16px; background: var(--paper); border-bottom: 1px solid var(--rule);
+}
+.bar h1 { font: 600 17px var(--serif); margin: 0 8px 0 0; }
+.bar .count { color: var(--muted); font-size: 14px; margin-right: auto; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+.seg button {
+    border: 0; background: transparent; color: var(--ink-soft); font: 14px var(--sans);
+    padding: 7px 12px; cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--seal); color: #fff; }
+.quiet {
+    border: 1px solid var(--rule); background: transparent; color: var(--ink-soft);
+    border-radius: 8px; padding: 7px 12px; font: 14px var(--sans); cursor: pointer;
+}
+
+/* 书页区 */
+.stage {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 14px;
+    padding: 18px 16px; min-height: 0;
+}
+.nav {
+    flex: none; width: 44px; height: 88px; border-radius: 10px; border: 1px solid var(--rule);
+    background: var(--paper); color: var(--ink-soft); font-size: 22px; cursor: pointer;
+}
+.nav:disabled { opacity: .35; cursor: default; }
+.spread {
+    display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 18px;
+    height: 100%; max-height: 900px; width: min(100%, calc((100vh - 120px) * 0.72 * var(--cols, 2)));
+}
+.slot { perspective: 2000px; min-height: 0; }
+.slot.empty { visibility: hidden; }
+
+.card {
+    position: relative; width: 100%; height: 100%;
+    transform-style: preserve-3d;
+    transition: transform .8s cubic-bezier(.22, .9, .25, 1);
+}
+.slot.open .card { transform: rotateY(-180deg); }
+.slot.flipping .card { animation: lift .8s cubic-bezier(.22, .9, .25, 1); }
+@keyframes lift {
+    0%   { transform: rotateY(0) translateZ(0) scale(1); }
+    45%  { transform: rotateY(-95deg) translateZ(80px) scale(1.06); }
+    100% { transform: rotateY(-180deg) translateZ(0) scale(1); }
+}
+.face {
+    position: absolute; inset: 0; border-radius: 12px; overflow: hidden;
+    backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 10px 28px rgba(0,0,0,.14);
+}
+.slot.flipping .face { box-shadow: 0 30px 60px rgba(0,0,0,.28); }
+
+/* 正面：原稿页或示意文字页 */
+.front { transform: rotateY(180deg); background: var(--paper); }
+.front img { width: 100%; height: 100%; object-fit: contain; display: block; background: #fff; }
+.front .text { padding: 34px 32px; font: 18px/1.95 var(--serif); color: var(--ink); height: 100%; overflow: auto; }
+.front .text h2 { font: 600 20px var(--serif); margin: 0 0 14px; }
+.front .text .stop {
+    margin-top: 22px; padding: 12px 14px; border: 1px dashed var(--seal); color: var(--seal);
+    border-radius: 8px; text-align: center;
+}
+.front .pno { position: absolute; bottom: 10px; right: 14px; font-size: 12px; color: var(--muted); }
+/* 翻开那一下掠过的一道光 */
+.front::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.55) 50%, transparent 65%);
+    transform: translateX(-120%);
+}
+.slot.flipping .front::after { animation: glint 1s .45s ease-out; }
+@keyframes glint { to { transform: translateX(120%); } }
+
+/* 背面：三种卡背 */
+.back {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    cursor: pointer; user-select: none; color: #fff;
+}
+.back .no { font: 600 28px var(--serif); letter-spacing: 2px; }
+.back .hint { font-size: 14px; opacity: .85; }
+.back .ring { width: 86px; height: 86px; position: relative; }
+.back .ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.back .ring circle { fill: none; stroke-width: 4; }
+.back .ring .track { stroke: rgba(255,255,255,.25); }
+.back .ring .fill { stroke: #fff; stroke-dasharray: 251; stroke-dashoffset: 251; }
+.back .ring .seal {
+    position: absolute; inset: 12px; border-radius: 50%; display: grid; place-items: center;
+    font: 600 22px var(--serif); border: 2px solid currentColor;
+}
+
+.skin-seal .back {
+    background:
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,.10), transparent 60%),
+        repeating-linear-gradient(45deg, rgba(255,255,255,.07) 0 2px, transparent 2px 14px),
+        repeating-linear-gradient(-45deg, rgba(255,255,255,.07) 0 2px, transparent 2px 14px),
+        var(--seal);
+    outline: 2px solid rgba(255,255,255,.35); outline-offset: -12px;
+}
+.skin-paper .back {
+    color: var(--seal);
+    background:
+        linear-gradient(var(--paper-deep), var(--paper-deep)) padding-box,
+        repeating-linear-gradient(0deg, transparent 0 27px, var(--rule) 27px 28px);
+    outline: 1px solid var(--seal); outline-offset: -14px;
+    box-shadow: inset 0 0 0 20px var(--paper-deep), inset 0 0 0 21px var(--seal), 0 10px 28px rgba(0,0,0,.12);
+}
+.skin-paper .back .ring .track { stroke: rgba(148,63,50,.2); }
+.skin-paper .back .ring .fill { stroke: var(--seal); }
+.skin-ink .back {
+    color: var(--gold);
+    background:
+        radial-gradient(ellipse at 30% 20%, rgba(255,255,255,.06), transparent 55%),
+        radial-gradient(ellipse at 70% 85%, rgba(184,146,74,.12), transparent 50%),
+        #1d1c19;
+    outline: 1px solid var(--gold); outline-offset: -12px;
+}
+.skin-ink .back .ring .track { stroke: rgba(210,176,106,.22); }
+.skin-ink .back .ring .fill { stroke: var(--gold); }
+
+/* 还没轮到的页：灰一点，点了会晃一下 */
+.slot.waiting .back { filter: saturate(.35) brightness(.92); cursor: not-allowed; }
+.slot.shake .card { animation: shake .42s; }
+@keyframes shake {
+    20% { transform: translateX(-7px); } 40% { transform: translateX(6px); }
+    60% { transform: translateX(-4px); } 80% { transform: translateX(2px); }
+}
+.slot.next .back { animation: breathe 2.4s ease-in-out infinite; }
+@keyframes breathe { 50% { box-shadow: 0 0 0 4px rgba(184,146,74,.45), 0 10px 28px rgba(0,0,0,.14); } }
+
+.toast {
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(20px);
+    background: var(--ink); color: var(--paper); padding: 9px 16px; border-radius: 999px;
+    font-size: 14px; opacity: 0; transition: .25s; pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateX(-50%); }
+
+@media (prefers-reduced-motion: reduce) {
+    .card, .slot.flipping .card { transition: none; animation: none; }
+    .slot.next .back, .slot.flipping .front::after { animation: none; }
+}
+@media (max-width: 700px) {
+    .spread { --cols: 1 !important; width: 100%; }
+    .nav { width: 36px; }
+}
+</style>
+<script src="pages.js" onerror="void 0"></script>
+</head>
+<body>
+<header class="bar">
+    <h1>角色本</h1>
+    <span class="count" id="count"></span>
+    <span class="seg" role="group" aria-label="栏数">
+        <button data-cols="2" aria-pressed="true">双栏</button>
+        <button data-cols="1" aria-pressed="false">单栏</button>
+    </span>
+    <span class="seg" role="group" aria-label="翻开方式">
+        <button data-mode="tap" aria-pressed="true">轻点</button>
+        <button data-mode="hold" aria-pressed="false">长按</button>
+    </span>
+    <span class="seg" role="group" aria-label="卡背">
+        <button data-skin="seal" aria-pressed="false">朱印</button>
+        <button data-skin="paper" aria-pressed="true">素笺</button>
+        <button data-skin="ink" aria-pressed="false">墨染</button>
+    </span>
+    <button class="quiet" id="reset">全部合上</button>
+</header>
+<main class="stage skin-paper" id="stage">
+    <button class="nav" id="prev" aria-label="上一页">‹</button>
+    <div class="spread" id="spread"></div>
+    <button class="nav" id="next" aria-label="下一页">›</button>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+// 真实页由探针写进 pages.js（window.FLIP_PAGES）；没有就用示意页。
+const pages = window.FLIP_PAGES || Array.from({ length: 12 }, (_, i) => {
+    const n = i + 1;
+    const stop = n === 5 || n === 9;
+    return {
+        title: n === 1 ? "第一幕" : n === 6 ? "第二幕" : n === 10 ? "第三幕" : null,
+        text: "这是一页示意文字，用来看翻页、排版和双栏的效果。真实使用时这里是角色本原稿页。".repeat(n % 3 + 2),
+        stop: stop ? "—— 本幕到此为止，请等待主持人通知后再翻开下一页 ——" : null,
+    };
+});
+
+const HOLD_MS = 650;
+const state = { cols: 2, mode: "tap", start: 0, opened: 0 };
+const spread = document.getElementById("spread");
+
+function pageFace(p, n) {
+    if (p.img) return `<img src="${p.img}" alt="第 ${n} 页原稿">`;
+    return `<div class="text">${p.title ? `<h2>${p.title}</h2>` : ""}<p>${p.text}</p>${p.stop ? `<div class="stop">${p.stop}</div>` : ""}</div><span class="pno">${n}</span>`;
+}
+
+function render() {
+    spread.style.setProperty("--cols", state.cols);
+    spread.innerHTML = "";
+    for (let k = 0; k < state.cols; k++) {
+        const i = state.start + k;
+        const slot = document.createElement("div");
+        slot.className = "slot";
+        if (i >= pages.length) { slot.classList.add("empty"); spread.append(slot); continue; }
+        const n = i + 1;
+        if (i < state.opened) slot.classList.add("open");
+        else if (i === state.opened) slot.classList.add("next");
+        else slot.classList.add("waiting");
+        slot.innerHTML = `
+            <div class="card">
+                <div class="face back">
+                    <div class="ring">
+                        <svg viewBox="0 0 86 86"><circle class="track" cx="43" cy="43" r="40"/><circle class="fill" cx="43" cy="43" r="40"/></svg>
+                        <div class="seal">阅</div>
+                    </div>
+                    <div class="no">第 ${n} 页</div>
+                    <div class="hint">${i === state.opened ? (state.mode === "hold" ? "按住翻开" : "轻点翻开") : `先翻开第 ${state.opened + 1} 页`}</div>
+                </div>
+                <div class="face front">${pageFace(pages[i], n)}</div>
+            </div>`;
+        bindSlot(slot, i);
+        spread.append(slot);
+    }
+    document.getElementById("prev").disabled = state.start === 0;
+    document.getElementById("next").disabled = state.start + state.cols >= pages.length;
+    document.getElementById("count").textContent = `已翻开 ${state.opened} / ${pages.length} 页`;
+}
+
+function flip(slot, i) {
+    state.opened = i + 1;
+    document.getElementById("count").textContent = `已翻开 ${state.opened} / ${pages.length} 页`;
+    slot.classList.remove("next");
+    slot.classList.add("flipping", "open");
+    if (navigator.vibrate) navigator.vibrate(12);
+    setTimeout(() => render(), 1100);
+}
+
+function refuse(slot) {
+    slot.classList.remove("shake"); void slot.offsetWidth; slot.classList.add("shake");
+    toast(`先翻开第 ${state.opened + 1} 页`);
+}
+
+function bindSlot(slot, i) {
+    const back = slot.querySelector(".back");
+    const fill = slot.querySelector(".fill");
+    let timer = null, raf = null, t0 = 0;
+    const cancel = () => {
+        clearTimeout(timer); cancelAnimationFrame(raf); timer = null;
+        fill.style.strokeDashoffset = 251;
+    };
+    back.addEventListener("pointerdown", e => {
+        if (i !== state.opened) { refuse(slot); return; }
+        if (state.mode === "tap") { flip(slot, i); return; }
+        back.setPointerCapture(e.pointerId);
+        t0 = performance.now();
+        const tick = now => {
+            fill.style.strokeDashoffset = 251 * (1 - Math.min(1, (now - t0) / HOLD_MS));
+            raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        timer = setTimeout(() => { cancel(); flip(slot, i); }, HOLD_MS);
+    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach(ev => back.addEventListener(ev, () => {
+        if (timer) { cancel(); toast("按住不放才会翻开"); }
+    }));
+}
+
+let toastTimer;
+function toast(text) {
+    const el = document.getElementById("toast");
+    el.textContent = text; el.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove("show"), 1400);
+}
+
+function go(delta) {
+    state.start = Math.max(0, Math.min(pages.length - 1, state.start + delta * state.cols));
+    render();
+}
+document.getElementById("prev").onclick = () => go(-1);
+document.getElementById("next").onclick = () => go(1);
+document.addEventListener("keydown", e => { if (e.key === "ArrowLeft") go(-1); if (e.key === "ArrowRight") go(1); });
+document.getElementById("reset").onclick = () => { state.opened = 0; state.start = 0; render(); };
+
+document.querySelectorAll(".seg").forEach(group => group.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    group.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    if (b.dataset.cols) { state.cols = +b.dataset.cols; state.start -= state.start % state.cols; }
+    if (b.dataset.mode) state.mode = b.dataset.mode;
+    if (b.dataset.skin) document.getElementById("stage").className = "stage skin-" + b.dataset.skin;
+    render();
+}));
+
+render();
+</script>
+</body>
+</html>

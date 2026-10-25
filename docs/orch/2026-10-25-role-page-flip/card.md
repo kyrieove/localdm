@@ -218,3 +218,6 @@ may change: `src/LocalDm.Tablet/Pages/RoleReader.razor`, `src/LocalDm.Tablet/www
   - round 1: exec antigravity/gemini-3.8-flash: fresh 197k, cached 1192k, out 26k  (agy-role-page-flip.jsonl) · review gpt-6.1-sol: fresh 47k, cached 161k, out 2k  (codex-review-role-page-flip.jsonl)
   - Fix 1: exec antigravity/gemini-3.8-flash: fresh 149k, cached 796k, out 19k  (agy-role-page-flip.jsonl)
 - review findings: 1 real / 0 false positive / 0 missed (medium, gpt-6.1-sol)
+- deferred: [P2] `TabletPageFlipTests.cs` 重复了 `TabletSpeechTests.cs` 里的测试内容夹具。
+- deferred: [P3] 长按只支持指针（触屏/鼠标），键盘无法翻开。
+- claude 实测：合成模式浏览器里轻点不翻、长按翻开、点图全屏只到已翻开页、刷新后状态保留。

@@ -45,6 +45,11 @@ if (args.Length > 0 && args[0] == "--export-session")
     return await ExportSessionProbe.RunAsync(args.Skip(1).ToArray());
 }
 
+if (args.Length > 0 && args[0] == "--flip-preview")
+{
+    return FlipPreviewProbe.Run(args.Skip(1).ToArray());
+}
+
 if (args.Length > 0 && args[0] == "--context-size")
 {
     return ContextSizeProbe.Run(args.Skip(1).ToArray());
