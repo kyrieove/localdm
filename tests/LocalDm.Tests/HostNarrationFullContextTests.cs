@@ -18,8 +18,8 @@ public sealed class HostNarrationFullContextTests
         Assert.Contains(SyntheticPackage.PublicIntro, prompt, StringComparison.Ordinal);
         Assert.Contains(SyntheticPackage.PublicTruth, prompt, StringComparison.Ordinal);
         Assert.Contains(SyntheticPackage.ClueCardText, prompt, StringComparison.Ordinal);
-        // 角色本不进 DM 上下文：隔离发生在上下文构造处，不靠提示词自觉。
-        Assert.DoesNotContain(SyntheticPackage.RoleBookText, prompt, StringComparison.Ordinal);
+        // 角色本也进 DM 上下文，按角色标出。
+        Assert.Contains(SyntheticPackage.RoleBookText, prompt, StringComparison.Ordinal);
         Assert.Contains("Visibility=Private", prompt, StringComparison.Ordinal);
         Assert.Contains("p.5", prompt, StringComparison.Ordinal);
         Assert.Contains("投票", prompt, StringComparison.Ordinal);
@@ -106,6 +106,13 @@ public sealed class HostNarrationFullContextTests
         Assert.Contains("只答眼前这一步，并且只讲这一步用得上的规则", system, StringComparison.Ordinal);
         Assert.Contains("不要点出资料、卡面或卡背之间的任何矛盾、巧合或数量关系", system, StringComparison.Ordinal);
         Assert.Contains("不管聊了多久，都不要在对话里说出任何卡面上的物件、文字或细节", system, StringComparison.Ordinal);
+
+        // 2026-10-25 真人整局：保密规则把手册里的分段引导也挡掉了，材料疑问也一律婉拒。
+        Assert.Contains("就照手册原文念，这不算暗示。一次只念一段", system, StringComparison.Ordinal);
+        Assert.Contains("手册没写就如实说手册没写", system, StringComparison.Ordinal);
+        Assert.Contains("不要把任何人角色本或私有卡里的内容说给全桌听", system, StringComparison.Ordinal);
+        Assert.Contains("请操作者去平板的线索列表或实体卡盒里核对", system, StringComparison.Ordinal);
+        Assert.Contains("提醒还有哪些地方没查、当前环节该讨论什么问题", system, StringComparison.Ordinal);
     }
 
     [Fact]

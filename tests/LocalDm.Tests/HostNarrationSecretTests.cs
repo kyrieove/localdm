@@ -40,14 +40,15 @@ public sealed class HostNarrationSecretTests
             SyntheticPackage.Create(), session, HostNarrationIntent.RevealTruth).Select(m => m.Content));
 
     [Fact]
-    public void Role_book_text_never_reaches_the_dm_in_any_state()
+    public void Role_book_text_reaches_the_dm_labelled_with_its_role_in_any_state()
     {
-        // 角色本在 DM 上下文构造处就被隔离：不是靠提示词让模型自己不看。
+        // 角色本给 DM 读，按角色标出；不外说靠提示词第 4 条。
         foreach (var session in AllStates())
         {
             var prompt = Prompt(session);
 
-            Assert.DoesNotContain(SyntheticPackage.RoleBookText, prompt, StringComparison.Ordinal);
+            Assert.Contains(SyntheticPackage.RoleBookText, prompt, StringComparison.Ordinal);
+            Assert.Contains("类别=角色本（角色 role-1）", prompt, StringComparison.Ordinal);
         }
     }
 
@@ -65,14 +66,12 @@ public sealed class HostNarrationSecretTests
     }
 
     [Fact]
-    public void Uncovered_role_book_source_text_is_not_appended()
+    public void Uncovered_role_book_source_text_is_appended_like_any_other_source()
     {
-        // 角色本的 span 没被任何段覆盖：它也不能从「未覆盖来源原文」这一段漏出去。
         var prompt = Prompt(Revealed() with { State = SessionState.Playing });
 
         var section = Section(prompt, "【未被规范文段完整覆盖的来源原文】");
 
-        Assert.DoesNotContain("合成页 6", section, StringComparison.Ordinal);
         Assert.Contains("合成页 7", section, StringComparison.Ordinal);
     }
 
@@ -99,7 +98,7 @@ public sealed class HostNarrationSecretTests
     }
 
     [Fact]
-    public void Revealed_session_gives_dm_truth_but_never_role_book()
+    public void Revealed_session_gives_dm_truth_and_role_book()
     {
         var revealed = Revealed();
 
@@ -108,7 +107,7 @@ public sealed class HostNarrationSecretTests
 
         Assert.Contains(SyntheticPackage.PublicTruth, prompt, StringComparison.Ordinal);
         Assert.Contains(SyntheticPackage.PublicTruth, grounding, StringComparison.Ordinal);
-        Assert.DoesNotContain(SyntheticPackage.RoleBookText, prompt, StringComparison.Ordinal);
+        Assert.Contains(SyntheticPackage.RoleBookText, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain(SyntheticPackage.RoleBookText, grounding, StringComparison.Ordinal);
     }
 
@@ -139,7 +138,7 @@ public sealed class HostNarrationSecretTests
         var prompt = Prompt(paused);
 
         Assert.Contains(SyntheticPackage.PublicTruth, prompt, StringComparison.Ordinal);
-        Assert.DoesNotContain(SyntheticPackage.RoleBookText, prompt, StringComparison.Ordinal);
+        Assert.Contains(SyntheticPackage.RoleBookText, prompt, StringComparison.Ordinal);
         Assert.DoesNotContain(SyntheticPackage.PublicTruth, HostNarration.BuildGroundingText(SyntheticPackage.Create(), paused), StringComparison.Ordinal);
     }
 
