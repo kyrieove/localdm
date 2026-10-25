@@ -24,7 +24,7 @@ class ConnectScreen extends StatelessWidget {
       children: [
         Text('连接主持电脑', style: text.displaySmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w600)),
         const SizedBox(height: 16),
-        Text('在电脑上打开本局主持，剧本库页顶部有平板入口，点开是一个大二维码。把平板对准它，连上后会自动进入。',
+        Text('在电脑上打开主持软件，剧本库页顶部有平板入口，点开是一个大二维码。把平板对准它，连上后会自动进入。',
             style: text.titleMedium?.copyWith(color: scheme.onSurfaceVariant, height: 1.6)),
         const SizedBox(height: 28),
         _Step(n: 1, text: '平板和电脑连同一个 Wi-Fi'),
@@ -212,7 +212,7 @@ class LocalNetworkScreen extends StatelessWidget {
       final allowed = await showCupertinoDialog<bool>(
         context: context,
         builder: (context) => CupertinoAlertDialog(
-          title: const Text('“本局主持”想要查找并连接到本地网络上的设备'),
+          title: const Text('“Dungeon Master”想要查找并连接到本地网络上的设备'),
           content: const Text('用来连接同一 Wi-Fi 下的主持电脑，读取你的角色本和线索卡。'),
           actions: [
             CupertinoDialogAction(onPressed: () => Navigator.pop(context, false), child: const Text('不允许')),
@@ -235,7 +235,7 @@ class LocalNetworkScreen extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               denied
-                  ? '打开「设置 › 隐私与安全性 › 本地网络」，把「本局主持」的开关打开，再回到这里。'
+                  ? '打开「设置 › 隐私与安全性 › 本地网络」，把「Dungeon Master」的开关打开，再回到这里。'
                   : 'iPad 会弹出一个系统提示。请点「好」，否则 App 找不到同一 Wi-Fi 下的主持电脑。',
               textAlign: TextAlign.center,
               style: text.titleMedium?.copyWith(color: scheme.onSurfaceVariant, height: 1.6),

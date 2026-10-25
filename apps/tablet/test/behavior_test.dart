@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localdm_tablet/data/app_state.dart';
 import 'package:localdm_tablet/main.dart';
+import 'package:localdm_tablet/screens/reader.dart';
 
 // 只验行为：测试环境的字体是方块字，外观靠浏览器截图看。
 Future<AppState> pump(WidgetTester tester, Size size, Map<String, String> link) async {
@@ -70,6 +71,44 @@ void main() {
     await tester.tap(find.text('没有背面'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('这张卡没有背面'), findsOneWidget);
+  });
+
+  testWidgets('盖着的下一页按住 0.65 秒翻开；中途松手不翻；更后面的页翻不开', (tester) async {
+    final state = await pump(tester, const Size(820, 1180), {'stage': 'inGame', 'page': '2', 'opened': '1', 'text': '0'});
+    expect(find.text('按住翻开'), findsOneWidget);
+
+    var g = await tester.startGesture(const Offset(450, 600));
+    await tester.pump(); // 动画从下一帧开始计时
+    await tester.pump(const Duration(milliseconds: 300));
+    await g.up();
+    await tester.pumpAndSettle();
+    expect(state.openedPages, 1, reason: '只按了 300ms');
+
+    g = await tester.startGesture(const Offset(450, 600));
+    await tester.pump(); // 动画从下一帧开始计时
+    await tester.pump(const Duration(milliseconds: 700));
+    await g.up();
+    await tester.pumpAndSettle();
+    expect(state.openedPages, 2);
+
+    expect(state.openPage(4), isFalse, reason: '只能按顺序翻');
+  });
+
+  testWidgets('横屏点左页只单独全屏这一页', (tester) async {
+    await pump(tester, const Size(1180, 820), {'stage': 'inGame', 'page': '1', 'opened': '12', 'text': '0'});
+    await tester.tapAt(const Offset(420, 400));
+    await tester.pumpAndSettle();
+    expect(find.byType(PageViewer), findsOneWidget);
+    expect(tester.widget<PageViewer>(find.byType(PageViewer)).page, 1);
+  });
+
+  testWidgets('横屏滑条一格是两页：手册 4 页拖到第二格就到第 3–4 页', (tester) async {
+    final state = await pump(tester, const Size(1180, 820), {'stage': 'inGame', 'section': 'handbook'});
+    final slider = tester.widget<Slider>(find.byType(Slider));
+    expect(slider.divisions, 1);
+    slider.onChanged!(1);
+    await tester.pumpAndSettle();
+    expect(state.handbookPage, 3);
   });
 
   testWidgets('断线后只有当时前后两页能看', (tester) async {

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -23,6 +25,9 @@ Widget nightFilter(NightMode mode, Widget child) => switch (mode) {
       NightMode.invert => ColorFiltered(colorFilter: const ColorFilter.matrix(invertMatrix), child: child),
     };
 
+/// 按住翻开要按满的时长，与网页端 page-flip.js 的 HOLD_MS 一致。
+const holdToOpen = Duration(milliseconds: 650);
+
 class RoleReader extends StatelessWidget {
   const RoleReader({super.key});
 
@@ -41,6 +46,8 @@ class RoleReader extends StatelessWidget {
               onPage: app.setPage,
               asset: (n) => 'assets/fake/role_$n.jpg',
               allowText: true,
+              openedPages: app.openedPages,
+              onOpen: app.openPage,
             ),
     );
   }
@@ -63,8 +70,10 @@ class HandbookReader extends StatelessWidget {
   }
 }
 
-/// 原稿翻页：竖屏一页、横屏两页并排。左右两边轻点翻页，中间轻点收起/展开控件，
-/// 双击放大到点的位置，双指缩放；放大时不翻页，只平移。
+/// 原稿翻页：竖屏一页、横屏两页并排。左右两边轻点翻页。
+/// 竖屏：中间轻点开关控件，双击/双指放大这一页。
+/// 横屏：点哪一页就单独全屏看哪一页（不会连带放大旁边那页），点两页之外的空白开关控件。
+/// 角色本的页一开始盖着，按住下一页约 0.65 秒才翻开，只能按顺序翻。
 class PageReader extends StatefulWidget {
   const PageReader({
     super.key,
@@ -74,6 +83,8 @@ class PageReader extends StatefulWidget {
     required this.onPage,
     required this.asset,
     required this.allowText,
+    this.openedPages,
+    this.onOpen,
   });
 
   final String title;
@@ -82,47 +93,34 @@ class PageReader extends StatefulWidget {
   final ValueChanged<int> onPage;
   final String Function(int page) asset;
   final bool allowText;
+  final int? openedPages; // null：不盖页（手册）
+  final bool Function(int page)? onOpen;
 
   @override
   State<PageReader> createState() => _PageReaderState();
 }
 
-class _PageReaderState extends State<PageReader> with TickerProviderStateMixin {
+class _PageReaderState extends State<PageReader> {
   PageController? _pages;
   bool? _spread;
-  final _zoom = TransformationController();
-  late final _zoomAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 220));
-  Animation<Matrix4>? _zoomTween;
-  Offset _doubleTapAt = Offset.zero;
   bool _zoomed = false;
   bool _seeking = false;
 
   @override
-  void initState() {
-    super.initState();
-    _zoomAnim.addListener(() => _zoom.value = _zoomTween!.value);
-    _zoom.addListener(() {
-      final z = _zoom.value.getMaxScaleOnAxis() > 1.01;
-      if (z != _zoomed) setState(() => _zoomed = z);
-    });
-  }
-
-  @override
   void dispose() {
     _pages?.dispose();
-    _zoom.dispose();
-    _zoomAnim.dispose();
     super.dispose();
   }
 
   int _viewOf(int page) => _spread! ? (page - 1) ~/ 2 : page - 1;
   int _firstPageOf(int view) => _spread! ? view * 2 + 1 : view + 1;
   int get _viewCount => _spread! ? (widget.pageCount + 1) ~/ 2 : widget.pageCount;
+  bool _covered(int p) => widget.openedPages != null && p > widget.openedPages!;
 
   void _precache(int page) {
     final app = AppScope.of(context);
     for (var p = page - 2; p <= page + 2; p++) {
-      if (p >= 1 && p <= widget.pageCount && app.pageCached(p)) precacheImage(pageImage(widget.asset(p)), context);
+      if (p >= 1 && p <= widget.pageCount && app.pageCached(p) && !_covered(p)) precacheImage(pageImage(widget.asset(p)), context);
     }
   }
 
@@ -135,18 +133,35 @@ class _PageReaderState extends State<PageReader> with TickerProviderStateMixin {
     _pages!.animateToPage(target, duration: const Duration(milliseconds: 260), curve: Curves.easeOutCubic);
   }
 
-  void _toggleZoom() {
-    final Matrix4 end;
-    if (_zoomed) {
-      end = Matrix4.identity();
+  void _openViewer(int p) {
+    Navigator.of(context).push(PageRouteBuilder(
+      opaque: false,
+      transitionDuration: const Duration(milliseconds: 260),
+      reverseTransitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, a, _) => FadeTransition(opacity: a, child: PageViewer(asset: widget.asset(p), page: p)),
+    ));
+  }
+
+  Widget _pageOrCover(AppState app, int p, {required bool spread}) {
+    final Widget child;
+    if (_covered(p)) {
+      child = CoverPage(
+        key: ValueKey('cover-$p'),
+        page: p,
+        isNext: p == widget.openedPages! + 1,
+        nextToOpen: widget.openedPages! + 1,
+        onOpen: () => widget.onOpen!(p),
+      );
     } else {
-      const s = 2.5;
-      end = Matrix4.identity()
-        ..translateByDouble(-_doubleTapAt.dx * (s - 1), -_doubleTapAt.dy * (s - 1), 0, 1)
-        ..scaleByDouble(s, s, 1, 1);
+      final page = _Page(key: ValueKey('page-$p'), asset: widget.asset(p), page: p, available: app.pageCached(p), night: app.night);
+      child = spread ? GestureDetector(onTap: () => _openViewer(p), child: page) : page;
     }
-    _zoomTween = Matrix4Tween(begin: _zoom.value, end: end).animate(CurvedAnimation(parent: _zoomAnim, curve: Curves.easeOutCubic));
-    _zoomAnim.forward(from: 0);
+    // 翻开那一下：盖页淡出、原稿轻微放大淡入。
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 320),
+      transitionBuilder: (c, a) => FadeTransition(opacity: a, child: ScaleTransition(scale: Tween(begin: 0.96, end: 1.0).animate(a), child: c)),
+      child: child,
+    );
   }
 
   @override
@@ -159,12 +174,12 @@ class _PageReaderState extends State<PageReader> with TickerProviderStateMixin {
         _spread = spread;
         _pages?.dispose();
         _pages = PageController(initialPage: _viewOf(widget.page));
-        _zoom.value = Matrix4.identity();
+        _zoomed = false;
       }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _precache(widget.page);
       });
-      final chrome = !app.immersive;
+      final view = _viewOf(widget.page);
       return ColoredBox(
         color: Theme.of(context).colorScheme.surfaceContainerLowest,
         child: Stack(children: [
@@ -173,33 +188,32 @@ class _PageReaderState extends State<PageReader> with TickerProviderStateMixin {
             itemCount: _viewCount,
             physics: _zoomed ? const NeverScrollableScrollPhysics() : const PageScrollPhysics(),
             onPageChanged: (v) {
-              _zoom.value = Matrix4.identity();
+              _zoomed = false;
               widget.onPage(_firstPageOf(v));
               if (!_seeking) app.toggleImmersive(true); // 一翻页就收起控件，像实体书；拖滑条时不收
             },
             itemBuilder: (context, v) {
               final first = _firstPageOf(v);
-              final pages = [first, if (spread && first + 1 <= widget.pageCount) first + 1];
-              return GestureDetector(
-                onTap: app.toggleImmersive,
-                onDoubleTapDown: (d) => _doubleTapAt = d.localPosition,
-                onDoubleTap: _toggleZoom,
-                child: InteractiveViewer(
-                  transformationController: v == _viewOf(widget.page) ? _zoom : null,
-                  maxScale: 4,
+              if (spread) {
+                final pages = [first, if (first + 1 <= widget.pageCount) first + 1];
+                return GestureDetector(
+                  onTap: app.toggleImmersive, // 只有点到两页之外的空白才会到这里
                   child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12, horizontal: spread ? 16 : 8),
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                     child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                       for (final p in pages)
-                        Flexible(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: _Page(asset: widget.asset(p), page: p, available: app.pageCached(p), night: app.night),
-                          ),
-                        ),
+                        Flexible(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: _pageOrCover(app, p, spread: true))),
                     ]),
                   ),
-                ),
+                );
+              }
+              return _ZoomablePage(
+                onTap: app.toggleImmersive,
+                onZoomChanged: (z) {
+                  if (z != _zoomed) setState(() => _zoomed = z);
+                },
+                zoomEnabled: !_covered(first),
+                child: Padding(padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8), child: Center(child: _pageOrCover(app, first, spread: false))),
               );
             },
           ),
@@ -209,15 +223,20 @@ class _PageReaderState extends State<PageReader> with TickerProviderStateMixin {
             Positioned(right: 0, top: 0, bottom: 0, width: c.maxWidth * 0.18, child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => _turn(1))),
           ],
           _ReaderChrome(
-            visible: chrome,
+            visible: !app.immersive,
             title: widget.title,
-            page: widget.page,
+            view: view,
+            viewCount: _viewCount,
+            labelOf: (v) {
+              final a = _firstPageOf(v), b = spread ? (a + 1).clamp(1, widget.pageCount) : a;
+              return a == b ? '第 $a 页' : '第 $a–$b 页';
+            },
             pageCount: widget.pageCount,
-            spread: spread,
             allowText: widget.allowText,
-            onSeek: (p) {
+            onSeek: (v) {
+              // 滑条按「一屏」走：横屏一格是两页，所以 1→2、3→4 这种同一屏内的拖动不会被吞掉。
               _seeking = true;
-              _pages!.jumpToPage(_viewOf(p));
+              _pages!.jumpToPage(v);
               _seeking = false;
             },
           ),
@@ -227,8 +246,132 @@ class _PageReaderState extends State<PageReader> with TickerProviderStateMixin {
   }
 }
 
+/// 竖屏单页：双击放大到点击处 2.5 倍，双指 1–4 倍。
+class _ZoomablePage extends StatefulWidget {
+  const _ZoomablePage({required this.child, required this.onTap, required this.onZoomChanged, required this.zoomEnabled});
+  final Widget child;
+  final VoidCallback onTap;
+  final ValueChanged<bool> onZoomChanged;
+  final bool zoomEnabled;
+
+  @override
+  State<_ZoomablePage> createState() => _ZoomablePageState();
+}
+
+class _ZoomablePageState extends State<_ZoomablePage> with SingleTickerProviderStateMixin {
+  final _zoom = TransformationController();
+  late final _anim = AnimationController(vsync: this, duration: const Duration(milliseconds: 220));
+  Animation<Matrix4>? _tween;
+  Offset _at = Offset.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _anim.addListener(() => _zoom.value = _tween!.value);
+    _zoom.addListener(() => widget.onZoomChanged(_zoom.value.getMaxScaleOnAxis() > 1.01));
+  }
+
+  @override
+  void dispose() {
+    _zoom.dispose();
+    _anim.dispose();
+    super.dispose();
+  }
+
+  void _toggle() {
+    final zoomed = _zoom.value.getMaxScaleOnAxis() > 1.01;
+    const s = 2.5;
+    final end = zoomed
+        ? Matrix4.identity()
+        : (Matrix4.identity()
+          ..translateByDouble(-_at.dx * (s - 1), -_at.dy * (s - 1), 0, 1)
+          ..scaleByDouble(s, s, 1, 1));
+    _tween = Matrix4Tween(begin: _zoom.value, end: end).animate(CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic));
+    _anim.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onDoubleTapDown: widget.zoomEnabled ? (d) => _at = d.localPosition : null,
+      onDoubleTap: widget.zoomEnabled ? _toggle : null,
+      child: InteractiveViewer(transformationController: _zoom, maxScale: 4, panEnabled: widget.zoomEnabled, scaleEnabled: widget.zoomEnabled, child: widget.child),
+    );
+  }
+}
+
+/// 横屏点开的单页全屏：黑底，只有这一页；双击/双指放大，下拉或点关闭回去。
+class PageViewer extends StatefulWidget {
+  const PageViewer({super.key, required this.asset, required this.page});
+  final String asset;
+  final int page;
+
+  @override
+  State<PageViewer> createState() => _PageViewerState();
+}
+
+class _PageViewerState extends State<PageViewer> {
+  double _drag = 0;
+  bool _zoomed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    final fade = (1 - _drag.abs() / 400).clamp(0.3, 1.0);
+    return GestureDetector(
+      onVerticalDragUpdate: _zoomed ? null : (d) => setState(() => _drag += d.delta.dy),
+      onVerticalDragEnd: _zoomed
+          ? null
+          : (d) {
+              if (_drag.abs() > 120 || d.velocity.pixelsPerSecond.dy.abs() > 900) {
+                Navigator.pop(context);
+              } else {
+                setState(() => _drag = 0);
+              }
+            },
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.95 * fade),
+        child: SafeArea(
+          child: Stack(children: [
+            Transform.translate(
+              offset: Offset(0, _drag),
+              child: _ZoomablePage(
+                onTap: () {},
+                zoomEnabled: true,
+                onZoomChanged: (z) {
+                  if (z != _zoomed) setState(() => _zoomed = z);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Center(child: _Page(asset: widget.asset, page: widget.page, available: true, night: app.night)),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              left: 8,
+              child: IconButton(
+                tooltip: '关闭',
+                color: Colors.white,
+                icon: const Icon(Icons.close_rounded, size: 28),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            Positioned(
+              top: 18,
+              right: 24,
+              child: Text('第 ${widget.page} 页', style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 15)),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
 class _Page extends StatelessWidget {
-  const _Page({required this.asset, required this.page, required this.available, required this.night});
+  const _Page({super.key, required this.asset, required this.page, required this.available, required this.night});
   final String asset;
   final int page;
   final bool available;
@@ -258,23 +401,131 @@ class _Page extends StatelessWidget {
   }
 }
 
-/// 阅读控件：顶部书名与页码、原稿/文字切换、阅读设置；底部页码滑条。浮在原稿上，轻点中间收起。
+/// 盖着的原稿页。下一页：按住，圆环走满就翻开并震一下；中途松手或滑动就作废。
+/// 更后面的页：点一下抖一抖，提示先翻哪一页。
+class CoverPage extends StatefulWidget {
+  const CoverPage({super.key, required this.page, required this.isNext, required this.nextToOpen, required this.onOpen});
+  final int page;
+  final bool isNext;
+  final int nextToOpen;
+  final VoidCallback onOpen;
+
+  @override
+  State<CoverPage> createState() => _CoverPageState();
+}
+
+class _CoverPageState extends State<CoverPage> with TickerProviderStateMixin {
+  late final _hold = AnimationController(vsync: this, duration: holdToOpen)
+    ..addStatusListener((s) {
+      if (s == AnimationStatus.completed) {
+        HapticFeedback.mediumImpact();
+        widget.onOpen();
+      }
+    });
+  late final _shake = AnimationController(vsync: this, duration: const Duration(milliseconds: 360));
+  Offset? _down;
+
+  @override
+  void dispose() {
+    _hold.dispose();
+    _shake.dispose();
+    super.dispose();
+  }
+
+  void _cancel() {
+    if (!_hold.isCompleted) _hold.reverse();
+    _down = null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final face = AspectRatio(
+      aspectRatio: 821 / 1259,
+      child: Container(
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: widget.isNext ? scheme.primary.withValues(alpha: 0.6) : scheme.outlineVariant, width: 1.5),
+        ),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          SizedBox(
+            width: 96,
+            height: 96,
+            child: Stack(alignment: Alignment.center, children: [
+              // 底圈：没按时也看得见「要按满一圈」
+              Container(decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: scheme.outlineVariant, width: 5))),
+              AnimatedBuilder(
+                animation: _hold,
+                builder: (context, _) => CircularProgressIndicator(
+                  value: widget.isNext ? _hold.value : 0,
+                  strokeWidth: 5,
+                  strokeCap: StrokeCap.round,
+                  backgroundColor: scheme.outlineVariant,
+                ),
+              ),
+              Text('阅', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w700, color: widget.isNext ? scheme.primary : scheme.onSurfaceVariant)),
+            ]),
+          ),
+          const SizedBox(height: 20),
+          Text('第 ${widget.page} 页', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: scheme.onSurface)),
+          const SizedBox(height: 8),
+          Text(widget.isNext ? '按住翻开' : '先翻开第 ${widget.nextToOpen} 页', style: TextStyle(fontSize: 16, color: scheme.onSurfaceVariant)),
+        ]),
+      ),
+    );
+
+    if (!widget.isNext) {
+      return GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          _shake.forward(from: 0);
+        },
+        child: AnimatedBuilder(
+          animation: _shake,
+          builder: (context, child) {
+            final t = _shake.value;
+            return Transform.translate(offset: Offset(8 * (1 - t) * math.sin(t * math.pi * 6), 0), child: child);
+          },
+          child: face,
+        ),
+      );
+    }
+    // Listener 不进手势竞争：按住的同时还能左右滑动翻页，一滑就作废这次按住。
+    return Listener(
+      onPointerDown: (e) {
+        _down = e.position;
+        _hold.forward(from: 0);
+      },
+      onPointerMove: (e) {
+        if (_down != null && (e.position - _down!).distance > 12) _cancel();
+      },
+      onPointerUp: (_) => _cancel(),
+      onPointerCancel: (_) => _cancel(),
+      child: face,
+    );
+  }
+}
+
+/// 阅读控件：顶部书名与页码、原稿/文字切换、阅读设置；底部滑条。浮在原稿上，轻点收起。
 class _ReaderChrome extends StatelessWidget {
   const _ReaderChrome({
     required this.visible,
     required this.title,
-    required this.page,
+    required this.view,
+    required this.viewCount,
+    required this.labelOf,
     required this.pageCount,
-    required this.spread,
     required this.allowText,
     required this.onSeek,
   });
 
   final bool visible;
   final String title;
-  final int page;
+  final int view;
+  final int viewCount;
+  final String Function(int view) labelOf;
   final int pageCount;
-  final bool spread;
   final bool allowText;
   final ValueChanged<int> onSeek;
 
@@ -282,7 +533,6 @@ class _ReaderChrome extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final scheme = Theme.of(context).colorScheme;
-    final pageLabel = spread && page + 1 <= pageCount ? '第 $page–${page + 1} 页 · 共 $pageCount 页' : '第 $page 页 · 共 $pageCount 页';
     final bar = scheme.surfaceContainer.withValues(alpha: 0.96);
     return IgnorePointer(
       ignoring: !visible,
@@ -300,7 +550,7 @@ class _ReaderChrome extends StatelessWidget {
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                       Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
-                      Text(pageLabel, style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 14)),
+                      Text('${labelOf(view)} · 共 $pageCount 页', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 14)),
                     ]),
                   ),
                   if (allowText) const ModeSwitch(),
@@ -318,16 +568,17 @@ class _ReaderChrome extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 6, 20, 6),
                 child: Row(children: [
-                  Text('$page', style: TextStyle(color: scheme.onSurfaceVariant, fontFeatures: const [FontFeature.tabularFigures()])),
+                  Text('1', style: TextStyle(color: scheme.onSurfaceVariant)),
                   Expanded(
-                    child: Slider(
-                      value: page.toDouble(),
-                      min: 1,
-                      max: pageCount.toDouble(),
-                      divisions: pageCount - 1,
-                      label: '第 $page 页',
-                      onChanged: (v) => onSeek(v.round()),
-                    ),
+                    child: viewCount < 2
+                        ? const SizedBox()
+                        : Slider(
+                            value: view.toDouble(),
+                            max: (viewCount - 1).toDouble(),
+                            divisions: viewCount - 1,
+                            label: labelOf(view),
+                            onChanged: (v) => onSeek(v.round()),
+                          ),
                   ),
                   Text('$pageCount', style: TextStyle(color: scheme.onSurfaceVariant)),
                   const SizedBox(width: 8),
@@ -364,7 +615,8 @@ class ModeSwitch extends StatelessWidget {
   }
 }
 
-/// 文字重排：字号行距可调，一行不超过约 34 个字。长按一段跳到它所在的原稿页核对。
+/// 文字重排：字号行距可调，一行不超过约 34 个字。只显示已翻开的原稿页上的内容。
+/// 长按一段跳到它所在的原稿页核对。
 class TextReader extends StatelessWidget {
   const TextReader({super.key});
 
@@ -373,6 +625,8 @@ class TextReader extends StatelessWidget {
     final app = AppScope.of(context);
     final scheme = Theme.of(context).colorScheme;
     final body = TextStyle(fontSize: app.fontSize, height: app.lineSpacing, color: scheme.onSurface);
+    bool visible(int? p) => p == null || p <= app.openedPages;
+    final hiddenLeft = app.book.chapters.any((c) => c.blocks.any((b) => !visible(b.sourcePageNumber)));
     return Column(children: [
       Material(
         color: scheme.surfaceContainer,
@@ -398,7 +652,7 @@ class TextReader extends StatelessWidget {
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: app.fontSize * 34),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    for (final b in ch.blocks)
+                    for (final b in ch.blocks.where((b) => visible(b.sourcePageNumber)))
                       if (b.kind == 'ChapterTitle')
                         Padding(
                           padding: const EdgeInsets.only(top: 24, bottom: 16),
@@ -425,7 +679,11 @@ class TextReader extends StatelessWidget {
               ),
             Padding(
               padding: const EdgeInsets.only(top: 24),
-              child: Text('长按任一段，跳到它所在的原稿页核对', textAlign: TextAlign.center, style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 14)),
+              child: Text(
+                hiddenLeft ? '后面的内容还盖着：切到「原稿」，按住第 ${app.openedPages + 1} 页翻开' : '长按任一段，跳到它所在的原稿页核对',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 14),
+              ),
             ),
           ],
         ),

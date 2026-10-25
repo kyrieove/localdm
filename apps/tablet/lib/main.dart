@@ -36,7 +36,7 @@ class TabletApp extends StatelessWidget {
       child: ListenableBuilder(
         listenable: state,
         builder: (context, _) => MaterialApp(
-          title: '本局主持',
+          title: 'Dungeon Master',
           debugShowCheckedModeBanner: false,
           theme: buildTheme(Palette.light),
           darkTheme: buildTheme(Palette.dark),

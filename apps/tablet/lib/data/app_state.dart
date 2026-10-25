@@ -32,6 +32,9 @@ class AppState extends ChangeNotifier {
 
   int page = 1; // 角色本当前原稿页（1 起）
   int handbookPage = 1;
+  // 已按住翻开的原稿页数：后面的页盖着，只能按顺序翻开（与网页端 TabletSpikeState.OpenedPages 同规则）。
+  // 接口缺口：现在只有 Blazor 在进程内拿得到，HTTP 没有。
+  int openedPages = 0;
   bool textMode = false;
   bool immersive = false; // 阅读时隐藏导航栏与控件
   double fontSize = 19;
@@ -82,6 +85,7 @@ class AppState extends ChangeNotifier {
     pendingSheet = q['sheet'];
     showDebug = q['clean'] != '1';
     if (q['unread'] != null) unreadTalk = int.parse(q['unread']!);
+    openedPages = int.tryParse(q['opened'] ?? '') ?? page;
     if (stage == Stage.inGame) {
       myRoleId = 'role-3';
       catalog.claimedRoles.add('role-3');
@@ -113,6 +117,7 @@ class AppState extends ChangeNotifier {
     }
     catalog.claimedRoles.add(roleId);
     myRoleId = roleId;
+    openedPages = 0;
     stage = Stage.inGame;
     notifyListeners();
     return true;
@@ -122,6 +127,7 @@ class AppState extends ChangeNotifier {
     catalog.claimedRoles.remove(myRoleId);
     myRoleId = null;
     page = 1;
+    openedPages = 0;
     stage = Stage.pickRole;
     notifyListeners();
   }
@@ -136,6 +142,14 @@ class AppState extends ChangeNotifier {
   void setPage(int p) {
     page = p.clamp(1, rolePageCount);
     notifyListeners();
+  }
+
+  /// 按住翻开：只有下一页能翻，返回是否翻开。
+  bool openPage(int p) {
+    if (p != openedPages + 1) return false;
+    openedPages = p;
+    notifyListeners();
+    return true;
   }
 
   void setHandbookPage(int p) {
