@@ -117,4 +117,5 @@ may change: `src/LocalDm.Core/Hosting/HostNarration.cs`, `tests/LocalDm.Tests/Ho
 - check: `dotnet test tests/LocalDm.Tests --filter "FullyQualifiedName~HostNarration|FullyQualifiedName~HostUncertainty"` → exit 0 (run by run-card)
 - tokens:
   - round 1: exec antigravity/gemini-3.8-flash: fresh 265k, cached 2093k, out 34k  (agy-dm-reads-role-books.jsonl) · review gpt-6.1-sol: fresh 38k, cached 56k, out 1k  (codex-review-dm-reads-role-books.jsonl)
-- review findings: 0 real / 0 false positive / 0 missed (medium, gpt-6.1-sol)
+- review findings: 0 real / 0 false positive / 1 missed (medium, gpt-6.1-sol)
+- missed 1：`PhaseFlowTests` 里两条「角色本不进 DM」旧断言没列进卡（Claude 写卡时 grep 漏了），合入后跑全套测试发现，随后的测试修复提交里改掉。
