@@ -474,8 +474,7 @@
                             </StackPanel>
 
                             <Button x:Name="DictationButton" Grid.Column="1"
-                                    Margin="0,0,8,0" FontFamily="Segoe MDL2 Assets"
-                                    Content="&#xE720;" Command="{Binding ToggleDictationCommand}"
+                                    Margin="0,0,8,0" Command="{Binding ToggleDictationCommand}"
                                     AutomationProperties.AutomationId="DictationButton"
                                     ToolTip="语音输入（右 Alt）"
                                     Visibility="{Binding DictationAvailable, Converter={StaticResource BoolToVisibility}}">
@@ -493,6 +492,8 @@
                                         </Style.Triggers>
                                     </Style>
                                 </Button.Style>
+                                <!-- 图标放进带 Icon 样式的 TextBlock：按钮上的 FontFamily 会被隐式 TextBlock 样式盖成雅黑，显示成方框 -->
+                                <TextBlock Text="&#xE720;" Style="{StaticResource Icon}" FontSize="15" />
                             </Button>
 
                             <!-- 停止随忙碌出现；空输入时发送不可点 -->

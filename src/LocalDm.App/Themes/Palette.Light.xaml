@@ -7,8 +7,6 @@
     <SolidColorBrush x:Key="PaperDim" Color="#FFEFEAE2" />
     <SolidColorBrush x:Key="Bubble" Color="#FFE9E3DA" />
     <SolidColorBrush x:Key="AvatarWash" Color="#FFE2DCD2" />
-    <SolidColorBrush x:Key="Cloth" Color="#FFFFFFFF" />
-    <SolidColorBrush x:Key="ClothSoft" Color="#FFE9E3DA" />
     <SolidColorBrush x:Key="Ink" Color="#FF1F1B16" />
     <SolidColorBrush x:Key="InkSoft" Color="#FF575045" />
     <SolidColorBrush x:Key="Muted" Color="#FF645D51" />

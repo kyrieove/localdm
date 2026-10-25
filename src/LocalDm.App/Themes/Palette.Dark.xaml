@@ -6,7 +6,7 @@
       近黑的暖灰底 + 一种琥珀（台灯光）当唯一强调色，其余全是灰阶。
       键名沿用旧的纸墨命名，对应关系：
         Paper=surface  PaperDeep=surfaceContainerLow  PaperDim=surfaceContainer
-        Bubble=surfaceContainerHigh  AvatarWash=surfaceContainerHighest  Cloth=surfaceContainerLowest
+        Bubble=surfaceContainerHigh  AvatarWash=surfaceContainerHighest
         Ink=onSurface  InkSoft=onSurfaceVariant  Rule=outlineVariant  Silver=outline
         Seal=primary  OnSeal=onPrimary  SealWash=primaryContainer  OnSealWash=onPrimaryContainer
         SealDeep=error（警告与拒绝原因的字色）  ErrorWash=错误横幅底
@@ -17,8 +17,6 @@
     <SolidColorBrush x:Key="PaperDim" Color="#FF1E1B17" />
     <SolidColorBrush x:Key="Bubble" Color="#FF29251F" />
     <SolidColorBrush x:Key="AvatarWash" Color="#FF34302A" />
-    <SolidColorBrush x:Key="Cloth" Color="#FF0E0C0A" />
-    <SolidColorBrush x:Key="ClothSoft" Color="#FF29251F" />
     <SolidColorBrush x:Key="Ink" Color="#FFECE5D8" />
     <SolidColorBrush x:Key="InkSoft" Color="#FFB5AC9C" />
     <SolidColorBrush x:Key="Muted" Color="#FFA59C8C" />

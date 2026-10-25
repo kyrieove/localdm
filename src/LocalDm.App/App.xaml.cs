@@ -22,9 +22,9 @@ public partial class App : Application
             Themes.ThemePalette.UseLight =
                 new SettingsStore(Path.Combine(root, "settings.json"), Path.Combine(root, "secrets")).Load().LightTheme;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception)
         {
-            // 读不到设置就用默认深色，不能因为配色开不了软件。
+            // 读不到设置就用默认深色：这时崩溃处理还没挂上，配色偏好不能挡住启动。
         }
     }
 

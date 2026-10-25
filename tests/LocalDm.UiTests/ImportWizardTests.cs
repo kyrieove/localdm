@@ -107,6 +107,7 @@ public sealed class ImportWizardTests
 
                 // ② 页不能有任何图片控件：缩略图也会剧透。
                 Assert.Empty(CollectVisuals<Image>(window));
+                ConversationVisualTests.Save(window, "import-groups.png");
             }
             finally
             {
@@ -141,6 +142,7 @@ public sealed class ImportWizardTests
                 var texts = CollectTexts(window);
                 Assert.DoesNotContain(texts, text => text.Contains(TruthSentence, StringComparison.Ordinal));
                 Assert.Contains(texts, text => text.Contains("已隐藏", StringComparison.Ordinal));
+                ConversationVisualTests.Save(window, "import-flow.png");
 
                 // 重写之后才能继续。
                 flagged.Hint = "翻开线索卡，逐张读完。";
@@ -534,6 +536,11 @@ public sealed class ImportWizardTests
             Width = 1200,
             Height = 900,
         };
+        if (content is Control control)
+        {
+            // 截图只渲染内容：向导在主窗口里铺在 Paper 上，这里给同一块底
+            control.Background = (Brush)control.FindResource("Paper");
+        }
         WpfRunner.ShowOffscreen(window);
         return window;
     }

@@ -560,7 +560,7 @@ public sealed class ConversationVisualTests
         await Task.Delay(80);
     }
 
-    private static void Save(Window window, string fileName)
+    internal static void Save(Window window, string fileName)
     {
         Directory.CreateDirectory(ArtifactsDir);
         window.UpdateLayout();

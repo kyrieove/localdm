@@ -244,53 +244,6 @@
         </Setter>
     </Style>
 
-    <!-- 面板里的行按钮：透明底、悬停一层浅底 -->
-    <Style x:Key="RailButton" TargetType="Button">
-        <Setter Property="FontFamily" Value="{StaticResource BodyFace}" />
-        <Setter Property="FontSize" Value="14" />
-        <Setter Property="FontWeight" Value="Normal" />
-        <Setter Property="Foreground" Value="{StaticResource Ink}" />
-        <Setter Property="Background" Value="Transparent" />
-        <Setter Property="BorderBrush" Value="Transparent" />
-        <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="Padding" Value="10,9" />
-        <Setter Property="Margin" Value="0,0,0,1" />
-        <Setter Property="HorizontalContentAlignment" Value="Left" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <Border x:Name="Shell" Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="10" SnapsToDevicePixels="True">
-                        <ContentPresenter TextElement.Foreground="{TemplateBinding Foreground}"
-                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                          VerticalAlignment="Center"
-                                          Margin="{TemplateBinding Padding}" RecognizesAccessKey="False" />
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Shell" Property="Background" Value="{StaticResource Bubble}" />
-                        </Trigger>
-                        <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Shell" Property="Background" Value="{StaticResource AvatarWash}" />
-                        </Trigger>
-                        <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="Shell" Property="BorderBrush" Value="{StaticResource Seal}" />
-                            <Setter TargetName="Shell" Property="BorderThickness" Value="2" />
-                        </Trigger>
-                        <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Foreground" Value="{StaticResource Muted}" />
-                            <Setter Property="Cursor" Value="Arrow" />
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-
     <!-- 小标题：面板里的分组名，不是内容 -->
     <Style x:Key="RailLabel" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource BodyFace}" />
@@ -380,13 +333,6 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="20" />
         <Setter Property="Padding" Value="16,12,12,10" />
-    </Style>
-
-    <!-- 卡片：环节面板、设置分组、剧本库条目共用的圆角块 -->
-    <Style x:Key="Card" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource PaperDim}" />
-        <Setter Property="CornerRadius" Value="16" />
-        <Setter Property="Padding" Value="18" />
     </Style>
 
     <!-- ===== 输入 ===== -->
@@ -488,7 +434,12 @@
                                 </ControlTemplate>
                             </ToggleButton.Template>
                         </ToggleButton>
-                        <ContentPresenter IsHitTestVisible="False" Margin="{TemplateBinding Padding}" Width="Auto"
+                        <!-- 可编辑的下拉框（设置页的模型 ID）要有这个文本框，否则打不了字 -->
+                        <TextBox x:Name="PART_EditableTextBox" Visibility="Collapsed" Margin="0,0,30,0"
+                                 Padding="{TemplateBinding Padding}" Background="Transparent" BorderThickness="0"
+                                 Foreground="{TemplateBinding Foreground}" VerticalContentAlignment="Center"
+                                 IsReadOnly="{Binding IsReadOnly, RelativeSource={RelativeSource TemplatedParent}}" />
+                        <ContentPresenter x:Name="ContentSite" IsHitTestVisible="False" Margin="{TemplateBinding Padding}" Width="Auto"
                                           HorizontalAlignment="Left" VerticalAlignment="Center"
                                           Content="{TemplateBinding SelectionBoxItem}"
                                           ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
@@ -507,6 +458,10 @@
                         </Popup>
                     </Grid>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsEditable" Value="True">
+                            <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="ContentSite" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
                         <Trigger Property="IsKeyboardFocusWithin" Value="True">
                             <Setter Property="BorderBrush" Value="{StaticResource Seal}" />
                         </Trigger>

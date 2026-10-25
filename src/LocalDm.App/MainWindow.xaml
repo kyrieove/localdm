@@ -96,6 +96,9 @@
                                 Style="{StaticResource NavRailButton}" Tag="{Binding IsSetupActive}"
                                 Command="{Binding ShowSetupCommand}"
                                 ToolTip="{Binding ModelStatusLine}" />
+                        <TextBlock Text="未选模型" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center"
+                                   Foreground="{StaticResource SealDeep}" Margin="0,-6,0,10"
+                                   Visibility="{Binding IsModelMissing, Converter={StaticResource BoolToVisibility}}" />
                     </StackPanel>
 
                     <StackPanel Grid.Row="2" DataContext="{Binding Host}" Margin="0,0,0,14">
