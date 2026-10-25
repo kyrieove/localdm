@@ -19,7 +19,7 @@
             <Border Height="1" Background="{StaticResource Rule}" Margin="0,22,0,0" />
 
             <Border x:Name="TabletConnectionSection" DataContext="{Binding Tablet}" Padding="18" Margin="0,22,0,0"
-                    Background="{StaticResource PaperDeep}" BorderBrush="{StaticResource Rule}" BorderThickness="1" CornerRadius="8">
+                    Background="{StaticResource PaperDim}" CornerRadius="16">
                 <StackPanel>
                     <Grid>
                         <Grid.ColumnDefinitions>

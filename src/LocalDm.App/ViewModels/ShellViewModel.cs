@@ -155,6 +155,7 @@ public sealed class ShellViewModel : ObservableObject
                 or nameof(SessionViewModel.Revision))
             {
                 OnPropertyChanged(nameof(CanReturnToSession));
+                OnPropertyChanged(nameof(HasSession));
             }
         };
 
@@ -179,6 +180,12 @@ public sealed class ShellViewModel : ObservableObject
     /// <summary>当前是否停在设置页。</summary>
     public bool IsSetupActive => ReferenceEquals(Current, _setup);
 
+    /// <summary>导航栏「剧本库」亮起：剧本库与导入向导都算这一栏。</summary>
+    public bool IsLibraryActive => !IsHostActive && !IsSetupActive;
+
+    /// <summary>已经装载了一局：导航栏显示「本局」入口。</summary>
+    public bool HasSession => _host.Session.Projection is not null;
+
     /// <summary>
     /// 能不能「回到本局」：已经装载了一局、但当前不在主持台。
     /// 没有这个入口，从设置页回来只能重新走一遍剧本库。
@@ -194,6 +201,7 @@ public sealed class ShellViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(IsHostActive));
                 OnPropertyChanged(nameof(IsSetupActive));
+                OnPropertyChanged(nameof(IsLibraryActive));
                 OnPropertyChanged(nameof(CanReturnToSession));
 
                 if (ReferenceEquals(value, _library))

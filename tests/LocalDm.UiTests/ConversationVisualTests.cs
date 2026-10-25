@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using LocalDm.App;
 using LocalDm.App.Demo;
+using LocalDm.App.Themes;
 using LocalDm.App.ViewModels;
 using LocalDm.Core.Domain;
 using LocalDm.Core.Game;
@@ -73,6 +74,107 @@ public sealed class ConversationVisualTests
                 chatScroll!.ScrollToTop();
                 await WaitForRenderAsync();
                 Save(window, "hostdesk-conversation-top.png");
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    /// <summary>浅色配色：开关在 ThemePalette 上，必须在窗口创建之前拨过去（颜色在加载时取定）。</summary>
+    [Fact]
+    public async Task Light_theme_snapshot()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            using var testShell = await TestShell.OpenAsync(root.Path);
+            var shell = testShell.Shell;
+            ThemePalette.UseLight = true;
+            var window = NewWindow(shell, 1360, 860);
+            WpfRunner.ShowOffscreen(window);
+            try
+            {
+                Assert.Equal(Color.FromRgb(0xFA, 0xF7, 0xF2), ((SolidColorBrush)window.FindResource("Paper")).Color);
+                await WalkToSearchWithChatAsync(shell);
+                await WaitForRenderAsync();
+                Save(window, "hostdesk-light.png");
+
+                shell.ShowSetupCommand.Execute(null);
+                await WaitForRenderAsync();
+                Save(window, "setup-light.png");
+            }
+            finally
+            {
+                window.Close();
+                ThemePalette.UseLight = false;
+            }
+        });
+    }
+
+    /// <summary>重新开始不可撤销：从底部滑出确认面板，取消后收起。</summary>
+    [Fact]
+    public async Task Restart_confirms_in_a_bottom_sheet()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            using var testShell = await TestShell.OpenAsync(root.Path);
+            var shell = testShell.Shell;
+            var window = NewWindow(shell, 1360, 860);
+            WpfRunner.ShowOffscreen(window);
+            try
+            {
+                await WalkToSearchWithChatAsync(shell);
+                var sheet = (FrameworkElement)window.FindName("RestartSheet");
+                Assert.False(sheet.IsVisible, "没点重新开始时不该有确认面板。");
+
+                shell.Host.Session.RestartCommand.Execute(null);
+                await Task.Delay(300); // 等滑入动画走完再截图
+                await WaitForRenderAsync();
+                Assert.True(sheet.IsVisible, "点了重新开始要先弹出确认面板。");
+                Save(window, "hostdesk-restart-sheet.png");
+
+                shell.Host.Session.CancelRestartCommand.Execute(null);
+                await WaitForRenderAsync();
+                Assert.False(sheet.IsVisible, "取消后确认面板要收起。");
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    /// <summary>窄窗口（含放大后）自动收起环节面板，点表盘再展开。</summary>
+    [Fact]
+    public async Task Phase_panel_collapses_when_narrow_and_the_dial_reopens_it()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            using var testShell = await TestShell.OpenAsync(root.Path);
+            var shell = testShell.Shell;
+            var window = NewWindow(shell, 1280, 720);
+            WpfRunner.ShowOffscreen(window);
+            try
+            {
+                await WalkToSearchWithChatAsync(shell);
+                await WaitForRenderAsync();
+                Assert.True(window.IsPhasePanelOpen, "1280 宽、1.0 倍时环节面板应当展开。");
+
+                window.SetUiScale(1.5); // 有效宽度约 853，低于 1000
+                await WaitForRenderAsync();
+                Assert.False(window.IsPhasePanelOpen, "放大到窄于 1000 时环节面板应当自动收起。");
+
+                var dial = (Button)window.FindName("PhaseDial");
+                dial.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                await Task.Delay(300); // 宽度过渡 240ms
+                await WaitForRenderAsync();
+                Assert.True(window.IsPhasePanelOpen);
+                Assert.True(((FrameworkElement)window.FindName("PhasePanel")).ActualWidth > 280,
+                    "点表盘后环节面板应当展开到全宽。");
             }
             finally
             {
