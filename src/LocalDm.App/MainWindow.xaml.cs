@@ -143,6 +143,24 @@ public partial class MainWindow
             MaxWidth = 280,
             HorizontalAlignment = HorizontalAlignment.Center,
         });
+        // 平板关了浏览器或换 App 扫码会认不回角色：在这里释放后让它重新认领。
+        foreach (var role in tablet.JoinedRoles)
+        {
+            var release = new Button
+            {
+                Content = $"释放「{role.DisplayName}」",
+                Style = (Style)FindResource("QuietButton"),
+                Margin = new Thickness(0, 8, 0, 0),
+                ToolTip = "平板认不回这个角色时点这里，再在平板上重新选它；翻开的页要重新翻",
+            };
+            release.Click += (_, _) =>
+            {
+                role.ReleaseCommand.Execute(null);
+                panel.Children.Remove(release);
+            };
+            panel.Children.Add(release);
+        }
+
         new Window
         {
             Title = "平板入口",

@@ -57,6 +57,19 @@
                         </Grid>
                         <TextBlock Text="{Binding JoinedSummary}" Style="{StaticResource ChatMeta}" Margin="0,8,0,0"
                                    Visibility="{Binding JoinedSummary, Converter={StaticResource NotEmptyToVisibility}}" />
+                        <!-- 平板关了浏览器或换 App 扫码会认不回角色：在这里释放后重新认领 -->
+                        <ItemsControl x:Name="TabletJoinedRoles" ItemsSource="{Binding JoinedRoles}" Margin="0,4,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Content="{Binding DisplayName, StringFormat=释放「{0}」}" Command="{Binding ReleaseCommand}"
+                                            Style="{StaticResource QuietButton}" FontSize="12" Padding="10,4" Margin="0,4,6,0"
+                                            ToolTip="平板认不回这个角色时点这里，再在平板上重新选它；翻开的页要重新翻" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                         <Border Margin="0,8,0,0" Padding="10,8" CornerRadius="6" Background="{StaticResource SealWash}"
                                 BorderBrush="{StaticResource Seal}" BorderThickness="1"
                                 Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">

@@ -123,6 +123,24 @@ public sealed class TabletSpikeState
         }
     }
 
+    /// <summary>
+    /// 电脑上释放某个角色：平板关了浏览器或换了 App 扫码后 Cookie 就丢了，
+    /// 旧会话还占着角色；释放后新设备能重新认领。
+    /// </summary>
+    public void ReleaseRole(string roleId)
+    {
+        lock (_claimGate)
+        {
+            foreach (var (key, session) in _sessions)
+            {
+                if (string.Equals(session.RoleId, roleId, StringComparison.Ordinal))
+                {
+                    Release(key);
+                }
+            }
+        }
+    }
+
     /// <summary>翻开第 page 页：只有紧接着的下一页能翻，返回是否翻开。</summary>
     public bool OpenPage(string key, int page)
     {

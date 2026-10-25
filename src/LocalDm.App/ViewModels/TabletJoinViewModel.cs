@@ -36,6 +36,7 @@ public sealed class TabletJoinViewModel : ObservableObject, IAsyncDisposable
     private string _headline = "平板服务没有启动";
     private string? _errorText;
     private string _joinedSummary = string.Empty;
+    private IReadOnlyList<JoinedRole> _joinedRoles = [];
     private string? _selectedAddress;
     private BitmapImage? _qrCode;
     private volatile bool _disposed;
@@ -84,6 +85,9 @@ public sealed class TabletJoinViewModel : ObservableObject, IAsyncDisposable
 
     public bool HasError => _errorText is not null;
     public string JoinedSummary { get => _joinedSummary; private set => SetProperty(ref _joinedSummary, value); }
+
+    /// <summary>已认领的角色，每个带「释放」：平板丢了 Cookie 认不回角色时，在电脑上放开它重新认领。</summary>
+    public IReadOnlyList<JoinedRole> JoinedRoles { get => _joinedRoles; private set => SetProperty(ref _joinedRoles, value); }
     public BitmapImage? QrCode { get => _qrCode; private set => SetProperty(ref _qrCode, value); }
     public string? SelectedAddress
     {
@@ -226,14 +230,24 @@ public sealed class TabletJoinViewModel : ObservableObject, IAsyncDisposable
         if (server is null)
         {
             JoinedSummary = string.Empty;
+            JoinedRoles = [];
             return;
         }
 
-        var claimed = server.Services.GetRequiredService<TabletSpikeState>().ClaimedRoles;
-        var total = _content.Roles.Count;
-        JoinedSummary = total == 0 || claimed.Count == 0
+        var state = server.Services.GetRequiredService<TabletSpikeState>();
+        var claimed = state.ClaimedRoles;
+        var joined = _content.Roles.Where(r => claimed.Contains(r.RoleId, StringComparer.Ordinal)).ToArray();
+        JoinedSummary = joined.Length == 0
             ? string.Empty
-            : $"已加入 {claimed.Count} / {total}：{string.Join("、", claimed)}";
+            : $"已加入 {joined.Length} / {_content.Roles.Count}：{string.Join("、", joined.Select(r => r.DisplayName))}";
+        JoinedRoles = joined
+            .Select(r => new JoinedRole(r.DisplayName, new RelayCommand(() =>
+            {
+                state.ReleaseRole(r.RoleId);
+                TabletSessions.RaiseChanged();
+                return Task.CompletedTask;
+            })))
+            .ToArray();
     }
 
     private async Task StopCoreAsync()
@@ -249,6 +263,7 @@ public sealed class TabletJoinViewModel : ObservableObject, IAsyncDisposable
         Addresses.Clear();
         LocalUrl = string.Empty;
         JoinedSummary = string.Empty;
+        JoinedRoles = [];
         NotifyRunning();
     }
 
@@ -303,3 +318,6 @@ public sealed class TabletJoinViewModel : ObservableObject, IAsyncDisposable
         finally { _gate.Release(); }
     }
 }
+
+/// <summary>电脑上显示的一个已认领角色，带释放命令。</summary>
+public sealed record JoinedRole(string DisplayName, RelayCommand ReleaseCommand);

@@ -36,6 +36,21 @@ public sealed class TabletPageFlipTests
     }
 
     [Fact]
+    public void Releasing_a_role_lets_a_new_device_claim_it()
+    {
+        var state = new TabletSpikeState(new MinimalTabletContent());
+        Assert.True(state.TryClaim("lost-cookie", "role-1"));
+        Assert.True(state.TryClaim("other", "role-2"));
+        Assert.False(state.TryClaim("rescanned", "role-1"));
+
+        state.ReleaseRole("role-1");
+
+        Assert.Null(state.Session("lost-cookie").RoleId);
+        Assert.Equal("role-2", state.Session("other").RoleId);
+        Assert.True(state.TryClaim("rescanned", "role-1"));
+    }
+
+    [Fact]
     public void Page_flip_follows_order_and_resets_on_release()
     {
         var content = new MinimalTabletContent();

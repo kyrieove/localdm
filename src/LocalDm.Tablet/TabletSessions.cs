@@ -48,6 +48,8 @@ public static class TabletSessions
             SameSite = SameSiteMode.Lax,
             // 探针只在局域网跑，不设 Secure；一期产品用 HTTP 时同样不能设。
             IsEssential = true,
+            // 不设过期就是会话 Cookie，平板关掉浏览器再扫码会变成新设备、认不回自己的角色。
+            MaxAge = TimeSpan.FromDays(1),
         });
         return fresh;
     }
