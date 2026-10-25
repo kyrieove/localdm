@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PC 界面改造对比</title>
+<style>
+  :root { --bg:#14120F; --card:#1E1B17; --ink:#ECE5D8; --soft:#B5AC9C; --lamp:#F2B35E; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:"Microsoft YaHei UI","PingFang SC",sans-serif; }
+  main { max-width:1500px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 6px; }
+  p.lead { color:var(--soft); margin:0 0 28px; line-height:1.7; }
+  section { background:var(--card); border-radius:16px; padding:18px; margin:0 0 22px; }
+  h2 { font-size:17px; margin:0 0 12px; color:var(--lamp); }
+  .pair { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .pair.one { grid-template-columns:1fr; }
+  figure { margin:0; }
+  figcaption { color:var(--soft); font-size:13px; margin:0 0 6px; }
+  img { width:100%; border-radius:10px; display:block; }
+  @media (max-width:900px) { .pair { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>PC 端换成平板「灯下」的样子：改造前后对比</h1>
+  <p class="lead">截图由 UI 测试离屏渲染，用的是合成演示剧本，不含真实剧情。左边是改造前（main），右边是改造后（分支 pc-ui-dengxia）。</p>
+
+  <section><h2>主持台 · 对话</h2><div class="pair">
+    <figure><figcaption>改造前</figcaption><img src="before/hostdesk-conversation.png" alt="改造前的主持台对话"></figure>
+    <figure><figcaption>改造后</figcaption><img src="after/hostdesk-conversation.png" alt="改造后的主持台对话"></figure>
+  </div></section>
+
+  <section><h2>主持台 · 等待模型与朗读</h2><div class="pair">
+    <figure><figcaption>改造前</figcaption><img src="before/hostdesk-speaking.png" alt="改造前的朗读状态"></figure>
+    <figure><figcaption>改造后</figcaption><img src="after/hostdesk-speaking.png" alt="改造后的朗读状态"></figure>
+  </div></section>
+
+  <section><h2>公开材料与复盘</h2><div class="pair">
+    <figure><figcaption>改造前</figcaption><img src="before/hostdesk-truth.png" alt="改造前的复盘页"></figure>
+    <figure><figcaption>改造后</figcaption><img src="after/hostdesk-truth.png" alt="改造后的复盘页"></figure>
+  </div></section>
+
+  <section><h2>剧本库</h2><div class="pair">
+    <figure><figcaption>改造前</figcaption><img src="before/library-empty.png" alt="改造前的剧本库"></figure>
+    <figure><figcaption>改造后</figcaption><img src="after/library-empty.png" alt="改造后的剧本库"></figure>
+  </div></section>
+
+  <section><h2>偏好设置</h2><div class="pair">
+    <figure><figcaption>改造前</figcaption><img src="before/hostdesk-settings-v2.png" alt="改造前的设置页"></figure>
+    <figure><figcaption>改造后</figcaption><img src="after/hostdesk-settings-v2.png" alt="改造后的设置页"></figure>
+  </div></section>
+
+  <section><h2>小屏：1280×720（系统 150% 缩放下的可用空间）</h2><div class="pair">
+    <figure><figcaption>改造前</figcaption><img src="before/hostdesk-scale-150.png" alt="改造前 1280×720"></figure>
+    <figure><figcaption>改造后（软件内再放大到内容宽不足 1000 时，环节面板自动收起，点左上表盘展开）</figcaption><img src="after/hostdesk-scale-150.png" alt="改造后 1280×720"></figure>
+  </div></section>
+
+  <section><h2>新增：重新开始的底部确认面板</h2><div class="pair one">
+    <figure><img src="after/hostdesk-restart-sheet.png" alt="重新开始确认面板"></figure>
+  </div></section>
+
+  <section><h2>新增：浅色（设置里勾「用浅色」，重启生效）</h2><div class="pair">
+    <figure><figcaption>主持台</figcaption><img src="after/hostdesk-light.png" alt="浅色主持台"></figure>
+    <figure><figcaption>设置</figcaption><img src="after/setup-light.png" alt="浅色设置页"></figure>
+  </div></section>
+</main>
+</body>
+</html>
