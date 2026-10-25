@@ -62,27 +62,33 @@
 
             <!-- 已装订的剧本 -->
             <TextBlock Text="已装订" Style="{StaticResource RailLabel}" Margin="0,26,0,6" />
+            <!-- 剧本排成一行行小卡片：整行长条中间全是空白 -->
             <ListBox x:Name="PackageList" ItemsSource="{Binding Packages}"
                      SelectedItem="{Binding Selected, Mode=TwoWay}">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                        <Setter Property="Width" Value="280" />
+                        <Setter Property="Margin" Value="0,0,10,10" />
+                    </Style>
+                </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="4" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <Border Grid.Column="0" Background="{StaticResource Seal}" CornerRadius="2" />
-                            <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding Title}" Style="{StaticResource RailTitle}" FontSize="17" />
+                            <StackPanel Grid.Column="1" Margin="14,0,0,0">
+                                <TextBlock Text="{Binding Title}" Style="{StaticResource RailTitle}" FontSize="17"
+                                           TextTrimming="CharacterEllipsis" ToolTip="{Binding Title}" />
                                 <TextBlock Text="{Binding Summary}" Style="{StaticResource ChatMeta}"
                                            Margin="0,5,0,0" FontSize="12" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding Readiness}" Style="{StaticResource ChatMeta}"
-                                           VerticalAlignment="Center" Margin="16,0,8,0" />
                                 <Button Content="重新整理流程" Style="{StaticResource TopBarButton}"
-                                        Padding="8,3" Click="OnRefineFlow"
+                                        Padding="0,3" Margin="0,6,0,0" HorizontalAlignment="Left" Click="OnRefineFlow"
                                         ToolTip="改流程不用重新识别，确认后生成新版本的包" />
                             </StackPanel>
                         </Grid>
@@ -99,24 +105,15 @@
             </Border>
 
             <!-- 上一局还没走完：可选的接着玩，不抢「开始这一局」的主位 -->
-            <StackPanel Visibility="{Binding HasResumableSession, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock Text="上一局还没走完" Style="{StaticResource RailLabel}" Margin="0,26,0,6" />
-                <Border Padding="20,18" CornerRadius="16" Background="{StaticResource PaperDim}">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding ResumableTitle}" Style="{StaticResource RailTitle}" FontSize="17" />
-                            <TextBlock Text="{Binding ResumableDetail}" Style="{StaticResource ChatMeta}"
-                                       Margin="0,5,0,0" />
-                        </StackPanel>
-                        <Button Grid.Column="1" Content="继续这一局" Command="{Binding ContinueCommand}"
-                                Style="{StaticResource QuietButton}" VerticalAlignment="Center"
-                                Padding="18,9" Margin="22,0,0,0" />
-                    </Grid>
-                </Border>
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
+                        Visibility="{Binding HasResumableSession, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="上一局还没走完：" Style="{StaticResource ChatMeta}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding ResumableTitle}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding ResumableDetail, StringFormat=' · {0}'}" Style="{StaticResource ChatMeta}"
+                           VerticalAlignment="Center" />
+                <Button Content="继续这一局" Command="{Binding ContinueCommand}"
+                        Style="{StaticResource QuietButton}" VerticalAlignment="Center"
+                        Padding="14,6" Margin="14,0,0,0" />
             </StackPanel>
 
             <!-- 开局 -->
