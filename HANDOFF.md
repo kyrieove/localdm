@@ -11,6 +11,8 @@
 
 ## 下一步
 00. **先做这个**：2026-10-25 真人四人整局发现 6 个问题，已记录待修（还没改代码）：`docs/playtest/2026-10-25-real-four-player-issues.md`。最要紧的是保密过严导致手册分段引导用不了，和揭秘长文语音超时换声重读。
+   - 2026-10-25 已做（`4afc8b3`、`6332a0c`、`7c5d306`）：第 1 条提示词修了（分段引导例外、手册没写如实说）；按 ADR 0011 角色本进主持资料，固定提示词按试玩问题重写；设置页高级项能只读查看提示词。没在真软件里试玩验证。5 人本加角色本后 system 约 5.2 万 token，默认窗口 65,536 时要调大（本机设的是 200 万）。
+   - 还没做：第 5 条长文分段朗读、第 2 条引导段进流程、第 3 条角色本按环节解锁、第 4 条找回角色、暂缓线索找不到的原因。
 0. 试玩（2026-10-24，报告 `docs/playtest/2026-10-24-four-player-playtest.md`，含完整对话的本机版在 `.local/playtest/20261024-023234/report.md`）发现：玩家直接问 DM 时有 2 次没回复。推测是 `HostViewModel.SendAsync` 在忙的时候直接 `return`，把消息静默吞掉了。先在探针里记录发送那一刻的 `IsBusy` 来确认，确认后改成忙时给提示或排队。试玩命令：`dotnet run --project tools/LocalDm.Probe -- --playtest --model gpt-6.1-sol`（约 45 分钟）。
 1. 新版已发布到桌面（2026-10-24），开始菜单的旧图标和旧快捷方式已清理。
    发布：先 `pwsh -File packaging/windows/Publish.ps1`，再 `artifacts/LocalDm-Setup-x64.exe /VERYSILENT /SUPPRESSMSGBOXES /CURRENTUSER /NORESTART /TASKS=desktopicon`。改名后快捷方式叫 Dungeon Master，桌面上旧的「本局主持.lnk」要请用户自己删。
