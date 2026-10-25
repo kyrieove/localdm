@@ -61,7 +61,41 @@
                     @for (var pg = SourcePage; pg <= SourcePageEnd; pg++)
                     {
                         var page = pg;
-                        <img src="@(SourceUrlPrefix + page)" alt="@(SourceOnly ? RoleName : "本人角色本")原稿第 @(page) 页" @onclick="() => OpenViewerAsync(page)" />
+                        if (IsCovered(page))
+                        {
+                            if (page == OpenedPages + 1)
+                            {
+                                <div class="flip-card next @(page == _refused ? "shake" : "")">
+                                    <button type="button" class="face back" data-flip-page="@(page)" aria-label="翻开第 @(page) 页">
+                                        <span class="ring"><svg viewBox="0 0 86 86" aria-hidden="true"><circle class="track" cx="43" cy="43" r="40" /><circle class="fill" cx="43" cy="43" r="40" /></svg><span class="seal">阅</span></span>
+                                        <span class="no">第 @(page) 页</span>
+                                        <span class="hint">按住翻开</span>
+                                    </button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="flip-card waiting @(page == _refused ? "shake" : "")">
+                                    <button type="button" class="face back" @onclick="() => TryOpenAsync(page)" aria-label="翻开第 @(page) 页">
+                                        <span class="seal">阅</span>
+                                        <span class="no">第 @(page) 页</span>
+                                        <span class="hint">先翻开第 @(OpenedPages + 1) 页</span>
+                                    </button>
+                                </div>
+                            }
+                        }
+                        else if (FlipPages)
+                        {
+                            <div class="flip-card open @(page == _justOpened ? "flipping" : "")">
+                                <div class="face front">
+                                    <img src="@(SourceUrlPrefix + page)" alt="@(SourceOnly ? RoleName : "本人角色本")原稿第 @(page) 页" @onclick="() => OpenViewerAsync(page)" />
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <img src="@(SourceUrlPrefix + page)" alt="@(SourceOnly ? RoleName : "本人角色本")原稿第 @(page) 页" @onclick="() => OpenViewerAsync(page)" />
+                        }
                     }
                 </div>
                 <figcaption>原稿第 @SourcePageLabel 页，保留原文文字、颜色与排版。</figcaption>
@@ -74,10 +108,10 @@
             @if (Book is not null)
             {
                 <nav class="reader-chapters" aria-label="角色本章节">
-                    @for (var i = 0; i < Book.Chapters.Count; i++)
+                    @for (var i = 0; i < VisibleChapters.Count; i++)
                     {
                         var chapter = i;
-                        <button class="tool" aria-current="@(i == _chapter ? "location" : null)" @onclick="() => JumpChapter(chapter)">@Book.Chapters[i].Title</button>
+                        <button class="tool" aria-current="@(i == _chapter ? "location" : null)" @onclick="() => JumpChapter(chapter)">@VisibleChapters[i].Title</button>
                     }
                 </nav>
             }
@@ -116,6 +150,9 @@
     private int _total;
     private int _chapter;
     private int _sourcePage = 1;
+    private int _justOpened;
+    private int _refused;
+    private int _lastOpened = -1;
     private string _chapterLabel = string.Empty;
     private string _chapterTitle = string.Empty;
 
@@ -128,6 +165,16 @@
     [Parameter] public string SourceUrlPrefix { get; set; } = "/tablet/role/source/";
     /// <summary>只看原稿：没有文字重排（手册页签）。</summary>
     [Parameter] public bool SourceOnly { get; set; }
+    [Parameter] public bool FlipPages { get; set; }
+    [Parameter] public int OpenedPages { get; set; }
+    [Parameter] public EventCallback<int> OnOpenPage { get; set; }
+
+    private bool IsCovered(int page) => FlipPages && page > OpenedPages;
+    private bool IsChapterVisible(RoleBookChapter chapter) =>
+        !FlipPages || !(chapter.Blocks.FirstOrDefault()?.SourcePageNumber > OpenedPages);
+
+    private IReadOnlyList<RoleBookChapter> VisibleChapters =>
+        Book is null ? [] : Book.Chapters.Where(IsChapterVisible).ToArray();
 
     private int SourcePageCount => Book?.SourcePageAssetIds.Count ?? 0;
     private int SourcePage => Math.Clamp(_activeSettings.SourcePageNumber, 1, Math.Max(1, SourcePageCount));
@@ -151,10 +198,21 @@
             _activeSettings = incoming;
             _needsPagination = true;
         }
+
+        if (OpenedPages != _lastOpened)
+        {
+            if (_lastOpened >= 0) _needsPagination = true;
+            _lastOpened = OpenedPages;
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender && FlipPages)
+        {
+            _reference ??= DotNetObjectReference.Create(this);
+            await Js.InvokeVoidAsync("tabletFlip.attach", _reference);
+        }
         if (IsSourceMode || _disposed) return;
         if (_disposed || Book is null || (!_needsMount && !_needsPagination)) return;
         if (_needsMount)
@@ -174,9 +232,20 @@
         var result = new List<object>();
         foreach (var chapter in book.Chapters)
         {
-            result.Add(new { kind = "ChapterTitle", text = chapter.Title, sourcePageNumber = chapter.Blocks.FirstOrDefault()?.SourcePageNumber });
+            var chapterPage = chapter.Blocks.FirstOrDefault()?.SourcePageNumber;
+            if (!IsChapterVisible(chapter))
+            {
+                continue;
+            }
+
+            result.Add(new { kind = "ChapterTitle", text = chapter.Title, sourcePageNumber = chapterPage });
             foreach (var block in chapter.Blocks.Where(block => block.Kind != RoleBookBlockKind.ChapterTitle))
             {
+                if (FlipPages && block.SourcePageNumber > OpenedPages)
+                {
+                    continue;
+                }
+
                 result.Add(new
                 {
                     kind = block.Kind.ToString(), text = block.Text, blockId = block.BlockId,
@@ -221,10 +290,15 @@
         _offset = await Js.InvokeAsync<long>("tabletReader.offset");
         _chapter = await Js.InvokeAsync<int>("tabletReader.chapter");
         _sourcePage = await Js.InvokeAsync<int?>("tabletReader.sourcePage") ?? 1;
-        if (Book is not null && _chapter >= 0 && _chapter < Book.Chapters.Count)
+        if (_chapter >= 0 && _chapter < VisibleChapters.Count)
         {
             _chapterLabel = $"第 {_chapter + 1} 章";
-            _chapterTitle = Book.Chapters[_chapter].Title;
+            _chapterTitle = VisibleChapters[_chapter].Title;
+        }
+        else
+        {
+            _chapterLabel = "";
+            _chapterTitle = "";
         }
         var update = new ReadingProgressUpdate(_offset, _activeSettings);
         if (update != _lastReported)
@@ -271,10 +345,39 @@
         _needsPagination = true;
     }
 
+    [JSInvokable]
+    public Task HoldOpen(int page) => InvokeAsync(() => TryOpenAsync(page));
+
+    private async Task TryOpenAsync(int page)
+    {
+        if (page != OpenedPages + 1)
+        {
+            _refused = 0;
+            StateHasChanged();
+            await Task.Yield();
+            _refused = page;
+            return;
+        }
+
+        _justOpened = page;
+        await OnOpenPage.InvokeAsync(page);
+        _ = ClearJustOpenedAsync(page);
+    }
+
+    private async Task ClearJustOpenedAsync(int page)
+    {
+        await Task.Delay(1100);
+        if (_disposed || _justOpened != page) return;
+        _justOpened = 0;
+        await InvokeAsync(StateHasChanged);
+    }
+
     private async Task OpenViewerAsync(int page)
     {
         _reference ??= DotNetObjectReference.Create(this);
-        var urls = Enumerable.Range(1, SourcePageCount).Select(p => SourceUrlPrefix + p).ToArray();
+        var urls = Enumerable.Range(1, FlipPages ? Math.Min(OpenedPages, SourcePageCount) : SourcePageCount)
+            .Select(p => SourceUrlPrefix + p)
+            .ToArray();
         await Js.InvokeVoidAsync("tabletViewer.open", urls, page - 1, false, _reference);
     }
 
@@ -294,6 +397,7 @@
     {
         _disposed = true;
         try { await Js.InvokeVoidAsync("tabletViewer.close"); } catch (JSDisconnectedException) { }
+        if (FlipPages) { try { await Js.InvokeVoidAsync("tabletFlip.detach"); } catch (JSDisconnectedException) { } }
         if (_mounted)
         {
             try { await Js.InvokeVoidAsync("tabletReader.reset"); }

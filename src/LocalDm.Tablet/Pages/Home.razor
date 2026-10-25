@@ -120,7 +120,8 @@
             @if (_tab == TabBook)
             {
                 <RoleReader @key="session.RoleId" Book="Book" RoleName="@RoleName" Settings="session.Settings"
-                            Offset="session.ReadingOffset" OnProgress="ProgressCallback" />
+                            Offset="session.ReadingOffset" OnProgress="ProgressCallback"
+                            FlipPages="true" OpenedPages="session.OpenedPages" OnOpenPage="OpenPageCallback" />
             }
             else if (_tab == TabHandbook && Handbook is { } handbook)
             {
@@ -375,6 +376,9 @@
     /// <summary>阅读器进度回调。Blazor 的 EventCallback 只接受同类型委托，用工厂构造。</summary>
     private EventCallback<ReadingProgressUpdate> ProgressCallback =>
         EventCallback.Factory.Create<ReadingProgressUpdate>(this, SaveProgress);
+
+    private EventCallback<int> OpenPageCallback =>
+        EventCallback.Factory.Create<int>(this, page => { State.OpenPage(_sessionKey, page); });
 
     private async Task CopyAddress()
     {

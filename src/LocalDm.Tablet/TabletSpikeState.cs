@@ -49,6 +49,7 @@ public sealed class TabletSpikeState
                 session.RoleId = null;
                 session.SelectedCardId = null;
                 session.ReadingOffset = 0;
+                session.OpenedPages = 0;
                 session.Settings = session.Settings with { SourcePageNumber = 1 };
             }
         }
@@ -103,6 +104,7 @@ public sealed class TabletSpikeState
             session.RoleId = roleId;
             session.SelectedCardId = null;
             session.ReadingOffset = 0;
+            session.OpenedPages = 0;
             session.Settings = session.Settings with { SourcePageNumber = 1 };
             return true;
         }
@@ -116,7 +118,24 @@ public sealed class TabletSpikeState
             session.RoleId = null;
             session.SelectedCardId = null;
             session.ReadingOffset = 0;
+            session.OpenedPages = 0;
             session.Settings = session.Settings with { SourcePageNumber = 1 };
+        }
+    }
+
+    /// <summary>翻开第 page 页：只有紧接着的下一页能翻，返回是否翻开。</summary>
+    public bool OpenPage(string key, int page)
+    {
+        lock (_claimGate)
+        {
+            var session = Session(key);
+            if (session.RoleId is null || page != session.OpenedPages + 1)
+            {
+                return false;
+            }
+
+            session.OpenedPages = page;
+            return true;
         }
     }
 
@@ -128,6 +147,9 @@ public sealed class TabletSpikeState
 
         /// <summary>阅读位置：按文本字符偏移量保存，字号与窗口变化后仍能回到读到的位置。</summary>
         public long ReadingOffset { get; set; }
+
+        /// <summary>角色本原稿已按顺序翻开的页数；没翻开的页平板上显示卡背。</summary>
+        public int OpenedPages { get; set; }
 
         public ReadingSettings Settings { get; set; } = new();
     }

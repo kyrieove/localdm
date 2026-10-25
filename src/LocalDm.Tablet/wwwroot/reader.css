@@ -768,3 +768,129 @@ html, body { font-size: 16px; -webkit-text-size-adjust: 100%; }
 .pv-toast { top: 64px; font-size: 13px; pointer-events: none; }
 .pv-banner[hidden], .pv-toast[hidden] { display: none; }
 
+/* ===== 角色本翻页：原稿默认盖着，按顺序轻点翻开 ===== */
+.source-pages .flip-card {
+    position: relative;
+    perspective: 2000px;
+    transform-style: preserve-3d;
+}
+
+.face {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    border-radius: 10px;
+}
+
+.flip-card .face.front {
+    position: relative;
+    overflow: hidden;
+}
+
+.flip-card .face.front::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .55) 50%, transparent 65%);
+    transform: translateX(-120%);
+}
+
+.flip-card .back {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    border: 0;
+    width: 100%;
+    aspect-ratio: 1 / 1.414;
+    cursor: pointer;
+    font: inherit;
+    user-select: none;
+    color: var(--seal);
+    background:
+        linear-gradient(var(--paper-deep), var(--paper-deep)) padding-box,
+        repeating-linear-gradient(0deg, transparent 0 27px, var(--rule) 27px 28px);
+    outline: 1px solid var(--seal);
+    outline-offset: -14px;
+    box-shadow: inset 0 0 0 20px var(--paper-deep), inset 0 0 0 21px var(--seal), 0 10px 28px rgba(0, 0, 0, .12);
+}
+
+.flip-card .back .seal {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font: 600 22px var(--serif);
+    border: 2px solid currentColor;
+}
+
+.flip-card .back .no {
+    font: 600 28px var(--serif);
+    letter-spacing: 2px;
+}
+
+.flip-card .back .hint {
+    font-size: 14px;
+    opacity: .85;
+}
+
+.flip-card.flipping .face.front {
+    animation: flip-in .8s cubic-bezier(.22, .9, .25, 1);
+}
+
+.flip-card.flipping .face.front::after {
+    animation: glint 1s .45s ease-out;
+}
+
+@keyframes flip-in {
+    0%   { transform: rotateY(180deg) translateZ(0) scale(1); }
+    55%  { transform: rotateY(85deg) translateZ(80px) scale(1.05); }
+    100% { transform: rotateY(0) translateZ(0) scale(1); }
+}
+
+@keyframes glint {
+    to { transform: translateX(120%); }
+}
+
+.flip-card.waiting .back {
+    filter: saturate(.35) brightness(.92);
+    cursor: not-allowed;
+}
+
+.flip-card.shake {
+    animation: shake .42s;
+}
+
+@keyframes shake {
+    20% { transform: translateX(-7px); }
+    40% { transform: translateX(6px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(2px); }
+}
+
+.flip-card.next .back {
+    animation: breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+    50% { box-shadow: 0 0 0 4px rgba(184, 146, 74, .45), 0 10px 28px rgba(0, 0, 0, .14); }
+}
+
+.flip-card .back { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+.flip-card .back .ring { position: relative; width: 86px; height: 86px; display: block; }
+.flip-card .back .ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.flip-card .back .ring circle { fill: none; stroke-width: 4; }
+.flip-card .back .ring .track { stroke: rgba(148, 63, 50, .2); }
+.flip-card .back .ring .fill { stroke: var(--seal); stroke-dasharray: 251; stroke-dashoffset: 251; }
+.flip-card .back .ring .seal { position: absolute; inset: 12px; width: auto; height: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+    .flip-card.flipping .face.front { animation: none; }
+    .flip-card.flipping .face.front::after { animation: none; }
+    .flip-card.shake { animation: none; }
+    .flip-card.next .back { animation: none; }
+}
+
+
