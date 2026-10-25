@@ -64,3 +64,4 @@ __pycache__/
 # Overnight runner local config (contains machine-specific agent commands)
 /tools/overnight/agents.json
 /OVERNIGHT-QUESTION.md
+.tmp/

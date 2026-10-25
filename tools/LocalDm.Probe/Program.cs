@@ -40,6 +40,11 @@ if (args.Length > 0 && args[0] == "--dictation-check")
     return await DictationProbe.RunAsync(args.Skip(1).ToArray());
 }
 
+if (args.Length > 0 && args[0] == "--export-session")
+{
+    return await ExportSessionProbe.RunAsync(args.Skip(1).ToArray());
+}
+
 Console.WriteLine("LocalDm.Probe:");
 Console.WriteLine("  --speech [--out <dir>] [--model <id>] [--voice <name>]");
 Console.WriteLine("  --import --story <dir> [--pages N] [--tier Flash|Basic|Standard|Advanced] [--out <dir>]");
@@ -47,4 +52,5 @@ Console.WriteLine("  --build-package --story <剧本根目录> [--title T] [--pl
 Console.WriteLine("  --dm-acceptance [--data <dir>] [--settings <file>] [--out <dir>] [--phase story|chat|untuned|compare] [--model <id>]");
 Console.WriteLine("  --prepare-tablet --package <包.json> [--assets <目录>] [--out <包.json>]");
 Console.WriteLine("  --dictation-check [--model-dir <目录>]");
+Console.WriteLine("  --export-session [--session <ID>] [--data <dir>] [--out <file>]   默认最近一局，写到 .local/exports/");
 return 1;

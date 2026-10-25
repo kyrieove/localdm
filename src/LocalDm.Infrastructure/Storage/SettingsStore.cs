@@ -10,7 +10,7 @@ namespace LocalDm.Infrastructure.Storage;
 /// 一次完整会话运行的装配：数据根目录、SQLite 存档与设置。
 /// 运行数据不存安装目录。
 /// </summary>
-public sealed class SessionContext
+public sealed class SessionContext : IDisposable
 {
     private readonly SessionStore _store;
 
