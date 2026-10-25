@@ -136,7 +136,7 @@ public sealed class TtsService : ITtsService, IDisposable
                         {
                             // Edge 侧不可用（缺依赖、网络失败、进程起不来）：降级到本地 SAPI。
                             // 这里不把异常抛给界面：公共屏上不该出现 python 或路径细节。
-                            System.Diagnostics.Debug.WriteLine("[Tts] Edge-TTS 不可用，降级到 Windows 本地语音。");
+                            LocalDm.Core.Diagnostics.RunLog.Write("Tts", "Edge-TTS 不可用，降级到 Windows 本地语音。");
                             usedEdge = false;
                         }
                         finally

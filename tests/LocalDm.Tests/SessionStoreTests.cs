@@ -70,6 +70,64 @@ public sealed class SessionStoreTests : IDisposable
         Assert.Equal(SessionState.Playing, loaded.State);
     }
 
+    /// <summary>存一局：开局事件 + 一问一答。</summary>
+    private static async Task SeedPlayedSessionAsync(SessionStore store, string id, CancellationToken ct)
+    {
+        var current = NewSession(id);
+        await store.SaveSessionAsync(current, ct);
+        var next = current with { Revision = 1, State = SessionState.Playing };
+        var command = new GameCommand { SessionId = id, OperationId = "op1", ExpectedRevision = 0, Type = GameCommandType.Start };
+        await store.CommitAsync(current, next, command, NewEvent(next, command), NewReceipt(next, command), ct);
+        await store.SaveDmConversationAsync(id, new DmConversationSnapshot
+        {
+            Turns = [new MagpieMessage { Role = "user", Content = "玩家问题甲" }, new MagpieMessage { Role = "assistant", Content = "主持回答乙" }],
+        }, ct);
+    }
+
+    [Fact]
+    public async Task Archiving_a_played_session_writes_timeline_and_conversation_and_skips_empty_ones()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var store = NewStore();
+        await store.InitializeAsync(ct);
+        await SeedPlayedSessionAsync(store, "s1", ct);
+
+        var path = await SessionExport.ArchiveAsync(store, "s1", "测试:剧本", ct);
+
+        Assert.NotNull(path);
+        Assert.Equal(Path.Combine(_root, "playlogs"), Path.GetDirectoryName(path));
+        Assert.StartsWith("测试_剧本-", Path.GetFileName(path));
+        var text = await File.ReadAllTextAsync(path!, ct);
+        Assert.Contains("Start", text);
+        Assert.Contains("玩家问题甲", text);
+        Assert.Contains("主持回答乙", text);
+        Assert.Null(await SessionExport.ArchiveAsync(store, "never-played", "空局", ct));
+    }
+
+    [Fact]
+    public async Task Diagnostics_bundle_has_logs_archives_and_every_session_but_no_secrets()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var store = NewStore();
+        await store.InitializeAsync(ct);
+        await SeedPlayedSessionAsync(store, "s1", ct);
+        Directory.CreateDirectory(Path.Combine(_root, "logs"));
+        await File.WriteAllTextAsync(Path.Combine(_root, "logs", "run-20261025.log"), "[12:00:00] App: 软件启动", ct);
+        Directory.CreateDirectory(Path.Combine(_root, "secrets"));
+        await File.WriteAllTextAsync(Path.Combine(_root, "secrets", "key"), "secret", ct);
+        await SessionExport.ArchiveAsync(store, "s1", "剧本", ct);
+
+        var zipPath = Path.Combine(_root, "bundle.zip");
+        await DiagnosticsBundle.CreateAsync(store, zipPath, ct);
+
+        using var zip = System.IO.Compression.ZipFile.OpenRead(zipPath);
+        var names = zip.Entries.Select(e => e.FullName).ToArray();
+        Assert.Contains("logs/run-20261025.log", names);
+        Assert.Contains("sessions/s1.md", names);
+        Assert.Contains(names, n => n.StartsWith("playlogs/剧本-", StringComparison.Ordinal));
+        Assert.DoesNotContain(names, n => n.Contains("secret", StringComparison.OrdinalIgnoreCase));
+    }
+
     [Fact]
     public async Task Deleting_a_session_removes_its_progress_and_conversation_but_not_other_sessions()
     {

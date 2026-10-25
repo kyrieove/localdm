@@ -50,6 +50,7 @@ public sealed class SetupViewModel : ObservableObject
         CheckVoicesCommand = new RelayCommand(() => { RefreshVoices(); return Task.CompletedTask; }, () => !Busy);
         PreviewVoiceCommand = new RelayCommand(PreviewVoiceAsync, () => !Busy && AvailableVoices.Count > 0);
         SaveCommand = new RelayCommand(SaveAsync, () => !Busy);
+        ExportLogsCommand = new RelayCommand(ExportLogsAsync, () => Store is not null);
     }
 
     public ObservableCollection<string> AvailableModels { get; } = [];
@@ -57,6 +58,35 @@ public sealed class SetupViewModel : ObservableObject
     public ObservableCollection<VoiceOption> AvailableVoices { get; } = [];
 
     public TabletJoinViewModel? Tablet { get; set; }
+
+    /// <summary>存档：由组装处设置，导出日志时要用它导出每一局。</summary>
+    public SessionStore? Store { get; set; }
+
+    public RelayCommand ExportLogsCommand { get; }
+
+    /// <summary>运行日志、试玩归档和每一局的记录打成 zip 放到桌面，方便交给开发者查问题。</summary>
+    private async Task ExportLogsAsync()
+    {
+        if (Store is not { } store)
+        {
+            return;
+        }
+
+        var path = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+            $"LocalDm-日志-{DateTime.Now:yyyyMMdd-HHmmss}.zip");
+        try
+        {
+            await DiagnosticsBundle.CreateAsync(store, path, CancellationToken.None);
+            Status = $"日志已导出到桌面：{System.IO.Path.GetFileName(path)}。里面有对话原文（含剧情），只发给帮你查问题的人。";
+            System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\"");
+        }
+        catch (Exception ex)
+        {
+            LocalDm.Core.Diagnostics.RunLog.Write("Setup", "导出日志失败：" + ex.GetType().Name);
+            Status = $"导出日志失败（{ex.GetType().Name}），请检查桌面是否可写。";
+        }
+    }
 
     public string Status
     {

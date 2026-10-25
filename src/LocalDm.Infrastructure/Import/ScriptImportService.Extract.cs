@@ -208,7 +208,7 @@ public sealed partial class ScriptImportService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            System.Diagnostics.Debug.WriteLine("[Tablet] 导入时备平板材料失败：" + ex.GetType().Name);
+            LocalDm.Core.Diagnostics.RunLog.Write("Tablet", "导入时备平板材料失败：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex.GetType().Name)));
         }
 
         return new ScriptImportResult { Build = built, PackagePath = packagePath, FlowPath = flowPath };

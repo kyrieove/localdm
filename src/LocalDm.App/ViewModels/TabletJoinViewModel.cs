@@ -140,7 +140,7 @@ public sealed class TabletJoinViewModel : ObservableObject, IAsyncDisposable
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                Debug.WriteLine("[Tablet] 备材料失败：" + ex.GetType().Name);
+                LocalDm.Core.Diagnostics.RunLog.Write("Tablet", "备材料失败：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex.GetType().Name)));
                 _content.SetNone();
                 SetReady("这本剧本的平板材料没有备好，这一局请用纸质材料。电脑端主持不受影响。");
             }
@@ -174,7 +174,7 @@ public sealed class TabletJoinViewModel : ObservableObject, IAsyncDisposable
                     if (server is not null) { await server.DisposeAsync(); }
                     if (port == 0)
                     {
-                        Debug.WriteLine("[Tablet] " + ex.GetType().Name);
+                        LocalDm.Core.Diagnostics.RunLog.Write("Tablet", "" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex.GetType().Name)));
                         ErrorText = $"平板服务没有启动：{ex.GetType().Name}。请检查防火墙与网络，或重启软件。";
                     }
                 }

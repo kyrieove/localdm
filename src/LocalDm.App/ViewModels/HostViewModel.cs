@@ -113,7 +113,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine("[Host] 枚举音色失败：" + ex.Message);
+            LocalDm.Core.Diagnostics.RunLog.Write("Host", "枚举音色失败：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex.Message)));
         }
 
         var savedVoice = settingsProvider()?.VoiceId;
@@ -150,7 +150,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             catch (Exception ex)
             {
                 // 公共屏只显示固定文案：异常里可能带本机路径与模型细节。
-                System.Diagnostics.Debug.WriteLine("[Host] 播报异常：" + ex);
+                LocalDm.Core.Diagnostics.RunLog.Write("Host", "播报异常：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex)));
                 Status = "播报未完成，文字已保留。";
             }
             finally
@@ -577,7 +577,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine("[Host] 刷新音色列表失败：" + ex.Message);
+            LocalDm.Core.Diagnostics.RunLog.Write("Host", "刷新音色列表失败：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex.Message)));
         }
     }
 
@@ -697,6 +697,13 @@ public sealed class HostViewModel : ObservableObject, IDisposable
 
         _director.ResetToIdle();
         SpeechState = SpeechState.Idle;
+        // 删之前先归档：同一本剧本只有一份存档，不归档上一局就没了。归档失败抛出，调用方提示且不删。
+        var archived = await SessionExport.ArchiveAsync(store, SessionIds.For(package), package.Title, CancellationToken.None);
+        if (archived is not null)
+        {
+            LocalDm.Core.Diagnostics.RunLog.Write("Host", $"重新开始《{package.Title}》，上一局已归档：{System.IO.Path.GetFileName(archived)}");
+        }
+
         await store.DeleteSessionAsync(SessionIds.For(package), CancellationToken.None);
         _conversationSessionId = null; // 同一个存档 id：不清掉的话屏幕上还留着上一局的对话
         await LoadPackageAsync(package);
@@ -1292,6 +1299,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
 
             if (reply is null)
             {
+                LocalDm.Core.Diagnostics.RunLog.Write("Host", "模型没有给出可用内容：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(reason ?? "（没有原因）"));
                 SpeechState = SpeechState.Error;
                 AppendHost(reason ?? "模型这次没有给出可用内容，请检查本机模型服务。", fromModel: false);
                 Activity.Fail("模型没有给出可用内容", reason ?? "请检查本机模型服务。");
@@ -1551,7 +1559,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             catch (Exception ex)
             {
                 // 记忆读不出来不该让这一局开不了：这一局从空记忆继续。
-                System.Diagnostics.Debug.WriteLine("[Host] 读取对话记忆失败：" + ex.Message);
+                LocalDm.Core.Diagnostics.RunLog.Write("Host", "读取对话记忆失败：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex.Message)));
             }
         }
 
@@ -1590,7 +1598,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine("[Host] 保存对话记忆失败：" + ex.Message);
+            LocalDm.Core.Diagnostics.RunLog.Write("Host", "保存对话记忆失败：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex.Message)));
             if (generation == _generation
                 && sessionId == _conversationSessionId
                 && ReferenceEquals(conversation, _conversation))

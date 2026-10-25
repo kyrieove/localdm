@@ -29,6 +29,9 @@ public sealed class SessionStore : ISessionStore, IPublicMessageFeed, IDisposabl
     public static string DefaultDatabasePath(string dataRoot) =>
         Path.Combine(dataRoot, "sessions.db");
 
+    /// <summary>存档所在的数据目录：试玩归档放在它下面。</summary>
+    public string DataFolder => Path.GetDirectoryName(Path.GetFullPath(_databasePath))!;
+
     /// <summary>可注入故障点，仅用于自动化验证「事务前后强退」的行为。</summary>
     public Action<TransactionFaultPoint>? FaultInjector { get; set; }
 

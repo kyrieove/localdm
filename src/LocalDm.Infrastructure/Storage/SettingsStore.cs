@@ -113,7 +113,7 @@ public sealed class SettingsStore
             // 设置文件损坏（写入过程中断电等）不应该让整个应用起不来。
             // 但也不能就这么把默认值写回去 —— 那会把还能人工修复的内容覆盖掉。
             // 先把坏文件改名备份，再退回默认设置。
-            System.Diagnostics.Debug.WriteLine("[Settings] settings.json 解析失败，已退回默认设置。");
+            LocalDm.Core.Diagnostics.RunLog.Write("Settings", "settings.json 解析失败，已退回默认设置。");
             try
             {
                 var backup = _settingsPath + ".corrupt-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");

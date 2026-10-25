@@ -195,7 +195,7 @@ public sealed class PublicMessagePublisher
                 _running = false;
             }
 
-            System.Diagnostics.Debug.WriteLine("[Public] 写公开消息时出了意外：" + ex.Message);
+            LocalDm.Core.Diagnostics.RunLog.Write("Public", "写公开消息时出了意外：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex.Message)));
         }
     }
 }

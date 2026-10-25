@@ -124,7 +124,7 @@ public sealed class AppComposition : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine("[Settings] 保存音色失败：" + ex.Message);
+                    LocalDm.Core.Diagnostics.RunLog.Write("Settings", "保存音色失败：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex.Message)));
                     return "设置文件写入失败";
                 }
             },
@@ -137,6 +137,7 @@ public sealed class AppComposition : IDisposable
             speech: new TabletSpeechBridge(host, System.Windows.Application.Current.Dispatcher),
             ui: new CurrentSessionTabletUiSource(feedSource, () => host.Session, System.Windows.Application.Current.Dispatcher));
         setup.Tablet = tablet;
+        setup.Store = _context.Store as SessionStore;
         _tablet = tablet;
         library.Tablet = tablet;
         _library = library;
@@ -166,7 +167,7 @@ public sealed class AppComposition : IDisposable
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine("[App] 重新开始失败：" + ex);
+                LocalDm.Core.Diagnostics.RunLog.Write("App", "重新开始失败：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex)));
                 host.ReportProblem("重新开始失败，原来的进度没有动。");
             }
         };
@@ -216,7 +217,7 @@ public sealed class AppComposition : IDisposable
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine("[App] 导入后装载剧本失败：" + ex);
+                LocalDm.Core.Diagnostics.RunLog.Write("App", "导入后装载剧本失败：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex)));
                 host.ReportProblem("导入完成，但装载失败，请从剧本库重新打开。");
             }
         };
@@ -230,7 +231,7 @@ public sealed class AppComposition : IDisposable
             {
                 // 事件处理器是 async void：异常必须在这里吃掉，
                 // 否则会变成未处理异常把整个应用带走。
-                System.Diagnostics.Debug.WriteLine("[App] 装载剧本失败：" + ex);
+                LocalDm.Core.Diagnostics.RunLog.Write("App", "装载剧本失败：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex)));
                 host.ReportProblem("装载剧本失败，请重试或换一个剧本。");
             }
         };
@@ -262,7 +263,7 @@ public sealed class AppComposition : IDisposable
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine("[App] 继续上一局失败：" + ex);
+                LocalDm.Core.Diagnostics.RunLog.Write("App", "继续上一局失败：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex)));
                 host.ReportProblem("继续这一局失败，请重试。");
             }
         };
@@ -291,7 +292,7 @@ public sealed class AppComposition : IDisposable
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine("[App] 装载演示剧本失败：" + ex);
+                LocalDm.Core.Diagnostics.RunLog.Write("App", "装载演示剧本失败：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex)));
                 host.ReportProblem("装载演示剧本失败，请重试。");
             }
         };
@@ -375,7 +376,7 @@ public sealed class AppComposition : IDisposable
             foreach (var row in rows.Where(r => r.Package.Tablet is null && !string.IsNullOrEmpty(r.FilePath)))
             {
                 try { LocalDm.Infrastructure.Import.TabletMaterials.Ensure(row.Package, row.FilePath); }
-                catch (Exception ex) { System.Diagnostics.Debug.WriteLine("[Tablet] 后台补材料失败：" + ex.GetType().Name); }
+                catch (Exception ex) { LocalDm.Core.Diagnostics.RunLog.Write("Tablet", "后台补材料失败：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex.GetType().Name))); }
             }
         });
     }

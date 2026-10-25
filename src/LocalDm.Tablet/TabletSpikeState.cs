@@ -97,6 +97,7 @@ public sealed class TabletSpikeState
             var taken = _sessions.Values.Any(s => string.Equals(s.RoleId, roleId, StringComparison.Ordinal));
             if (taken)
             {
+                LocalDm.Core.Diagnostics.RunLog.Write("Tablet", $"设备 {Short(key)} 想认领 {roleId}，已被占用");
                 return false;
             }
 
@@ -106,6 +107,7 @@ public sealed class TabletSpikeState
             session.ReadingOffset = 0;
             session.OpenedPages = 0;
             session.Settings = session.Settings with { SourcePageNumber = 1 };
+            LocalDm.Core.Diagnostics.RunLog.Write("Tablet", $"设备 {Short(key)} 认领 {roleId}");
             return true;
         }
     }
@@ -115,6 +117,11 @@ public sealed class TabletSpikeState
         lock (_claimGate)
         {
             var session = Session(key);
+            if (session.RoleId is { } held)
+            {
+                LocalDm.Core.Diagnostics.RunLog.Write("Tablet", $"设备 {Short(key)} 放开 {held}");
+            }
+
             session.RoleId = null;
             session.SelectedCardId = null;
             session.ReadingOffset = 0;
@@ -129,6 +136,7 @@ public sealed class TabletSpikeState
     /// </summary>
     public void ReleaseRole(string roleId)
     {
+        LocalDm.Core.Diagnostics.RunLog.Write("Tablet", $"电脑上释放 {roleId}");
         lock (_claimGate)
         {
             foreach (var (key, session) in _sessions)
@@ -156,6 +164,9 @@ public sealed class TabletSpikeState
             return true;
         }
     }
+
+    /// <summary>日志里只记设备键前 6 位：够区分设备，又不把整个 Cookie 写进文件。</summary>
+    private static string Short(string key) => key.Length > 6 ? key[..6] : key;
 
     public sealed class SessionEntry
     {

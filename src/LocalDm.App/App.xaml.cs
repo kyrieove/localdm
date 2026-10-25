@@ -25,6 +25,8 @@ public partial class App : Application
         TaskScheduler.UnobservedTaskException += (_, args) =>
             LogCrash("TaskScheduler", args.Exception?.ToString() ?? "未知异常");
         DispatcherUnhandledException += OnDispatcherUnhandledException;
+        LocalDm.Core.Diagnostics.RunLog.Folder = Path.Combine(SessionContext.ResolveDataRoot(), "logs");
+        LocalDm.Core.Diagnostics.RunLog.Write("App", "软件启动");
 
         try
         {

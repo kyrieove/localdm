@@ -128,10 +128,16 @@ public static class EdgeTtsEngine
             // 读干两个流，避免进程退出后残留未消费的读取任务。
             await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
 
+            if (proc.ExitCode != 0)
+            {
+                LocalDm.Core.Diagnostics.RunLog.Write("EdgeTts", $"播音进程退出码 {proc.ExitCode}（{text.Length} 字），降级到本地语音。");
+            }
+
             return proc.ExitCode == 0;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
+            LocalDm.Core.Diagnostics.RunLog.Write("EdgeTts", $"播音超时（{text.Length} 字），降级到本地语音。");
             // 超时（不是主持人点了停止）：按失败处理，让上层降级到本地语音。
             // 若把它当成取消，主持人会看到「已停止播音」而实际是他自己没点停止。
             Stop();
@@ -143,11 +149,11 @@ public static class EdgeTtsEngine
             Stop();
             throw;
         }
-        catch
+        catch (Exception ex)
         {
             // 脚本 ImportError、网络失败、Win32Exception 等：无法区分「环境没有」与「Edge 坏了」，
-            // 这里统一降级，诊断信息只写 Debug 输出，不进公共界面。
-            System.Diagnostics.Debug.WriteLine("[EdgeTts] 播音失败，已降级到本地语音。");
+            // 这里统一降级，诊断信息只写运行日志，不进公共界面。
+            LocalDm.Core.Diagnostics.RunLog.Write("EdgeTts", $"播音失败（{ex.GetType().Name}），已降级到本地语音。");
             return false;
         }
         finally

@@ -276,6 +276,19 @@
                 </StackPanel>
             </Expander>
 
+            <!-- 导出日志：试玩后把运行日志和对话记录交给开发者查问题 -->
+            <Expander Margin="0,6,0,0" Foreground="{StaticResource InkSoft}">
+                <Expander.Header>
+                    <TextBlock Text="高级：导出日志" FontSize="13" Foreground="{StaticResource Muted}" />
+                </Expander.Header>
+                <StackPanel Margin="0,14,0,0">
+                    <TextBlock Text="把运行日志、每局的操作和对话记录打成一个 zip 放到桌面，发给帮你查问题的人。里面有对话原文，含剧情；不含密钥。"
+                               Style="{StaticResource ChatMeta}" TextWrapping="Wrap" />
+                    <Button x:Name="ExportLogsButton" Content="导出日志到桌面" Command="{Binding ExportLogsCommand}"
+                            Style="{StaticResource QuietButton}" HorizontalAlignment="Left" Padding="14,6" Margin="0,10,0,0" />
+                </StackPanel>
+            </Expander>
+
             <Button Content="保存设置" Command="{Binding SaveCommand}" Style="{StaticResource SealButton}"
                     HorizontalAlignment="Left" Padding="26,12" Margin="0,26,0,0" />
             <TextBlock Text="{Binding Status}" Margin="0,14,0,0" TextWrapping="Wrap"

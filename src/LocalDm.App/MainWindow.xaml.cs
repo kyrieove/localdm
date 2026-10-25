@@ -75,7 +75,7 @@ public partial class MainWindow
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // 写不进去不能把界面卡住：这一次缩放仍然生效，只是下次启动回到旧倍数。
-            System.Diagnostics.Debug.WriteLine("[Settings] 保存界面缩放失败：" + ex.Message);
+            LocalDm.Core.Diagnostics.RunLog.Write("Settings", "保存界面缩放失败：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex.Message)));
         }
     }
 
