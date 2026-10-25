@@ -24,7 +24,7 @@ minimax 那三个「书卷」方向用户否了（原话：「看起来像网页
 ## 下一步
 
 1. 用户在浏览器里看过原型，评价「还不错」。原型 apk 已出：`artifacts\本局主持-原型.apk`（gitignore，不进仓库），等用户装到安卓平板上试手感并反馈。原型用假数据，不连电脑；右上角烧瓶按钮切状态。
-2. iPad：配 GitHub Actions 出未签名 ipa，用 iloader 装。
+2. iPad：`.github/workflows/tablet-ipa.yml` 已跑通（`apps/tablet/**` 有改动推到 main 就自动出包，也能手动触发），首个包 run 40225880512，下载到 `artifacts\本局主持-原型-未签名.ipa`（11MB）。等用户用 iloader 装到 iPad Air 4 试手感；装没装上、哪一步卡住都还没反馈。仓库已推送到 origin/main。
 3. 补四个接口缺口（设计文件 §8）：原稿页数、手册页数、剧本状态、卡片有无背面；加 JSON 契约测试。
 4. 更新 ADR 0012：写进用户对下面问题的回答。
 
