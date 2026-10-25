@@ -1,0 +1,86 @@
+{
+  "storyTitle": "雨停之前",
+  "roles": [
+    {
+      "roleId": "role-1",
+      "displayName": "合成角色 1"
+    },
+    {
+      "roleId": "role-2",
+      "displayName": "合成角色 2"
+    },
+    {
+      "roleId": "role-3",
+      "displayName": "合成角色 3"
+    },
+    {
+      "roleId": "role-4",
+      "displayName": "合成角色 4"
+    },
+    {
+      "roleId": "role-5",
+      "displayName": "合成角色 5"
+    },
+    {
+      "roleId": "role-6",
+      "displayName": "合成角色 6"
+    }
+  ],
+  "cards": [
+    {
+      "cardId": "card-1",
+      "displayName": "书房",
+      "label": "书房",
+      "groupName": "地点",
+      "sourceOrder": 1,
+      "isAvailable": true,
+      "notReadyReason": null
+    },
+    {
+      "cardId": "card-2",
+      "displayName": "书房",
+      "label": "书房",
+      "groupName": "地点",
+      "sourceOrder": 2,
+      "isAvailable": true,
+      "notReadyReason": null
+    },
+    {
+      "cardId": "card-3",
+      "displayName": "走廊",
+      "label": "走廊",
+      "groupName": "地点",
+      "sourceOrder": 3,
+      "isAvailable": true,
+      "notReadyReason": null
+    },
+    {
+      "cardId": "card-4",
+      "displayName": "信箱",
+      "label": "信箱",
+      "groupName": "地点",
+      "sourceOrder": 4,
+      "isAvailable": true,
+      "notReadyReason": null
+    },
+    {
+      "cardId": "card-5",
+      "displayName": "旧照片",
+      "label": "旧照片",
+      "groupName": "回忆",
+      "sourceOrder": 5,
+      "isAvailable": true,
+      "notReadyReason": null
+    },
+    {
+      "cardId": "card-6",
+      "displayName": "钥匙",
+      "label": "钥匙",
+      "groupName": "回忆",
+      "sourceOrder": 6,
+      "isAvailable": true,
+      "notReadyReason": null
+    }
+  ],
+  "claimedRoles": []
+}

@@ -1,0 +1,12 @@
+{
+  "roleId": "role-3",
+  "characterOffset": 0,
+  "settings": {
+    "fontSize": 19,
+    "lineSpacing": "1.95",
+    "focusMode": false,
+    "preferText": false,
+    "sourcePageNumber": 1,
+    "columns": 2
+  }
+}

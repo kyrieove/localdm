@@ -21,6 +21,9 @@
 # Machine-bound preview verification helper, not a product dependency
 /docs/preview/verify-preview.mjs
 
+# Local toolchain (Flutter SDK, Android SDK, JDK, Playwright browsers) — installed into the project, never committed
+/.tools/
+
 # .NET tooling state, packaging output and test artifacts
 *.binlog
 *.secure

@@ -1,0 +1,38 @@
+{
+  "sessionId": "session-spike",
+  "phase": {
+    "id": "phase-search",
+    "title": "搜证"
+  },
+  "messages": [
+    {
+      "sequence": 1,
+      "messageId": "spike-1",
+      "author": "Player",
+      "kind": "PlayerSpeech",
+      "text": "我们去检查一下码头。",
+      "createdAt": "2026-01-01T20:00:00.0000000+03:00"
+    },
+    {
+      "sequence": 2,
+      "messageId": "spike-2",
+      "author": "Host",
+      "kind": "HostReply",
+      "text": "好的，翻牌的时候把线索卡摆开。",
+      "createdAt": "2026-01-01T20:01:00.0000000+03:00"
+    },
+    {
+      "sequence": 3,
+      "messageId": "spike-3",
+      "author": "System",
+      "kind": "FlowEvent",
+      "text": "进入搜证",
+      "createdAt": "2026-01-01T20:02:00.0000000+03:00"
+    }
+  ],
+  "nextSequence": 3,
+  "host": {
+    "busy": false,
+    "speaking": false
+  }
+}

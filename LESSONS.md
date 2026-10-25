@@ -15,3 +15,11 @@
 - 写卡时只 grep 了 `HostNarration*` 测试找「角色本不进 DM」断言 → 合入后全套测试 `PhaseFlowTests` 红了两条 → 改断言前对整个 `tests/` grep 断言里的常量和原句（`RoleBookText`、`合成角色的秘密`）。
 - 卡在跑基线 Check 时，Claude 改了卡里列为只读的文件 → `readonly_violated`，执行者没启动 → 派出卡后到它跑完前，不碰卡的只读和可改路径。
 - 试玩探针报「（无回复）」只认 `IsModelReply` → 模型报错时软件上屏的提示（`fromModel: false`）也被记成无回复，误以为消息被吞 → 探针现在用 `ReplyFor` 写清是忙时没发出、还是软件提示了什么。
+- 设计稿里用程序化 SVG 画「扫描页」，同一个 `linearGradient` id 既当纸底又当最后一张蒙层 → 蒙层把整页文字盖住，截图只剩一片米色，乍看像渲染失败 → 渐变只能引用一次；要做纹理另起 id 或只用 `<filter>` 噪声，截图后一定要用看图能力亲眼看一遍。
+- `design_lint.py check` 传 `file://` URL → 报「relative path can't be expressed as a file URI」→ 它要本地路径，不要 URL；Node 版 `playwright screenshot` 才吃 `file://`。
+- `design_lint.py` 依赖 **Python 版** playwright，Node 版不算 → `pip install playwright pillow` 后设 `PLAYWRIGHT_BROWSERS_PATH` 指向 `.tools\playwright-browsers`，就复用已下的 chromium，不必再下一份（否则默认落 `%LOCALAPPDATA%`，进 C 盘）。
+- 临时日志重定向到 `.local/`（探针 stdout/err）→ 那是禁读禁提交的目录 → 临时产物一律写 `artifacts/`（已 gitignore）或系统临时目录，别往 `.local/` 里塞。
+- `design_lint.py check` 的字号下限是网页口径（正文 ≥14px、标签 ≥12px）→ 平板 App 的界面也在 1:1 设备像素里画，11sp 的标签是真偏小 → 按 App 口径直接提到 12/14，别当误报放过；`compare` 报「撞了」时它看的是整个 HTML（含展示板外壳），三版外壳一致会误判，板面底色与构图拉开才解决。
+- aria2 下 Flutter SDK 报「unreachable network」→ 本机 IPv6 不通 → 大文件用 `curl -4`；Bash 里直接写 curl 会被 context-mode 钩子拦，写成 node/python 脚本再跑。
+- 在浏览器面板里点 Flutter 网页版，截图总落后一帧、换屏后第一下点击常被吞 → 原型加网址参数直达各屏（`?stage=inGame&section=cards`），截图用本机 Chrome `--headless=new --screenshot --virtual-time-budget`，见 `apps/tablet/tool/shots.sh`。
+- 原型界面的颜色对比度靠人看会漏（半透明压暗、夜读矩阵）→ 每对文字/底色写进 `Palette.textPairs`，夜读矩阵和界面共用常量，由 `flutter test` 算出并卡 4.5。

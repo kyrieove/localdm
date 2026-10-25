@@ -1,0 +1,114 @@
+{
+  "sessionId": "session-spike",
+  "title": "合成剧本",
+  "state": "Playing",
+  "revision": 1,
+  "phaseId": "phase-search",
+  "phaseTitle": "搜证",
+  "phaseIndex": 2,
+  "phaseCount": 4,
+  "hint": "合成提示：把线索卡摆开再讨论。",
+  "phases": [
+    {
+      "phaseId": "phase-open",
+      "title": "开场",
+      "status": "Done"
+    },
+    {
+      "phaseId": "phase-search",
+      "title": "搜证",
+      "status": "Current"
+    },
+    {
+      "phaseId": "phase-talk",
+      "title": "讨论",
+      "status": "Upcoming"
+    },
+    {
+      "phaseId": "phase-reveal",
+      "title": "揭秘",
+      "status": "Upcoming"
+    }
+  ],
+  "controls": [
+    {
+      "kind": "Start",
+      "label": "开始这一局",
+      "visible": false,
+      "enabled": false
+    },
+    {
+      "kind": "Advance",
+      "label": "进入讨论",
+      "visible": true,
+      "enabled": true
+    },
+    {
+      "kind": "ReleaseMaterials",
+      "label": "发放材料 card-3",
+      "visible": true,
+      "enabled": true
+    },
+    {
+      "kind": "SubmitVote",
+      "label": "确认提交汇总",
+      "visible": false,
+      "enabled": false
+    },
+    {
+      "kind": "Reveal",
+      "label": "公开真相",
+      "visible": false,
+      "enabled": false
+    },
+    {
+      "kind": "Complete",
+      "label": "进入复盘",
+      "visible": false,
+      "enabled": false
+    },
+    {
+      "kind": "PauseResume",
+      "label": "暂停本局",
+      "visible": true,
+      "enabled": true
+    }
+  ],
+  "controlsNote": "请在电脑上操作",
+  "pendingMaterialCount": 2,
+  "releasedMaterialCount": 1,
+  "voteSummary": null,
+  "revealedTexts": null,
+  "messages": [
+    {
+      "sessionId": "session-spike",
+      "messageId": "spike-1",
+      "author": "Player",
+      "text": "我们去检查一下码头。",
+      "createdAt": "2026-01-01T20:00:00+03:00",
+      "kind": "PlayerSpeech",
+      "sequence": 1
+    },
+    {
+      "sessionId": "session-spike",
+      "messageId": "spike-2",
+      "author": "Host",
+      "text": "好的，翻牌的时候把线索卡摆开。",
+      "createdAt": "2026-01-01T20:01:00+03:00",
+      "kind": "HostReply",
+      "sequence": 2
+    },
+    {
+      "sessionId": "session-spike",
+      "messageId": "spike-3",
+      "author": "System",
+      "text": "进入搜证",
+      "createdAt": "2026-01-01T20:02:00+03:00",
+      "kind": "FlowEvent",
+      "sequence": 3
+    }
+  ],
+  "nextSequence": 3,
+  "hostBusy": false,
+  "hostSpeaking": false
+}
