@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>盖页三个方向</title>
+<style>
+  :root {
+    --lamp: #F2B35E; --on-primary: #2B1C05; --surface: #14120F; --on-surface: #ECE5D8;
+    --variant: #B5AC9C; --c-low: #1A1714; --c: #1E1B17; --c-high: #29251F; --c-highest: #34302A;
+    --outline: #8C8475; --outline-v: #3E3931;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--surface); color: var(--on-surface);
+    font-family: "PingFang SC", "Microsoft YaHei UI", "Noto Sans SC", sans-serif; padding: 28px 16px 60px; }
+  h1 { font-size: 24px; margin: 0 0 6px; font-weight: 600; }
+  .lede { color: var(--variant); font-size: 15px; margin: 0 0 28px; line-height: 1.6; }
+  .dir { margin: 0 auto 44px; max-width: 1100px; }
+  .dir h2 { font-size: 19px; margin: 0 0 4px; font-weight: 600; }
+  .dir h2 b { color: var(--lamp); margin-right: 8px; }
+  .dir p { margin: 0 0 16px; color: var(--variant); font-size: 14px; line-height: 1.6; }
+  .row { display: flex; gap: 20px; flex-wrap: wrap; }
+  .slot { flex: 1 1 240px; max-width: 320px; }
+  .slot small { display: block; color: var(--variant); font-size: 13px; margin-top: 8px; text-align: center; }
+  .page { position: relative; aspect-ratio: 821 / 1259; border-radius: 6px; overflow: hidden;
+    user-select: none; -webkit-user-select: none; touch-action: none; cursor: pointer;
+    box-shadow: 0 6px 18px rgba(0,0,0,.35); --p: 0; }
+  .page.locked { cursor: not-allowed; }
+  .page.shake { animation: shake .36s; }
+  @keyframes shake { 0%,100%{transform:none} 20%{transform:translateX(-7px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(2px)} }
+  .page.opened { animation: open .5s ease-out forwards; }
+  @keyframes open { to { opacity: 0; transform: perspective(900px) rotateY(-70deg); transform-origin: left center; } }
+  .reveal { position: absolute; inset: 0; display: grid; place-items: center; color: #6b6458; font-size: 14px;
+    background: repeating-linear-gradient(0deg, #e9e3d6 0 22px, #ded7c8 22px 23px); border-radius: 6px; }
+  .wrap { position: relative; }
+
+  /* A 封条 */
+  .a { background: linear-gradient(160deg, #2c2722, #221e1a); border: 1px solid var(--outline-v); }
+  .a::before { content: ""; position: absolute; inset: 14px; border: 1px solid rgba(242,179,94,.14); border-radius: 3px; }
+  .a .band { position: absolute; left: -4%; right: -4%; top: 44%; height: 64px; transform: rotate(-4deg);
+    background: #3a332a; border-top: 1px solid #4d4438; border-bottom: 1px solid #4d4438;
+    display: flex; align-items: center; justify-content: center; gap: 14px; overflow: hidden; }
+  .a .band::before { content: ""; position: absolute; inset: 0; width: calc(var(--p) * 100%);
+    background: linear-gradient(90deg, #8a5a1c, var(--lamp)); }
+  .a .band span { position: relative; font-size: 18px; letter-spacing: .5em; font-weight: 600; color: #e6d7bd; }
+  .a.next .band { background: #4a3410; border-color: #6b4b17; }
+  .a .seal { position: absolute; left: 50%; top: 44%; width: 58px; height: 58px; margin: -78px 0 0 -29px;
+    border-radius: 50%; background: radial-gradient(circle at 35% 30%, #c98a3a, #7a4a12); display: grid; place-items: center;
+    color: #2B1C05; font-weight: 700; font-size: 22px; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+  .a.locked .seal { background: radial-gradient(circle at 35% 30%, #5a5348, #3a352e); color: #8C8475; }
+  .a .hint { position: absolute; left: 0; right: 0; bottom: 12%; text-align: center; color: var(--variant); font-size: 15px; }
+
+  /* B 书背 */
+  .b { background:
+      repeating-linear-gradient(45deg, rgba(255,255,255,.018) 0 2px, transparent 2px 7px),
+      linear-gradient(180deg, #2a251f, #201c18);
+    border: 1px solid var(--outline-v); }
+  .b::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--p) * 100%);
+    background: linear-gradient(0deg, rgba(242,179,94,.42), rgba(242,179,94,.08)); }
+  .b .num { position: absolute; inset: 0; display: grid; place-items: center; z-index: 1;
+    font-family: "Songti SC", "STSong", "SimSun", serif; font-size: 112px; font-weight: 300; color: rgba(236,229,216,.16); letter-spacing: -.02em; }
+  .b.next .num { color: rgba(242,179,94,.55); }
+  .b .rule { position: absolute; left: 22%; right: 22%; top: 18%; border-top: 1px solid rgba(236,229,216,.12); z-index: 1; }
+  .b .rule.bot { top: auto; bottom: 18%; }
+  .b .hint { position: absolute; left: 0; right: 0; bottom: 10%; text-align: center; z-index: 1; color: var(--variant); font-size: 15px; letter-spacing: .1em; }
+  .b.next .hint { color: var(--lamp); }
+
+  /* C 灯下 */
+  .c { background: #0f0d0b; border: 1px solid #26221c; }
+  .c .glow { position: absolute; inset: 0;
+    background: radial-gradient(circle at 50% 42%, rgba(242,179,94, calc(.16 + var(--p) * .5)) 0, rgba(242,179,94,0) calc(28% + var(--p) * 60%)); }
+  .c.locked .glow { background: radial-gradient(circle at 50% 42%, rgba(181,172,156,.06) 0, transparent 30%); }
+  .c .bulb { position: absolute; left: 50%; top: 42%; width: 14px; height: 14px; margin: -7px; border-radius: 50%;
+    background: var(--lamp); box-shadow: 0 0 calc(18px + var(--p) * 40px) var(--lamp); }
+  .c.locked .bulb { background: #3E3931; box-shadow: none; }
+  .c .num { position: absolute; left: 0; right: 0; top: 54%; text-align: center; font-size: 22px; font-weight: 300; letter-spacing: .3em; color: var(--on-surface); }
+  .c.locked .num { color: #6b6458; }
+  .c .hint { position: absolute; left: 0; right: 0; top: 61%; text-align: center; color: var(--variant); font-size: 14px; }
+
+  .now { margin: 0 auto 44px; max-width: 1100px; opacity: .8; }
+  .old { aspect-ratio: 821/1259; max-width: 240px; background: var(--c-high); border: 1.5px solid rgba(242,179,94,.6); border-radius: 6px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+  .old .ring { width: 96px; height: 96px; border-radius: 50%; border: 5px solid var(--outline-v); display: grid; place-items: center; font-size: 36px; font-weight: 700; color: var(--lamp); }
+  button.reset { background: none; border: 1px solid var(--outline-v); color: var(--variant); border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; margin-left: 8px; }
+</style>
+</head>
+<body>
+<div class="dir">
+  <h1>盖着的原稿页 · 三个方向</h1>
+  <p class="lede">每个方向左边是「下一页」，按住约 0.65 秒翻开（松手或滑动作废）；右边是「更后面的页」，点一下会抖，提示先翻前一页。<button class="reset" onclick="location.reload()">全部复原</button></p>
+</div>
+
+<div class="dir">
+  <h2><b>A</b>封条</h2>
+  <p>像没拆封的角色本：一道封条斜贴在页中间，上面印页码。按住时灯色从左往右把封条「烧」开。仪式感最强。</p>
+  <div class="row">
+    <div class="slot"><div class="wrap"><div class="reveal">第 3 页内容</div>
+      <div class="page a next" data-hold><div class="seal">叁</div><div class="band"><span>第 三 页</span></div><div class="hint">按住拆封</div></div></div><small>下一页</small></div>
+    <div class="slot"><div class="page a locked" data-locked><div class="seal">肆</div><div class="band"><span>第 四 页</span></div><div class="hint">先拆第 3 页</div></div><small>更后面的页</small></div>
+  </div>
+</div>
+
+<div class="dir">
+  <h2><b>B</b>书背</h2>
+  <p>像一页倒扣的书：暖色纸纹，中间一个大号宋体页码，上下两道细线。按住时灯光从下往上漫上来。最安静、最像书。</p>
+  <div class="row">
+    <div class="slot"><div class="wrap"><div class="reveal">第 3 页内容</div>
+      <div class="page b next" data-hold><div class="rule"></div><div class="num">03</div><div class="rule bot"></div><div class="hint">按住翻开</div></div></div><small>下一页</small></div>
+    <div class="slot"><div class="page b locked" data-locked><div class="rule"></div><div class="num">04</div><div class="rule bot"></div><div class="hint">先翻第 3 页</div></div><small>更后面的页</small></div>
+  </div>
+</div>
+
+<div class="dir">
+  <h2><b>C</b>灯下</h2>
+  <p>暗页上一盏小灯：下一页的灯是亮的，按住时灯越来越亮、照满整页。锁着的页灯是灭的。和「灯下」主题最贴。</p>
+  <div class="row">
+    <div class="slot"><div class="wrap"><div class="reveal">第 3 页内容</div>
+      <div class="page c next" data-hold><div class="glow"></div><div class="bulb"></div><div class="num">第 3 页</div><div class="hint">按住点亮</div></div></div><small>下一页</small></div>
+    <div class="slot"><div class="page c locked" data-locked><div class="glow"></div><div class="bulb"></div><div class="num">第 4 页</div><div class="hint">先翻第 3 页</div></div><small>更后面的页</small></div>
+  </div>
+</div>
+
+<div class="now">
+  <h2 style="font-size:16px;font-weight:600;margin:0 0 10px;color:var(--variant)">现在的样子（对照）</h2>
+  <div class="old"><div class="ring">阅</div><div style="font-size:20px;font-weight:600">第 3 页</div><div style="color:var(--variant)">按住翻开</div></div>
+</div>
+
+<script>
+  const HOLD = 650;
+  document.querySelectorAll('[data-hold]').forEach((el) => {
+    let start = 0, raf = 0, down = null;
+    const tick = (t) => {
+      const p = Math.min(1, (t - start) / HOLD);
+      el.style.setProperty('--p', p);
+      if (p >= 1) { navigator.vibrate?.(30); el.classList.add('opened'); return; }
+      raf = requestAnimationFrame(tick);
+    };
+    const cancel = () => {
+      cancelAnimationFrame(raf); down = null;
+      if (!el.classList.contains('opened')) el.style.setProperty('--p', 0);
+    };
+    el.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; start = performance.now(); raf = requestAnimationFrame(tick); });
+    el.addEventListener('pointermove', (e) => { if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 12) cancel(); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach((n) => el.addEventListener(n, cancel));
+  });
+  document.querySelectorAll('[data-locked]').forEach((el) => el.addEventListener('click', () => {
+    el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
+  }));
+</script>
+</body>
+</html>

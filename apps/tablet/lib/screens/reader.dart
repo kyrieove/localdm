@@ -401,6 +401,14 @@ class _Page extends StatelessWidget {
   }
 }
 
+/// 封条印章上的大写页码：1→壹，12→拾贰，23→贰拾叁；超过 99 直接用数字。
+String chineseNumeral(int n) {
+  const d = ['', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];
+  if (n < 1 || n > 99) return '$n';
+  if (n < 10) return d[n];
+  return '${n >= 20 ? d[n ~/ 10] : ''}拾${d[n % 10]}';
+}
+
 /// 盖着的原稿页。下一页：按住，圆环走满就翻开并震一下；中途松手或滑动就作废。
 /// 更后面的页：点一下抖一抖，提示先翻哪一页。
 class CoverPage extends StatefulWidget {
@@ -440,37 +448,75 @@ class _CoverPageState extends State<CoverPage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final next = widget.isNext;
+    // 封条：像没拆封的角色本，一道封条斜贴在页中间；按住时灯色从左往右把封条「烧」开。
+    final band = Transform.rotate(
+      angle: -4 * math.pi / 180,
+      child: LayoutBuilder(
+        // 封条比页宽一点，斜过来两端不露空角。
+        builder: (context, box) => OverflowBox(
+          maxWidth: box.maxWidth * 1.1,
+          child: Container(
+            width: box.maxWidth * 1.1,
+            height: 64,
+            decoration: BoxDecoration(
+              color: next ? scheme.primaryContainer : scheme.surfaceContainerHighest,
+              border: Border.symmetric(horizontal: BorderSide(color: next ? scheme.primary.withValues(alpha: 0.35) : scheme.outlineVariant)),
+            ),
+            child: Stack(fit: StackFit.expand, children: [
+              AnimatedBuilder(
+                animation: _hold,
+                builder: (context, _) => FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: next ? _hold.value : 0,
+                  child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(colors: [scheme.primary.withValues(alpha: 0.5), scheme.primary]))),
+                ),
+              ),
+              Center(
+                child: Text('第 ${widget.page} 页',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, letterSpacing: 6, color: next ? scheme.onPrimaryContainer : scheme.onSurfaceVariant)),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+    final seal = Container(
+      width: 58,
+      height: 58,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: next ? scheme.primary : scheme.surfaceContainerHighest,
+        boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 6, offset: Offset(0, 2))],
+      ),
+      child: Text(chineseNumeral(widget.page),
+          style: TextStyle(fontSize: widget.page > 10 ? 17 : 22, fontWeight: FontWeight.w700, color: next ? scheme.onPrimary : scheme.outline)),
+    );
     final face = AspectRatio(
       aspectRatio: 821 / 1259,
       child: Container(
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: scheme.surfaceContainerHigh,
+          gradient: LinearGradient(
+              begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [scheme.surfaceContainerHigh, scheme.surfaceContainer]),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: widget.isNext ? scheme.primary.withValues(alpha: 0.6) : scheme.outlineVariant, width: 1.5),
+          border: Border.all(color: scheme.outlineVariant),
         ),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          SizedBox(
-            width: 96,
-            height: 96,
-            child: Stack(alignment: Alignment.center, children: [
-              // 底圈：没按时也看得见「要按满一圈」
-              Container(decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: scheme.outlineVariant, width: 5))),
-              AnimatedBuilder(
-                animation: _hold,
-                builder: (context, _) => CircularProgressIndicator(
-                  value: widget.isNext ? _hold.value : 0,
-                  strokeWidth: 5,
-                  strokeCap: StrokeCap.round,
-                  backgroundColor: scheme.outlineVariant,
-                ),
-              ),
-              Text('阅', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w700, color: widget.isNext ? scheme.primary : scheme.onSurfaceVariant)),
-            ]),
+        child: Stack(children: [
+          // 内框细线：像角色本的版心
+          Positioned.fill(
+            child: Container(
+              margin: const EdgeInsets.all(14),
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(3), border: Border.all(color: scheme.primary.withValues(alpha: 0.14))),
+            ),
           ),
-          const SizedBox(height: 20),
-          Text('第 ${widget.page} 页', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: scheme.onSurface)),
-          const SizedBox(height: 8),
-          Text(widget.isNext ? '按住翻开' : '先翻开第 ${widget.nextToOpen} 页', style: TextStyle(fontSize: 16, color: scheme.onSurfaceVariant)),
+          Align(alignment: const Alignment(0, -0.12), child: band),
+          Align(alignment: const Alignment(0, -0.34), child: seal),
+          Align(
+            alignment: const Alignment(0, 0.76),
+            child: Text(next ? '按住拆封' : '先拆第 ${widget.nextToOpen} 页', style: TextStyle(fontSize: 16, color: scheme.onSurfaceVariant)),
+          ),
         ]),
       ),
     );

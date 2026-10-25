@@ -75,7 +75,7 @@ void main() {
 
   testWidgets('盖着的下一页按住 0.65 秒翻开；中途松手不翻；更后面的页翻不开', (tester) async {
     final state = await pump(tester, const Size(820, 1180), {'stage': 'inGame', 'page': '2', 'opened': '1', 'text': '0'});
-    expect(find.text('按住翻开'), findsOneWidget);
+    expect(find.text('按住拆封'), findsOneWidget);
 
     var g = await tester.startGesture(const Offset(450, 600));
     await tester.pump(); // 动画从下一帧开始计时
