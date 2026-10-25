@@ -20,6 +20,7 @@
 - 仍未答：接口版本号与配对令牌；投票上不上平板；平板播语音；网页端是否长期保留；电脑重启后认领是否持久化。ADR 0012 草案未提交。
 
 ## 先读
+- PC 界面已按平板「灯下」重做并合入 main（`f75f4a9`），已结束，不用接手：`docs/decisions/0013-pc-ui-dengxia.md`
 - `docs/plans/2026-10-25-tablet-flutter-prototype.md` §8（已补的接口）
 - `docs/decisions/0012-tablet-native-flutter-app.md`（草案）
 - `LESSONS.md` 末尾

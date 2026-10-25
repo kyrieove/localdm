@@ -24,3 +24,7 @@
 - 在浏览器面板里点 Flutter 网页版，截图总落后一帧、换屏后第一下点击常被吞 → 原型加网址参数直达各屏（`?stage=inGame&section=cards`），截图用本机 Chrome `--headless=new --screenshot --virtual-time-budget`，见 `apps/tablet/tool/shots.sh`。
 - 原型界面的颜色对比度靠人看会漏（半透明压暗、夜读矩阵）→ 每对文字/底色写进 `Palette.textPairs`，夜读矩阵和界面共用常量，由 `flutter test` 算出并卡 4.5。
 - Git Bash 里 `flutter build web --base-href /app/` 报「--base-href should start and end with /」→ MSYS 把 `/app/` 改写成了 `D:/…/Git/app/` → 这条命令在 PowerShell 里跑（或设 `MSYS_NO_PATHCONV=1`）。
+- WPF 按钮写 `FontFamily="Segoe MDL2 Assets" Content="&#xE720;"` 却显示成方框 → `Shared.xaml` 的隐式 TextBlock 样式把字体盖回雅黑 → 图标一律写成 `<TextBlock Style="{StaticResource Icon}" Text="…"/>`。
+- `<Trigger Property="Tag" Value="True">` 对绑定来的 bool 永远不触发 → Tag 是 object，"True" 被当字符串比较 → 用 `<Trigger.Value><sys:Boolean>True</sys:Boolean></Trigger.Value>`。
+- 自绘 ComboBox 模板后可编辑下拉框（设置页模型 ID）打不了字 → 模板里少了 `PART_EditableTextBox` → 补上并按 `IsEditable` 切换显示。
+- UI 测试截图只渲染窗口内容：控件本身透明底时截出来是白底，看着像配色坏了 → 截图前给被测控件设 `Background`，真实软件里它铺在主窗口底色上。
