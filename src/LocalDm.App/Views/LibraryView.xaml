@@ -130,14 +130,14 @@
             </Border>
 
             <!-- 存档在、包不在：明说不能恢复，不用新包顶上去跳过环节 -->
-            <Border Margin="0,22,0,0" Padding="16,13" CornerRadius="6"
-                    Background="{StaticResource SealWash}" BorderBrush="#FFD8C8A7" BorderThickness="1"
+            <Border Margin="0,22,0,0" Padding="18,14" CornerRadius="12"
+                    Background="{StaticResource SealWash}"
                     Visibility="{Binding HasOrphanNotice, Converter={StaticResource BoolToVisibility}}">
                 <StackPanel>
                     <TextBlock Text="有一局存档暂时打不开" FontSize="11" FontWeight="SemiBold"
                                Foreground="{StaticResource SealDeep}" />
                     <TextBlock Text="{Binding OrphanNotice}" TextWrapping="Wrap" FontSize="12"
-                               Foreground="#FF6B5637" LineHeight="20" Margin="0,6,0,0" />
+                               Foreground="{StaticResource OnSealWash}" LineHeight="20" Margin="0,6,0,0" />
                 </StackPanel>
             </Border>
 

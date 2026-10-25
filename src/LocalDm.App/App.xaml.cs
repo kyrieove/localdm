@@ -13,6 +13,21 @@ public partial class App : Application
     /// <summary>诊断日志写入锁：多处异常可能同时落盘。</summary>
     private static readonly object CrashLogLock = new();
 
+    public App()
+    {
+        // 配色必须在 App.xaml 和第一个窗口加载 Shared.xaml 之前定下来，所以在构造函数里读设置。
+        try
+        {
+            var root = SessionContext.ResolveDataRoot();
+            Themes.ThemePalette.UseLight =
+                new SettingsStore(Path.Combine(root, "settings.json"), Path.Combine(root, "secrets")).Load().LightTheme;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 读不到设置就用默认深色，不能因为配色开不了软件。
+        }
+    }
+
     private AppComposition? _composition;
 
     protected override async void OnStartup(StartupEventArgs e)

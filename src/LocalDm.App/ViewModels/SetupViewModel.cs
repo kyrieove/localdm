@@ -33,6 +33,7 @@ public sealed class SetupViewModel : ObservableObject
     private int _contextWindowTokens = ToolSettings.DefaultContextWindowTokens;
     private double _uiScale = ToolSettings.DefaultUiScale;
     private ChatWidthMode _chatWidthMode = ChatWidthMode.Standard;
+    private bool _lightTheme;
     private bool _busy;
 
     public SetupViewModel(
@@ -110,6 +111,13 @@ public sealed class SetupViewModel : ObservableObject
     {
         get => _voiceId;
         set => SetProperty(ref _voiceId, value);
+    }
+
+    /// <summary>界面用浅色配色。保存后要重启软件才换色（颜色在加载时取定）。</summary>
+    public bool LightTheme
+    {
+        get => _lightTheme;
+        set => SetProperty(ref _lightTheme, value);
     }
 
     /// <summary>
@@ -266,6 +274,7 @@ public sealed class SetupViewModel : ObservableObject
         ContextWindowTokens = _settings.ContextWindowTokens;
         UiScale = _settings.UiScale;
         ChatWidthMode = _settings.ChatWidthMode;
+        LightTheme = _settings.LightTheme;
         _loadedVoiceId = VoiceId;
         MineruExecutable = _settings.MineruExecutable ?? string.Empty;
         OcrPythonPath = _settings.OcrPythonPath ?? string.Empty;
@@ -325,6 +334,7 @@ public sealed class SetupViewModel : ObservableObject
                 ContextWindowTokens = ContextWindowTokens,
                 UiScale = UiScale,
                 ChatWidthMode = ChatWidthMode,
+                LightTheme = LightTheme,
             };
             await _settingsStore.SaveAsync(_settings, CancellationToken.None);
             SettingsSaved?.Invoke(this, _settings);
@@ -446,6 +456,7 @@ public sealed class SetupViewModel : ObservableObject
                 ContextWindowTokens = ContextWindowTokens,
                 UiScale = UiScale,
                 ChatWidthMode = ChatWidthMode,
+                LightTheme = LightTheme,
             };
             _settings.Validate();
             await _settingsStore.SaveAsync(_settings, CancellationToken.None);

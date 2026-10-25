@@ -101,17 +101,17 @@
             <!-- ===== ④ 流程确认 ===== -->
             <StackPanel Margin="0,22,0,0"
                         Visibility="{Binding IsFlowStep, Converter={StaticResource BoolToVisibility}}">
-                <Border Background="{StaticResource SealWash}" BorderBrush="#FFD8C8A7" BorderThickness="1"
-                        CornerRadius="6" Padding="14,10">
+                <Border Background="{StaticResource SealWash}"
+                        CornerRadius="12" Padding="16,12">
                     <TextBlock x:Name="FlowNoticeLabel" Text="{Binding FlowNotice}" FontSize="12"
-                               Foreground="#FF6B5637" TextWrapping="Wrap" />
+                               Foreground="{StaticResource OnSealWash}" TextWrapping="Wrap" />
                 </Border>
 
                 <TextBlock x:Name="LayeringSummaryLabel" Text="{Binding LayeringSummary}"
                            Style="{StaticResource ChatMeta}" Margin="0,14,0,0" TextWrapping="Wrap" />
 
                 <TextBlock x:Name="LayeringNoticeLabel" Text="{Binding LayeringNotice}"
-                           Style="{StaticResource ChatMeta}" Foreground="#FF9A4A2E" Margin="0,6,0,0"
+                           Style="{StaticResource ChatMeta}" Foreground="{StaticResource SealDeep}" Margin="0,6,0,0"
                            TextWrapping="Wrap" />
 
                 <ItemsControl x:Name="FlowStepList" ItemsSource="{Binding FlowSteps}" Margin="0,10,0,0">

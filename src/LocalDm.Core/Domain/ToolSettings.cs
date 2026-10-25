@@ -51,6 +51,9 @@ public sealed record ToolSettings
     /// <summary>对话与输入区的宽度档位。</summary>
     public ChatWidthMode ChatWidthMode { get; init; } = ChatWidthMode.Standard;
 
+    /// <summary>界面用浅色配色（白天、亮房间）。默认深色；改了重启后生效。</summary>
+    public bool LightTheme { get; init; }
+
     // 主持资料含全部角色本（ADR 0011），5 人本约 5 万 token，6.5 万的旧默认放不下对话。
     public const int DefaultContextWindowTokens = 1_000_000;
 

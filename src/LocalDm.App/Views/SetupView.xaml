@@ -217,6 +217,21 @@
                 </StackPanel>
             </Grid>
 
+            <!-- 配色：默认深色（围桌房间暗），白天可换浅色；保存后重启生效 -->
+            <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                    <TextBlock Text="浅色界面" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
+                    <TextBlock Text="默认深色，适合围桌时的暗房间；白天或亮房间可换浅色。保存后重启软件生效。"
+                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
+                </StackPanel>
+                <CheckBox x:Name="LightThemeBox" Grid.Column="1" IsChecked="{Binding LightTheme, Mode=TwoWay}"
+                          VerticalAlignment="Center" Content="用浅色" />
+            </Grid>
+
             <!-- 高级：连接与鉴权 -->
             <Expander Margin="0,20,0,0" Foreground="{StaticResource InkSoft}">
                 <Expander.Header>
