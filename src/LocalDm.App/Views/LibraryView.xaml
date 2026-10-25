@@ -104,30 +104,6 @@
 
             <Border Height="1" Background="{StaticResource Rule}" Margin="0,22,0,0" />
 
-            <!-- 上一局还没走完：重启后直接接着玩 -->
-            <Border Margin="0,22,0,0" Padding="18,15"
-                    Background="{StaticResource PaperDim}" BorderBrush="{StaticResource Seal}"
-                    BorderThickness="2" CornerRadius="16"
-                    Visibility="{Binding HasResumableSession, Converter={StaticResource BoolToVisibility}}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                        <TextBlock Text="上一局还没走完" FontSize="11" FontWeight="SemiBold"
-                                   Foreground="{StaticResource Seal}" />
-                        <TextBlock Text="{Binding ResumableTitle}" Style="{StaticResource RailTitle}"
-                                   FontSize="17" Margin="0,6,0,0" />
-                        <TextBlock Text="{Binding ResumableDetail}" Style="{StaticResource ChatMeta}"
-                                   Margin="0,5,0,0" />
-                    </StackPanel>
-                    <Button Grid.Column="1" Content="继续这一局" Command="{Binding ContinueCommand}"
-                            Style="{StaticResource SealButton}" VerticalAlignment="Center"
-                            Padding="20,10" Margin="22,0,0,0" />
-                </Grid>
-            </Border>
-
             <!-- 存档在、包不在：明说不能恢复，不用新包顶上去跳过环节 -->
             <Border Margin="0,22,0,0" Padding="18,14" CornerRadius="12"
                     Background="{StaticResource SealWash}"
@@ -178,25 +154,26 @@
                            Foreground="{StaticResource Muted}" LineHeight="22" />
             </Border>
 
-            <!-- 演示剧本：留在剧本库，不摆在游玩界面里 -->
-            <TextBlock Text="熟悉操作" Style="{StaticResource RailLabel}" Margin="0,26,0,6" />
-            <Border Padding="20,18" CornerRadius="16"
-                    Background="{StaticResource PaperDim}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                        <TextBlock Text="演示剧本" Style="{StaticResource RailTitle}" FontSize="17" />
-                        <TextBlock Text="不含真实剧情，用来熟悉按钮与声音。"
-                                   Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
-                    </StackPanel>
-                    <Button x:Name="DemoButton" Grid.Column="1" Content="体验演示"
-                            Command="{Binding LoadDemoCommand}" Style="{StaticResource QuietButton}"
-                            VerticalAlignment="Center" Padding="18,9" Margin="22,0,0,0" />
-                </Grid>
-            </Border>
+            <!-- 上一局还没走完：可选的接着玩，不抢「开始这一局」的主位 -->
+            <StackPanel Visibility="{Binding HasResumableSession, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="上一局还没走完" Style="{StaticResource RailLabel}" Margin="0,26,0,6" />
+                <Border Padding="20,18" CornerRadius="16" Background="{StaticResource PaperDim}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ResumableTitle}" Style="{StaticResource RailTitle}" FontSize="17" />
+                            <TextBlock Text="{Binding ResumableDetail}" Style="{StaticResource ChatMeta}"
+                                       Margin="0,5,0,0" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="继续这一局" Command="{Binding ContinueCommand}"
+                                Style="{StaticResource QuietButton}" VerticalAlignment="Center"
+                                Padding="18,9" Margin="22,0,0,0" />
+                    </Grid>
+                </Border>
+            </StackPanel>
 
             <!-- 开局 -->
             <Grid Margin="0,24,0,0">

@@ -282,21 +282,6 @@ public sealed class AppComposition : IDisposable
             }
         };
 
-        // 第一次用的人没有剧本包：首页直接给一条能走的路。
-        library.DemoRequested += async (_, _) =>
-        {
-            try
-            {
-                await tablet.SetPackageAsync(null, null, () => host.LoadDemoAsync());
-                shell.ShowHostCommand.Execute(null);
-            }
-            catch (Exception ex)
-            {
-                LocalDm.Core.Diagnostics.RunLog.Write("App", "装载演示剧本失败：" + LocalDm.Infrastructure.Diagnostics.RedactedLog.Redact(Convert.ToString(ex)));
-                host.ReportProblem("装载演示剧本失败，请重试。");
-            }
-        };
-
         return shell;
     }
 

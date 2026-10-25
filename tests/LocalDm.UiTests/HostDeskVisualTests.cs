@@ -203,7 +203,7 @@ public sealed class HostDeskVisualTests
     }
 
     /// <summary>
-    /// 首页：没有剧本包时也要有路可走（先试演示），有存档时给出「继续这一局」。
+    /// 首页：没有剧本包也没有存档时，给出空状态提示。
     /// </summary>
     [Fact]
     public async Task Library_page_offers_a_way_forward_when_empty()
@@ -222,18 +222,11 @@ public sealed class HostDeskVisualTests
             {
                 await WaitForRenderAsync();
 
-                // 没有剧本包：首页给出「先试一局演示剧本」这条路
                 Assert.False(shell.Library.HasPackages, "本机还没有剧本包。");
                 Assert.False(shell.Library.HasResumableSession, "没有存档。");
+                Assert.False(string.IsNullOrWhiteSpace(shell.Library.EmptyStateText));
 
                 Save(window, "library-empty.png");
-
-                // 点「先试一局演示剧本」应当跳到主持台并装上演示
-                shell.Library.LoadDemoCommand.Execute(null);
-                await WaitForRenderAsync();
-
-                Assert.IsType<HostViewModel>(shell.Current);
-                Assert.Equal("阅本", shell.Host.Session.PhaseTitle);
             }
             finally
             {

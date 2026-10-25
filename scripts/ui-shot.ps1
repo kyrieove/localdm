@@ -1,6 +1,6 @@
 # 给已在运行的 LocalDm 窗口截图；可先按名字点一个按钮（UIA Invoke）。
 #   pwsh -File scripts/ui-shot.ps1 -Out artifacts\ui\x.png
-#   pwsh -File scripts/ui-shot.ps1 -Click "体验演示" -Out artifacts\ui\x.png
+#   pwsh -File scripts/ui-shot.ps1 -Click "继续这一局" -Out artifacts\ui\x.png
 # 截图用 PrintWindow（窗口自己画，不受遮挡影响），保存整幅窗口含边框。
 param(
     [string]$Click,

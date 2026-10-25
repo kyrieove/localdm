@@ -25,7 +25,6 @@ public sealed class LibraryViewModel : ObservableObject
         _packagesDir = packagesDir;
         OpenCommand = new RelayCommand(OpenSelectedAsync, () => _selected?.CanStart == true);
         ContinueCommand = new RelayCommand(ContinueAsync, () => _hasResumableSession);
-        LoadDemoCommand = new RelayCommand(LoadDemoAsync);
         ImportCommand = new RelayCommand(
             () => { ImportRequested?.Invoke(this, EventArgs.Empty); return Task.CompletedTask; },
             () => !IsImporting);
@@ -76,9 +75,6 @@ public sealed class LibraryViewModel : ObservableObject
     /// <summary>主持人点了「继续这一局」；参数是要接着玩的包。</summary>
     public event EventHandler<ScriptPackage>? ContinueRequested;
 
-    /// <summary>主持人想先试试内置演示剧本。</summary>
-    public event EventHandler? DemoRequested;
-
     public ObservableCollection<LibraryPackageRow> Packages { get; } = [];
 
     /// <summary>目录里全部版本，含被「已装订」列表折叠起来的旧版本：恢复存档按包标识找包，要用它。</summary>
@@ -121,9 +117,6 @@ public sealed class LibraryViewModel : ObservableObject
     public RelayCommand OpenCommand { get; }
 
     public RelayCommand ContinueCommand { get; }
-
-    /// <summary>装载内置演示剧本。第一次用的人不该只看到一句「没有剧本」。</summary>
-    public RelayCommand LoadDemoCommand { get; }
 
     /// <summary>有没有一局没走完的存档。</summary>
     public bool HasResumableSession
@@ -207,13 +200,6 @@ public sealed class LibraryViewModel : ObservableObject
             Status = $"继续「{_resumablePackage.Title}」。";
         }
 
-        return Task.CompletedTask;
-    }
-
-    private Task LoadDemoAsync()
-    {
-        DemoRequested?.Invoke(this, EventArgs.Empty);
-        Status = "正在装载演示剧本。";
         return Task.CompletedTask;
     }
 
