@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using LocalDm.Core.Domain;
 using LocalDm.Core.Hosting;
+using LocalDm.Core.Import;
 using LocalDm.Core.Ports;
 using LocalDm.Infrastructure.Storage;
 
@@ -190,6 +191,12 @@ public sealed class SetupViewModel : ObservableObject
         get => _ocrPythonPath;
         set => SetProperty(ref _ocrPythonPath, value);
     }
+
+    /// <summary>只读展示：发给主持模型的固定规则。</summary>
+    public string HostPromptText => HostNarration.FixedPromptTemplate;
+
+    /// <summary>只读展示：导入剧本时起草流程用的提示词。</summary>
+    public string FlowDraftPromptText => FlowDrafter.Prompt;
 
     public bool Busy
     {

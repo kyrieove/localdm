@@ -120,6 +120,35 @@ public sealed class SetupViewTests
         });
     }
 
+    [Fact]
+    public async Task Advanced_section_shows_fixed_prompts_read_only()
+    {
+        await WpfRunner.RunAsync(() =>
+        {
+            using var root = new TempRoot();
+            var settingsPath = Path.Combine(root.Path, "settings.json");
+            var secretsDir = Path.Combine(root.Path, "secrets");
+            var store = new SettingsStore(settingsPath, secretsDir);
+            var gateway = new StubGateway();
+            var tts = new SilentTts();
+            var director = new HostDirector(gateway, tts);
+            var setup = new SetupViewModel(store, gateway, tts, director);
+
+            Assert.Equal(HostNarration.FixedPromptTemplate, setup.HostPromptText);
+            Assert.Contains("你是《{剧本名}》", setup.HostPromptText, StringComparison.Ordinal);
+            Assert.Equal(LocalDm.Core.Import.FlowDrafter.Prompt, setup.FlowDraftPromptText);
+
+            var view = new LocalDm.App.Views.SetupView { DataContext = setup };
+            foreach (var name in new[] { "HostPromptBox", "FlowPromptBox" })
+            {
+                var box = Assert.IsType<System.Windows.Controls.TextBox>(view.FindName(name));
+                Assert.True(box.IsReadOnly);
+            }
+
+            return Task.CompletedTask;
+        });
+    }
+
     private sealed class StubGateway : IMagpieGateway
     {
         public Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken cancellationToken) =>

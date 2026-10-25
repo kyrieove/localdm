@@ -256,6 +256,26 @@
                 </StackPanel>
             </Expander>
 
+            <!-- 高级：主持提示词，只读，方便对照和复制 -->
+            <Expander Margin="0,6,0,0" Foreground="{StaticResource InkSoft}">
+                <Expander.Header>
+                    <TextBlock Text="高级：主持提示词（只读）" FontSize="13" Foreground="{StaticResource Muted}" />
+                </Expander.Header>
+                <StackPanel Margin="0,14,0,0">
+                    <TextBlock Text="主持人固定提示词" Style="{StaticResource RailLabel}" Margin="0,0,0,6" />
+                    <TextBox x:Name="HostPromptBox" Text="{Binding HostPromptText, Mode=OneWay}"
+                             IsReadOnly="True" TextWrapping="Wrap" MaxHeight="360" FontSize="13"
+                             VerticalScrollBarVisibility="Auto" />
+                    <TextBlock Text="开局时把「{剧本名}」「{人数}」换成实际值。每轮还会附上剧本资料和当前局面，这里不显示，免得剧透。"
+                               Style="{StaticResource ChatMeta}" Margin="0,8,0,0" TextWrapping="Wrap" />
+
+                    <TextBlock Text="导入时起草流程的提示词" Style="{StaticResource RailLabel}" Margin="0,14,0,6" />
+                    <TextBox x:Name="FlowPromptBox" Text="{Binding FlowDraftPromptText, Mode=OneWay}"
+                             IsReadOnly="True" TextWrapping="Wrap" MaxHeight="360" FontSize="13"
+                             VerticalScrollBarVisibility="Auto" />
+                </StackPanel>
+            </Expander>
+
             <Button Content="保存设置" Command="{Binding SaveCommand}" Style="{StaticResource SealButton}"
                     HorizontalAlignment="Left" Padding="26,12" Margin="0,26,0,0" />
             <TextBlock Text="{Binding Status}" Margin="0,14,0,0" TextWrapping="Wrap"
