@@ -113,73 +113,47 @@ public sealed class TtsService : ITtsService, IDisposable
                 var targetEdgeVoice = voiceId is not null && voiceId.StartsWith("zh-CN-", StringComparison.OrdinalIgnoreCase)
                     ? voiceId
                     : "zh-CN-YunxiNeural";
+                var edgeAllowed = (voiceId is null || voiceId.StartsWith("zh-CN-", StringComparison.OrdinalIgnoreCase))
+                    && _edge.IsAvailable();
 
-                var usedEdge = false;
-                if ((voiceId is null || voiceId.StartsWith("zh-CN-", StringComparison.OrdinalIgnoreCase))
-                    && _edge.IsAvailable())
+                foreach (var chunk in SpeechChunks.Split(item.SafeText))
                 {
-                    try
-                    {
-                        lock (_stateLock) { _isPlayingEdge = true; }
-                        usedEdge = await _edge.TrySpeakAsync(item.SafeText, targetEdgeVoice, linked.Token);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        throw;
-                    }
-                    catch
-                    {
-                        // Edge 侧不可用（缺依赖、网络失败、进程起不来）：降级到本地 SAPI。
-                        // 这里不把异常抛给界面：公共屏上不该出现 python 或路径细节。
-                        System.Diagnostics.Debug.WriteLine("[Tts] Edge-TTS 不可用，降级到 Windows 本地语音。");
-                        usedEdge = false;
-                    }
-                    finally
-                    {
-                        lock (_stateLock) { _isPlayingEdge = false; }
-                    }
-                }
-
-                if (!usedEdge)
-                {
-                    // 降级前先确认没有被取消：Stop() 杀掉 Edge 进程后，TrySpeakAsync 可能以
-                    // 非 0 退出码正常返回 false（没观察到取消），直接降级会把刚被主持人
-                    // 停掉的文本又用本地语音念一遍。
                     linked.Token.ThrowIfCancellationRequested();
 
-                    // 降级使用 Windows System.Speech (默认 Microsoft Kangkang 沉稳男声)
-                    ApplyVoice(voiceId);
-                    _synth.Rate = 0;
-                    _synth.Volume = 100;
-
-                    var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                    void OnCompleted(object? sender, SpeakCompletedEventArgs args)
+                    var usedEdge = false;
+                    if (edgeAllowed)
                     {
-                        if (args.Cancelled)
+                        try
                         {
-                            tcs.TrySetCanceled();
+                            lock (_stateLock) { _isPlayingEdge = true; }
+                            usedEdge = await _edge.TrySpeakAsync(chunk, targetEdgeVoice, linked.Token);
                         }
-                        else if (args.Error is not null)
+                        catch (OperationCanceledException)
                         {
-                            tcs.TrySetException(new DomainRuleException(
-                                DomainErrorCode.TTS_FAILED,
-                                "播音失败，文字已保留。"));
+                            throw;
                         }
-                        else
+                        catch
                         {
-                            tcs.TrySetResult();
+                            // Edge 侧不可用（缺依赖、网络失败、进程起不来）：降级到本地 SAPI。
+                            // 这里不把异常抛给界面：公共屏上不该出现 python 或路径细节。
+                            System.Diagnostics.Debug.WriteLine("[Tts] Edge-TTS 不可用，降级到 Windows 本地语音。");
+                            usedEdge = false;
+                        }
+                        finally
+                        {
+                            lock (_stateLock) { _isPlayingEdge = false; }
                         }
                     }
 
-                    _synth.SpeakCompleted += OnCompleted;
-                    try
+                    if (!usedEdge)
                     {
-                        _synth.SpeakAsync(item.SafeText);
-                        await tcs.Task.WaitAsync(linked.Token);
-                    }
-                    finally
-                    {
-                        _synth.SpeakCompleted -= OnCompleted;
+                        // 一段失败后剩下的都用本地语音：来回换声更难听，也省得每段再等一次超时。
+                        edgeAllowed = false;
+                        // 降级前先确认没有被取消：Stop() 杀掉 Edge 进程后，TrySpeakAsync 可能以
+                        // 非 0 退出码正常返回 false（没观察到取消），直接降级会把刚被主持人
+                        // 停掉的文本又用本地语音念一遍。
+                        linked.Token.ThrowIfCancellationRequested();
+                        await SpeakLocalAsync(chunk, voiceId, linked.Token);
                     }
                 }
             }
@@ -197,6 +171,44 @@ public sealed class TtsService : ITtsService, IDisposable
         finally
         {
             _queueLock.Release();
+        }
+    }
+
+    private async Task SpeakLocalAsync(string text, string? voiceId, CancellationToken token)
+    {
+        // 降级使用 Windows System.Speech (默认 Microsoft Kangkang 沉稳男声)
+        ApplyVoice(voiceId);
+        _synth.Rate = 0;
+        _synth.Volume = 100;
+
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnCompleted(object? sender, SpeakCompletedEventArgs args)
+        {
+            if (args.Cancelled)
+            {
+                tcs.TrySetCanceled();
+            }
+            else if (args.Error is not null)
+            {
+                tcs.TrySetException(new DomainRuleException(
+                    DomainErrorCode.TTS_FAILED,
+                    "播音失败，文字已保留。"));
+            }
+            else
+            {
+                tcs.TrySetResult();
+            }
+        }
+
+        _synth.SpeakCompleted += OnCompleted;
+        try
+        {
+            _synth.SpeakAsync(text);
+            await tcs.Task.WaitAsync(token);
+        }
+        finally
+        {
+            _synth.SpeakCompleted -= OnCompleted;
         }
     }
 
