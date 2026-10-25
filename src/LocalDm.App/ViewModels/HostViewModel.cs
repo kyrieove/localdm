@@ -230,16 +230,10 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         {
             if (SetProperty(ref _selectedVoiceId, value))
             {
-                OnPropertyChanged(nameof(VoiceLabel));
                 OnVoiceChanged(value);
             }
         }
     }
-
-    /// <summary>左侧页脚那一行：这位声音会不会自动读。</summary>
-    public string VoiceLabel =>
-        (string.IsNullOrEmpty(SelectedVoiceId) ? "跟随系统声音" : TtsVoiceDisplay.For(SelectedVoiceId))
-        + (AutoRead ? " · 自动朗读" : " · 仅文字");
 
     public string InputText
     {
@@ -605,7 +599,6 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         // 自动朗读是设置项，改完要立刻反映到输入区提示上。
         OnPropertyChanged(nameof(AutoRead));
         OnPropertyChanged(nameof(ComposerHint));
-        OnPropertyChanged(nameof(VoiceLabel));
     }
 
     /// <summary>默认不启动任何模型请求。</summary>

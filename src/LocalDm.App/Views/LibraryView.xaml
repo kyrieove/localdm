@@ -29,15 +29,15 @@
             </Grid>
 
             <!-- 平板加入：软件一开就有，不管有没有打开剧本 -->
-            <Border x:Name="TabletJoinCard" DataContext="{Binding Tablet}" Margin="0,18,0,0" Padding="16" CornerRadius="8"
-                    Background="{StaticResource PaperDim}" BorderBrush="{StaticResource Rule}" BorderThickness="1">
+            <Border x:Name="TabletJoinCard" DataContext="{Binding Tablet}" Margin="0,18,0,0" Padding="20" CornerRadius="16"
+                    Background="{StaticResource PaperDim}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0" Width="140" Height="140" Background="White" BorderBrush="{StaticResource Rule}"
-                            BorderThickness="1" CornerRadius="6" VerticalAlignment="Top">
+                    <Border Grid.Column="0" Width="140" Height="140" Background="White"
+                            CornerRadius="12" VerticalAlignment="Top">
                         <Image x:Name="TabletJoinQr" Source="{Binding QrCode}" Width="128" Height="128"
                                RenderOptions.BitmapScalingMode="NearestNeighbor" />
                     </Border>
@@ -70,8 +70,7 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                        <Border Margin="0,8,0,0" Padding="10,8" CornerRadius="6" Background="{StaticResource SealWash}"
-                                BorderBrush="{StaticResource Seal}" BorderThickness="1"
+                        <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="10" Background="{StaticResource ErrorWash}"
                                 Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">
                             <TextBlock x:Name="TabletJoinError" Text="{Binding ErrorText}" TextWrapping="Wrap" FontSize="12"
                                        Foreground="{StaticResource SealDeep}" />
@@ -86,7 +85,7 @@
             </Border>
 
             <!-- 正在导入：点一下回到向导 -->
-            <Border Margin="0,16,0,0" Padding="16,12" CornerRadius="6"
+            <Border Margin="0,16,0,0" Padding="18,14" CornerRadius="16"
                     Background="{StaticResource PaperDim}" BorderBrush="{StaticResource Seal}"
                     BorderThickness="1"
                     Visibility="{Binding IsImporting, Converter={StaticResource BoolToVisibility}}">
@@ -108,7 +107,7 @@
             <!-- 上一局还没走完：重启后直接接着玩 -->
             <Border Margin="0,22,0,0" Padding="18,15"
                     Background="{StaticResource PaperDim}" BorderBrush="{StaticResource Seal}"
-                    BorderThickness="1" CornerRadius="6"
+                    BorderThickness="2" CornerRadius="16"
                     Visibility="{Binding HasResumableSession, Converter={StaticResource BoolToVisibility}}">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -130,14 +129,14 @@
             </Border>
 
             <!-- 存档在、包不在：明说不能恢复，不用新包顶上去跳过环节 -->
-            <Border Margin="0,22,0,0" Padding="16,13" CornerRadius="6"
-                    Background="{StaticResource SealWash}" BorderBrush="#FFD8C8A7" BorderThickness="1"
+            <Border Margin="0,22,0,0" Padding="18,14" CornerRadius="12"
+                    Background="{StaticResource SealWash}"
                     Visibility="{Binding HasOrphanNotice, Converter={StaticResource BoolToVisibility}}">
                 <StackPanel>
                     <TextBlock Text="有一局存档暂时打不开" FontSize="11" FontWeight="SemiBold"
                                Foreground="{StaticResource SealDeep}" />
                     <TextBlock Text="{Binding OrphanNotice}" TextWrapping="Wrap" FontSize="12"
-                               Foreground="#FF6B5637" LineHeight="20" Margin="0,6,0,0" />
+                               Foreground="{StaticResource OnSealWash}" LineHeight="20" Margin="0,6,0,0" />
                 </StackPanel>
             </Border>
 
@@ -153,7 +152,7 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Background="{StaticResource Cloth}" CornerRadius="1" />
+                            <Border Grid.Column="0" Background="{StaticResource Seal}" CornerRadius="2" />
                             <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding Title}" Style="{StaticResource RailTitle}" FontSize="17" />
                                 <TextBlock Text="{Binding Summary}" Style="{StaticResource ChatMeta}"
@@ -172,8 +171,8 @@
             </ListBox>
 
             <!-- 没有剧本时给一条能走的路 -->
-            <Border Margin="0,6,0,0" Padding="18,16" CornerRadius="6"
-                    Background="{StaticResource PaperDim}" BorderBrush="{StaticResource Rule}" BorderThickness="1"
+            <Border Margin="0,6,0,0" Padding="20,18" CornerRadius="16"
+                    Background="{StaticResource PaperDim}"
                     Visibility="{Binding HasPackages, Converter={StaticResource InverseBoolToVisibility}}">
                 <TextBlock Text="{Binding EmptyStateText}" TextWrapping="Wrap" FontSize="13"
                            Foreground="{StaticResource Muted}" LineHeight="22" />
@@ -181,8 +180,8 @@
 
             <!-- 演示剧本：留在剧本库，不摆在游玩界面里 -->
             <TextBlock Text="熟悉操作" Style="{StaticResource RailLabel}" Margin="0,26,0,6" />
-            <Border Padding="18,15" CornerRadius="6"
-                    Background="{StaticResource PaperDim}" BorderBrush="{StaticResource Rule}" BorderThickness="1">
+            <Border Padding="20,18" CornerRadius="16"
+                    Background="{StaticResource PaperDim}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />

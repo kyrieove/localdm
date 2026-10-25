@@ -146,6 +146,7 @@ public sealed class SettingsStore
             // 旧设置文件没有界面缩放与对话宽度：保持原来的观感（1.0 倍、标准宽度）。
             UiScale = dto.UiScale ?? ToolSettings.DefaultUiScale,
             ChatWidthMode = dto.ChatWidthMode ?? ChatWidthMode.Standard,
+            LightTheme = dto.LightTheme ?? false,
         };
     }
 
@@ -198,6 +199,7 @@ public sealed class SettingsStore
         ContextWindowTokens = settings.ContextWindowTokens,
         UiScale = settings.UiScale,
         ChatWidthMode = settings.ChatWidthMode,
+        LightTheme = settings.LightTheme,
     };
 
     private static string Serialize(ToolSettings settings)
@@ -334,6 +336,9 @@ public sealed class SettingsStore
 
         /// <summary>可空：旧设置文件没有这一项时按标准宽度处理。</summary>
         public ChatWidthMode? ChatWidthMode { get; set; }
+
+        /// <summary>可空：旧设置文件没有这一项时按深色处理。</summary>
+        public bool? LightTheme { get; set; }
     }
 }
 

@@ -1,0 +1,36 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+      「灯下」深色（默认）：与平板 apps/tablet/lib/theme.dart 的 Palette.dark 同一套值。
+      近黑的暖灰底 + 一种琥珀（台灯光）当唯一强调色，其余全是灰阶。
+      键名沿用旧的纸墨命名，对应关系：
+        Paper=surface  PaperDeep=surfaceContainerLow  PaperDim=surfaceContainer
+        Bubble=surfaceContainerHigh  AvatarWash=surfaceContainerHighest
+        Ink=onSurface  InkSoft=onSurfaceVariant  Rule=outlineVariant  Silver=outline
+        Seal=primary  OnSeal=onPrimary  SealWash=primaryContainer  OnSealWash=onPrimaryContainer
+        SealDeep=error（警告与拒绝原因的字色）  ErrorWash=错误横幅底
+      每一对文字/底色的对比度由 UiTests 的 ThemeContrastTests 逐对检查（≥4.5:1）。
+    -->
+    <SolidColorBrush x:Key="Paper" Color="#FF14120F" />
+    <SolidColorBrush x:Key="PaperDeep" Color="#FF1A1714" />
+    <SolidColorBrush x:Key="PaperDim" Color="#FF1E1B17" />
+    <SolidColorBrush x:Key="Bubble" Color="#FF29251F" />
+    <SolidColorBrush x:Key="AvatarWash" Color="#FF34302A" />
+    <SolidColorBrush x:Key="Ink" Color="#FFECE5D8" />
+    <SolidColorBrush x:Key="InkSoft" Color="#FFB5AC9C" />
+    <SolidColorBrush x:Key="Muted" Color="#FFA59C8C" />
+    <SolidColorBrush x:Key="Rule" Color="#FF3E3931" />
+    <SolidColorBrush x:Key="Silver" Color="#FF8C8475" />
+    <SolidColorBrush x:Key="Seal" Color="#FFF2B35E" />
+    <SolidColorBrush x:Key="SealHover" Color="#FFF6C47F" />
+    <SolidColorBrush x:Key="OnSeal" Color="#FF2B1C05" />
+    <SolidColorBrush x:Key="SealWash" Color="#FF4A3410" />
+    <SolidColorBrush x:Key="OnSealWash" Color="#FFFFDDB0" />
+    <SolidColorBrush x:Key="SealDeep" Color="#FFFFB4A6" />
+    <SolidColorBrush x:Key="ErrorWash" Color="#FF3A1E18" />
+    <SolidColorBrush x:Key="Scrim" Color="#B3000000" />
+    <SolidColorBrush x:Key="ScrollThumb" Color="#668C8475" />
+    <Color x:Key="ShadowColor">#FF000000</Color>
+
+</ResourceDictionary>

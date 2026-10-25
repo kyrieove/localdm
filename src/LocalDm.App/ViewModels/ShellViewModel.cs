@@ -155,6 +155,7 @@ public sealed class ShellViewModel : ObservableObject
                 or nameof(SessionViewModel.Revision))
             {
                 OnPropertyChanged(nameof(CanReturnToSession));
+                OnPropertyChanged(nameof(HasSession));
             }
         };
 
@@ -165,19 +166,29 @@ public sealed class ShellViewModel : ObservableObject
                 or nameof(SetupViewModel.AvailableModels))
             {
                 OnPropertyChanged(nameof(ModelStatusLine));
+                OnPropertyChanged(nameof(IsModelMissing));
             }
         };
     }
 
     /// <summary>页脚那行：模型到底选好了没有。只说结论，不报地址与 ID。</summary>
     public string ModelStatusLine =>
-        string.IsNullOrWhiteSpace(_setup.ModelId) ? "模型未选择" : "模型已就绪";
+        IsModelMissing ? "模型未选择" : "模型已就绪";
+
+    /// <summary>还没选模型：导航栏「设置」下面常亮一行提醒，开局前就能看见。</summary>
+    public bool IsModelMissing => string.IsNullOrWhiteSpace(_setup.ModelId);
 
     /// <summary>当前是否停在主持台：左侧轨道据此决定显示本局面板还是剧本库入口。</summary>
     public bool IsHostActive => ReferenceEquals(Current, _host);
 
     /// <summary>当前是否停在设置页。</summary>
     public bool IsSetupActive => ReferenceEquals(Current, _setup);
+
+    /// <summary>导航栏「剧本库」亮起：剧本库与导入向导都算这一栏。</summary>
+    public bool IsLibraryActive => !IsHostActive && !IsSetupActive;
+
+    /// <summary>已经装载了一局：导航栏显示「本局」入口。</summary>
+    public bool HasSession => _host.Session.Projection is not null;
 
     /// <summary>
     /// 能不能「回到本局」：已经装载了一局、但当前不在主持台。
@@ -194,6 +205,7 @@ public sealed class ShellViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(IsHostActive));
                 OnPropertyChanged(nameof(IsSetupActive));
+                OnPropertyChanged(nameof(IsLibraryActive));
                 OnPropertyChanged(nameof(CanReturnToSession));
 
                 if (ReferenceEquals(value, _library))

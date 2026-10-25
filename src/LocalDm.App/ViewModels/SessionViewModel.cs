@@ -87,6 +87,11 @@ public sealed class SessionViewModel : ObservableObject
         ? string.Empty
         : $"{_projection.CurrentPhase.Index} / {_projection.CurrentPhase.Count}";
 
+    /// <summary>环节表盘的弧长：走到第几环占总数的比例（0–1）。</summary>
+    public double PhaseFraction => _projection is null || _projection.CurrentPhase.Count == 0
+        ? 0
+        : (double)_projection.CurrentPhase.Index / _projection.CurrentPhase.Count;
+
     /// <summary>当前流程提示：剧本给的那一句，没给就退回按原本条件拼接。</summary>
     public string Hint
     {
@@ -660,6 +665,7 @@ public sealed class SessionViewModel : ObservableObject
         {
             var isCurrent = i == currentIndex;
             PhaseRail.Add(new PhaseRailItem(
+                i + 1,
                 track[i].Title,
                 IsCurrent: isCurrent,
                 IsPast: i < currentIndex,
@@ -689,6 +695,7 @@ public sealed class SessionViewModel : ObservableObject
 
         OnPropertyChanged(nameof(PhaseTitle));
         OnPropertyChanged(nameof(PhaseProgress));
+        OnPropertyChanged(nameof(PhaseFraction));
         OnPropertyChanged(nameof(Hint));
         OnPropertyChanged(nameof(SessionStateText));
         OnPropertyChanged(nameof(SessionStateLabel));
@@ -749,4 +756,4 @@ public sealed class SessionViewModel : ObservableObject
 }
 
 /// <summary>阶段章标的一项：标题与它在整局中的位置。</summary>
-public sealed record PhaseRailItem(string Title, bool IsCurrent, bool IsPast, string Status = "");
+public sealed record PhaseRailItem(int Number, string Title, bool IsCurrent, bool IsPast, string Status = "");

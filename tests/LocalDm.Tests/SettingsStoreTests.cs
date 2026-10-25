@@ -78,13 +78,14 @@ public sealed class SettingsStoreTests : IDisposable
     public async Task Ui_scale_and_chat_width_round_trip_through_the_settings_file()
     {
         var store = NewStore();
-        var settings = ToolSettings.Default with { UiScale = 1.5, ChatWidthMode = ChatWidthMode.Wide };
+        var settings = ToolSettings.Default with { UiScale = 1.5, ChatWidthMode = ChatWidthMode.Wide, LightTheme = true };
 
         await store.SaveAsync(settings, TestContext.Current.CancellationToken);
         var loaded = await store.LoadAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(1.5, loaded.UiScale);
         Assert.Equal(ChatWidthMode.Wide, loaded.ChatWidthMode);
+        Assert.True(loaded.LightTheme);
     }
 
     [Fact]
@@ -101,6 +102,7 @@ public sealed class SettingsStoreTests : IDisposable
 
         Assert.Equal(ToolSettings.DefaultUiScale, loaded.UiScale);
         Assert.Equal(ChatWidthMode.Standard, loaded.ChatWidthMode);
+        Assert.False(loaded.LightTheme);
     }
 
     [Fact]

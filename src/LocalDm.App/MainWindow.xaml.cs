@@ -1,8 +1,12 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
+using LocalDm.App.Themes;
 using LocalDm.App.ViewModels;
 using LocalDm.Core.Domain;
 using LocalDm.Infrastructure.Storage;
@@ -21,6 +25,11 @@ public partial class MainWindow
 {
     private SettingsStore? _settingsStore;
 
+    /// <summary>环节面板宽度与自动收起的门槛（都按缩放前的布局宽度算）。</summary>
+    private const double PhasePanelWidth = 288, NarrowWidth = 1000;
+
+    private bool? _wasNarrow;
+
     /// <summary>当前界面的缩放内容根：MainWindow.xaml 里带 LayoutTransform 的那个元素。</summary>
     public FrameworkElement UiRoot => UiScaleRoot;
 
@@ -29,6 +38,70 @@ public partial class MainWindow
         InitializeComponent();
         PreviewKeyDown += OnPreviewKeyDown;
         PreviewMouseWheel += OnPreviewMouseWheel;
+    }
+
+    /// <summary>环节面板当前是否展开（窄窗口自动收起，点表盘切换）。</summary>
+    public bool IsPhasePanelOpen { get; private set; } = true;
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        UseThemedTitleBar(this);
+    }
+
+    /// <summary>深色界面配深色标题栏：否则一条白色系统标题栏压在近黑的窗口上。</summary>
+    internal static void UseThemedTitleBar(Window window)
+    {
+        if (ThemePalette.UseLight)
+        {
+            return;
+        }
+
+        var on = 1;
+        // DWMWA_USE_IMMERSIVE_DARK_MODE = 20（Win10 2004 起）；更老的系统调用失败，标题栏保持原样。
+        _ = DwmSetWindowAttribute(new WindowInteropHelper(window).Handle, 20, ref on, sizeof(int));
+    }
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    /// <summary>展开或收起环节面板：宽度 240ms 过渡，正文跟着平滑变宽。</summary>
+    public void SetPhasePanelOpen(bool open, bool animate = true)
+    {
+        IsPhasePanelOpen = open;
+        var to = open ? PhasePanelWidth : 0;
+        if (!animate)
+        {
+            PhasePanel.BeginAnimation(WidthProperty, null);
+            PhasePanel.Width = to;
+            return;
+        }
+
+        PhasePanel.BeginAnimation(WidthProperty, new DoubleAnimation(to, TimeSpan.FromMilliseconds(240))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        });
+    }
+
+    private void OnDialClick(object sender, RoutedEventArgs e) => SetPhasePanelOpen(!IsPhasePanelOpen);
+
+    private void OnRootSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // 只在跨过门槛时自动开合；用户自己点表盘的选择在同一档宽度内保留。
+        var narrow = UiScaleRoot.ActualWidth < NarrowWidth;
+        if (narrow != _wasNarrow)
+        {
+            _wasNarrow = narrow;
+            SetPhasePanelOpen(!narrow, animate: false);
+        }
+    }
+
+    private void OnScrimClick(object sender, MouseButtonEventArgs e)
+    {
+        if (DataContext is ShellViewModel shell)
+        {
+            shell.Host.Session.CancelRestartCommand.Execute(null);
+        }
     }
 
     /// <summary>从设置文件读缩放，并记下同一个存储，改完立即写回。</summary>
@@ -130,12 +203,21 @@ public partial class MainWindow
         {
             Text = "平板扫码加入",
             FontSize = 20,
+            FontWeight = FontWeights.Bold,
             FontFamily = (FontFamily)FindResource("DisplayFace"),
             HorizontalAlignment = HorizontalAlignment.Center,
         });
-        var qr = new Image { Source = tablet.QrCode, Width = 280, Height = 280, Margin = new Thickness(0, 14, 0, 10) };
+        var qr = new Image { Source = tablet.QrCode, Width = 280, Height = 280 };
         RenderOptions.SetBitmapScalingMode(qr, BitmapScalingMode.NearestNeighbor);
-        panel.Children.Add(qr);
+        // 二维码底必须是纯白：那圈白是扫码要的静区，换成主题色 iPad 就扫不出来。
+        panel.Children.Add(new Border
+        {
+            Child = qr,
+            Background = Brushes.White,
+            Padding = new Thickness(14),
+            CornerRadius = new CornerRadius(12),
+            Margin = new Thickness(0, 16, 0, 12),
+        });
         panel.Children.Add(new TextBlock
         {
             Text = tablet.SelectedAddress ?? tablet.Status,
@@ -161,7 +243,7 @@ public partial class MainWindow
             panel.Children.Add(release);
         }
 
-        new Window
+        var dialog = new Window
         {
             Title = "平板入口",
             Owner = this,
@@ -170,6 +252,10 @@ public partial class MainWindow
             ResizeMode = ResizeMode.NoResize,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Background = (Brush)FindResource("Paper"),
-        }.ShowDialog();
+            Foreground = (Brush)FindResource("Ink"),
+            FontFamily = (FontFamily)FindResource("BodyFace"),
+        };
+        dialog.SourceInitialized += (_, _) => UseThemedTitleBar(dialog);
+        dialog.ShowDialog();
     }
 }
