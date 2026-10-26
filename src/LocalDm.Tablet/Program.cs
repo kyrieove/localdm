@@ -17,9 +17,18 @@ if (!string.IsNullOrWhiteSpace(packagePath))
     var package = System.Text.Json.JsonSerializer.Deserialize<LocalDm.Core.Domain.ScriptPackage>(
         File.ReadAllText(packagePath))
         ?? throw new InvalidOperationException("剧本包读不出来。");
+    // 软件导入的包把清单放在 assets/<包标识>.tablet.json（规则同 Infrastructure 的 TabletMaterials；
+    // 那边是 Windows 目标框架，这里引用不了，只读不生成）。
+    var sidecar = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(packagePath))!, "..", "assets", package.PackageId + ".tablet.json");
     var manifest = package.Tablet
-        ?? throw new InvalidOperationException("这个剧本包没有平板清单，要重新准备后才能上平板。");
-    content = new PackageTabletContent(package, TabletAssetRoot.Resolve(packagePath, manifest));
+        ?? (File.Exists(sidecar) ? System.Text.Json.JsonSerializer.Deserialize<TabletManifest>(File.ReadAllText(sidecar)) : null)
+        ?? throw new InvalidOperationException("这个剧本包没有平板清单：先在软件里打开一次这本剧本，让它准备好。");
+    if (manifest.ManifestVersion != TabletManifest.CurrentManifestVersion)
+    {
+        throw new InvalidOperationException("平板清单是旧版本：先在软件里打开一次这本剧本，让它重新准备。");
+    }
+
+    content = new PackageTabletContent(package with { Tablet = manifest }, TabletAssetRoot.Resolve(packagePath, manifest));
 }
 else
 {

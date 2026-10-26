@@ -176,6 +176,25 @@ public sealed class TabletPackageModeTests : IDisposable
         Assert.Same(original, TabletMaterials.Ensure(original, packagePath));
     }
 
+    /// <summary>软件导入的真包把平板清单放在旁路文件里：独立服务也要能读，不能报「没有平板清单」。</summary>
+    [Fact]
+    public async Task Standalone_service_reads_the_sidecar_manifest()
+    {
+        var (packagePath, cardId) = PrepareSyntheticPackage();
+        var bare = JsonSerializer.Deserialize<ScriptPackage>(File.ReadAllText(packagePath))! with { Tablet = null };
+        TabletMaterials.Ensure(bare, packagePath);
+        File.WriteAllText(packagePath, JsonSerializer.Serialize(bare));
+
+        using var host = TabletBlazorHost.Start(
+            Project("LocalDm.Tablet.csproj"),
+            new Dictionary<string, string> { ["LOCALDM_TABLET_PACKAGE"] = packagePath });
+        using var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{host.Port}") };
+        var ct = TestContext.Current.CancellationToken;
+
+        using var catalog = JsonDocument.Parse(await client.GetStringAsync("/tablet/catalog", ct));
+        Assert.Equal(cardId, catalog.RootElement.GetProperty("cards")[0].GetProperty("cardId").GetString());
+    }
+
     [Fact]
     public void An_old_version_sidecar_is_prepared_again()
     {
