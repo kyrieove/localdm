@@ -55,7 +55,7 @@ class WaitingScreen extends StatelessWidget {
               Text(
                   !app.online
                       ? (offlineIos
-                          ? '连不上 ${app.serverAddress}。请确认同一 Wi-Fi，并在 iPad「设置 › 隐私与安全性 › 本地网络」里打开本应用开关，或点左上角换电脑。'
+                          ? '连不上 ${app.serverAddress}。请确认同一 Wi-Fi，并在 iPad「设置 › 隐私与安全性 › 本地网络」里打开「绘合·Paletale」开关，或点左上角换电脑。'
                           : '连不上 ${app.serverAddress}。请确认平板和电脑在同一 Wi-Fi，或点左上角重新扫码。')
                       : preparing
                           ? '线索卡和角色本正在整理，几秒后自动进入选角色。'

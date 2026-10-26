@@ -88,7 +88,7 @@ public partial class App : Application
             // 启动故障只显示脱敏摘要与错误码，不把原始异常全文绑定到界面
             MessageBox.Show(
                 "启动失败：" + RedactedLog.Redact(ex.GetType().Name) + "\n" + RedactedLog.Redact(ex.Message),
-                "Dungeon Master",
+                "绘合·Paletale",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Shutdown(1);
@@ -113,7 +113,7 @@ public partial class App : Application
         e.Handled = true;
         MessageBox.Show(
             "操作失败：" + RedactedLog.Redact(e.Exception.Message),
-            "Dungeon Master",
+            "绘合·Paletale",
             MessageBoxButton.OK,
             MessageBoxImage.Warning);
     }

@@ -11,11 +11,11 @@
 
 [Setup]
 AppId={{6B1B7B2E-8E4F-4A43-9E9C-2A1E7E1B7C11}}
-AppName=Dungeon Master
+AppName=绘合·Paletale
 AppVersion=0.1.0
 AppPublisher=LocalDm
 DefaultDirName={autopf}\LocalDm
-DefaultGroupName=Dungeon Master
+DefaultGroupName=绘合·Paletale
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
@@ -30,13 +30,15 @@ UninstallDisplayIcon={app}\LocalDm.exe
 SetupIconFile=..\..\src\LocalDm.App\Assets\app.ico
 ; 安装目录只放程序，不放用户数据
 UsePreviousAppDir=yes
-; 改名后不沿用旧的「本局主持」开始菜单文件夹
+; 改名后不沿用旧的开始菜单文件夹
 UsePreviousGroup=no
 
 [InstallDelete]
 ; 改名前留下的快捷方式（开始菜单旧文件夹与桌面）
 Type: filesandordirs; Name: "{userprograms}\本局主持"
 Type: files; Name: "{autodesktop}\本局主持.lnk"
+Type: filesandordirs; Name: "{userprograms}\Dungeon Master"
+Type: files; Name: "{autodesktop}\Dungeon Master.lnk"
 
 [Languages]
 Name: "chinesesimplified"; MessagesFile: "compiler:Default.isl"
@@ -48,12 +50,12 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: 
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\Dungeon Master"; Filename: "{app}\LocalDm.exe"
-Name: "{group}\卸载 Dungeon Master"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Dungeon Master"; Filename: "{app}\LocalDm.exe"; Tasks: desktopicon
+Name: "{group}\绘合·Paletale"; Filename: "{app}\LocalDm.exe"
+Name: "{group}\卸载 绘合·Paletale"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\绘合·Paletale"; Filename: "{app}\LocalDm.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\LocalDm.exe"; Description: "启动 Dungeon Master"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\LocalDm.exe"; Description: "启动 绘合·Paletale"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 ; 只清理安装目录自身的空目录；用户数据目录绝不触碰

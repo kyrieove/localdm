@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:LocalDm.App.ViewModels"
         xmlns:views="clr-namespace:LocalDm.App.Views"
-        Title="Dungeon Master" Icon="Assets/app.ico" Height="860" Width="1360" MinHeight="560" MinWidth="1040"
+        Title="绘合·Paletale" Icon="Assets/app.ico" Height="860" Width="1360" MinHeight="560" MinWidth="1040"
         WindowStartupLocation="CenterScreen"
         FontFamily="Microsoft YaHei UI" FontSize="15"
         Foreground="{DynamicResource Ink}"

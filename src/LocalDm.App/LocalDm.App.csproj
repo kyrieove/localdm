@@ -10,7 +10,7 @@
     <AssemblyName>LocalDm</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-    <Product>Dungeon Master</Product>
+    <Product>绘合·Paletale</Product>
     <SatelliteResourceLanguages>zh-Hans;en</SatelliteResourceLanguages>
   </PropertyGroup>
 
