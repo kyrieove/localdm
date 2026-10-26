@@ -23,6 +23,13 @@ $zipPath = Join-Path $artifacts 'LocalDm-win-x64.zip'
 $locks = Get-ChildItem -Path $repo -Recurse -Filter packages.lock.json | Where-Object { $_.FullName -notmatch '[\\/](bin|obj|node_modules)[\\/]' }
 $lockBytes = @{}
 foreach ($l in $locks) { $lockBytes[$l.FullName] = [IO.File]::ReadAllBytes($l.FullName) }
+# 普通 dotnet build 会把 assets 还原成不带 win-x64 的版本，WPF 的 wpftmp 内层构建随后报 NETSDK1047：先显式按 RID 还原。
+Write-Host "==> dotnet restore (win-x64)" -ForegroundColor Cyan
+dotnet restore (Join-Path $repo 'src\LocalDm.App\LocalDm.App.csproj') -r win-x64 | Out-Host
+if ($LASTEXITCODE -ne 0) {
+    foreach ($k in $lockBytes.Keys) { [IO.File]::WriteAllBytes($k, $lockBytes[$k]) }
+    throw "dotnet restore failed with exit code $LASTEXITCODE"
+}
 Write-Host "==> dotnet publish (self-contained win-x64)" -ForegroundColor Cyan
 dotnet publish (Join-Path $repo 'src\LocalDm.App\LocalDm.App.csproj') `
     -c $Configuration `

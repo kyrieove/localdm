@@ -9,9 +9,8 @@
 - 测试里序列化投影不用 `UnsafeRelaxedJsonEscaping` → 中文被转义，防泄露断言失效 → 必须加。
 - 并行整套测试偶发 `EdgeTtsTests` 探针超时、`HostConversationTests.Replay_holds_the_session_busy_gate` → 单跑稳定通过 → 根因未治（HANDOFF 已治：探测超时可由 LOCALDM_EDGE_PROBE_TIMEOUT_MS 覆盖，WaitUntilAsync 超时即失败）。
 - Blazor 探针用 Production 启动 → 脚本没映射，页面空白；从仓库根目录启动 → 内容根不对，静态文件 404 → 在 `src/LocalDm.Tablet` 目录里用 `ASPNETCORE_ENVIRONMENT=Development dotnet run --no-build -- --urls http://127.0.0.1:5099`；每次探针重启服务以释放已认领角色。
-- 发布带 `-r win-x64` 会弄脏 `packages.lock.json` → `--isolation worktree` 被拒 → `Publish.ps1` 现已在发布后还原。
-- 普通 `dotnet build` 之后跑 `Publish.ps1` → `NETSDK1047`（assets 里没有 `win-x64` 目标）→ 先 `dotnet restore src\LocalDm.App\LocalDm.App.csproj -r win-x64` 再发布，事后还原它弄脏的 `LocalDm.Core/packages.lock.json`。
-- `make_icons.py` 出的 ico 是 24 位 → WPF 窗口一加载就 `XamlParseException`（指向 `Icon=`），测试没拦住 → 存成 RGBA；换图标后要真启动一次 exe。
+- 发布带 `-r win-x64` 会弄脏 `packages.lock.json` → `--isolation worktree` 被拒 → `Publish.ps1` 现已在发布后还原；它也先显式 `restore -r win-x64`，否则普通构建之后发布会报 `NETSDK1047`。
+- `make_icons.py` 出的 ico 是 24 位 → WPF 窗口一加载就 `XamlParseException`（指向 `Icon=`）→ 存成 RGBA。UiTests 里 `new MainWindow` 的用例会拦住（已实测）：换图标后先跑 UiTests 再打包。
 - 旧 worktree/分支 `orch/tablet-speech-wiring`、`orch/tablet-speech-ui` 留在 `~/.claude/agent-live/orch-runner/wt/` → 内容已合入，删分支需用户确认。
 - Python 替换脚本里写 Windows 路径，`\a` 会变成控制字符 0x07（`Assets\app.ico` → `Assets<BEL>pp.ico`），构建报 MSB4025 才发现：路径里的反斜杠一律用 `chr(92)`，改完 `grep -c $'\a'` 查一遍。
 - 写卡时只 grep 了 `HostNarration*` 测试找「角色本不进 DM」断言 → 合入后全套测试 `PhaseFlowTests` 红了两条 → 改断言前对整个 `tests/` grep 断言里的常量和原句（`RoleBookText`、`合成角色的秘密`）。

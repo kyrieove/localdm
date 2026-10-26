@@ -123,7 +123,7 @@
     设置 → 回到本局 → 投票 → 公开真相」，主屏 100% 抓客户区；
   - `desktop-125-*.png`（1 张）：同一窗口移到 125% 副屏，真实 DPI 缩放；
   - `hostdesk-*.png`（10 张）：真实 WPF 渲染，含 `hostdesk-scale-150.png`（150% 下的 DIP 空间）。
-- 真实窗口脚本：`pwsh -File scripts/verify-live-window.ps1`（数据根指向临时目录，不碰真实存档）。
+- 真实窗口脚本 `scripts/verify-live-window.ps1` 已于 2026-10-26 删除：它靠剧本库的「体验演示」进主持台，入口删了；同一流程由 UiTests 覆盖，125% 副屏真实截图不再自动做。
 - 真实 Magpie 合成请求 + 真实中文播音通过（10.3 秒），重播 0 ms 不请求模型（上一轮记录）。
 - 安装器静默安装 → 启动 → 卸载全部退出码 0，卸载后用户数据保留（上一轮记录）。
 - 详细证据见 `docs/evidence/`，核对表见 `docs/release-checklist.md`。
