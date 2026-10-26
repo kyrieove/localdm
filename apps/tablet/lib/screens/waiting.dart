@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../data/app_state.dart';
@@ -13,15 +14,28 @@ class WaitingScreen extends StatelessWidget {
     final preparing = app.stage == Stage.preparing;
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final statusText = app.online
+        ? '已连上 ${app.serverAddress}${app.showDebug ? '（原型假地址）' : ''}'
+        : '正在连接 ${app.serverAddress}…';
+    final offlineIos = !app.online && defaultTargetPlatform == TargetPlatform.iOS;
     return SafeArea(
       child: Stack(children: [
         Positioned(
           top: 20,
           left: 24,
-          child: Chip(
-            avatar: Icon(Icons.link_rounded, color: scheme.primary, size: 18),
-            label: Text('已连上 ${app.serverAddress}${app.showDebug ? '（原型假地址）' : ''}'),
-          ),
+          right: 24,
+          child: Row(children: [
+            Chip(
+              avatar: Icon(app.online ? Icons.link_rounded : Icons.sync_problem_rounded, color: scheme.primary, size: 18),
+              label: Text(statusText),
+            ),
+            const SizedBox(width: 12),
+            TextButton.icon(
+              icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+              label: const Text('换电脑'),
+              onPressed: () => app.disconnect(),
+            ),
+          ]),
         ),
         Center(
           child: ConstrainedBox(
@@ -29,12 +43,26 @@ class WaitingScreen extends StatelessWidget {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               const _Lamp(),
               const SizedBox(height: 36),
-              Text(preparing ? '《${app.catalog.storyTitle}》材料准备中' : '等主持人打开剧本',
-                  textAlign: TextAlign.center, style: text.headlineMedium?.copyWith(fontWeight: FontWeight.w600)),
+              Text(
+                  !app.online
+                      ? '正在连接主持电脑'
+                      : preparing
+                          ? '《${app.catalog.storyTitle}》材料准备中'
+                          : '等主持人打开剧本',
+                  textAlign: TextAlign.center,
+                  style: text.headlineMedium?.copyWith(fontWeight: FontWeight.w600)),
               const SizedBox(height: 14),
-              Text(preparing ? '线索卡和角色本正在整理，几秒后自动进入选角色。' : '电脑上一打开剧本，这里会自动变成选角色，不用做任何事。',
-                  textAlign: TextAlign.center, style: text.titleMedium?.copyWith(color: scheme.onSurfaceVariant, height: 1.6)),
-              if (preparing) ...[
+              Text(
+                  !app.online
+                      ? (offlineIos
+                          ? '连不上 ${app.serverAddress}。请确认同一 Wi-Fi，并在 iPad「设置 › 隐私与安全性 › 本地网络」里打开本应用开关，或点左上角换电脑。'
+                          : '连不上 ${app.serverAddress}。请确认平板和电脑在同一 Wi-Fi，或点左上角重新扫码。')
+                      : preparing
+                          ? '线索卡和角色本正在整理，几秒后自动进入选角色。'
+                          : '电脑上一打开剧本，这里会自动变成选角色，不用做任何事。',
+                  textAlign: TextAlign.center,
+                  style: text.titleMedium?.copyWith(color: scheme.onSurfaceVariant, height: 1.6)),
+              if (preparing && app.online) ...[
                 const SizedBox(height: 28),
                 SizedBox(width: 280, child: LinearProgressIndicator(borderRadius: BorderRadius.circular(4))),
               ],

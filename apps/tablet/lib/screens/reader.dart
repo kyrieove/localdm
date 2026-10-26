@@ -36,7 +36,7 @@ class RoleReader extends StatelessWidget {
     final app = AppScope.of(context);
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 220),
-      child: app.textMode
+      child: app.textMode || app.rolePageCount == 0
           ? const TextReader(key: ValueKey('text'))
           : PageReader(
               key: const ValueKey('pages'),
@@ -649,6 +649,7 @@ class ModeSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
+    if (app.rolePageCount == 0) return const SizedBox();
     return SegmentedButton<bool>(
       showSelectedIcon: false,
       segments: const [
@@ -656,7 +657,7 @@ class ModeSwitch extends StatelessWidget {
         ButtonSegment(value: true, label: Text('文字')),
       ],
       selected: {app.textMode},
-      onSelectionChanged: (v) => app.update(() => app.textMode = v.first),
+      onSelectionChanged: (v) => app.updateReading(() => app.textMode = v.first),
     );
   }
 }
@@ -706,11 +707,11 @@ class TextReader extends StatelessWidget {
                         )
                       else
                         GestureDetector(
-                          onLongPress: b.sourcePageNumber == null
+                          onLongPress: b.sourcePageNumber == null || app.rolePageCount == 0
                               ? null
                               : () {
                                   HapticFeedback.mediumImpact();
-                                  app.update(() {
+                                  app.updateReading(() {
                                     app.textMode = false;
                                     app.page = b.sourcePageNumber!;
                                   });

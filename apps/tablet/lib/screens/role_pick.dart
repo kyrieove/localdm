@@ -17,7 +17,14 @@ class RolePickScreen extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(40, 36, 40, 24),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('《${app.catalog.storyTitle}》', style: text.titleMedium?.copyWith(color: scheme.primary)),
+          Row(children: [
+            Expanded(child: Text('《${app.catalog.storyTitle}》', style: text.titleMedium?.copyWith(color: scheme.primary))),
+            TextButton.icon(
+              icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+              label: const Text('换电脑'),
+              onPressed: () => app.disconnect(),
+            ),
+          ]),
           const SizedBox(height: 6),
           Text('选你的角色', style: text.displaySmall?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),

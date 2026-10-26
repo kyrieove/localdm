@@ -20,7 +20,7 @@ class AppState extends ChangeNotifier {
   static const pollEvery = Duration(seconds: 2);
 
   TabletApi? api;
-  String serverAddress = '192.168.1.23:5188'; // 原型假地址；连上后换成真地址
+  String serverAddress = ''; // 连上后记下真地址
   int rolePageCount = 12;
   int handbookPageCount = 4;
 
@@ -30,6 +30,7 @@ class AppState extends ChangeNotifier {
   final List<PublicMessage> messages = [];
   int _nextSequence = 0;
   String? _sessionId;
+  int? _generation;
   Timer? _poller;
 
   Stage stage = Stage.connect;
@@ -55,8 +56,8 @@ class AppState extends ChangeNotifier {
   bool curtain = false;
   bool nextClaimTaken = false;
   String? pendingToast;
-  bool showDebug = true; // 原型调试把手；截图时用 clean=1 隐藏，连真电脑时不出现
-  String? pendingSheet; //原型网址参数：进来就打开 phase / reading / role 面板
+  bool showDebug = false; // 正式版默认不出现；仅带原型网址参数（stage= 或 debug=1 且无 clean=1）时出现
+  String? pendingSheet; // 原型网址参数：进来就打开 phase / reading / role 面板
 
   Future<void> load() async {
     Future<Map<String, dynamic>> read(String name) async =>
@@ -92,7 +93,8 @@ class AppState extends ChangeNotifier {
     _offlineCenter = page;
     hostSpeaking = q['speaking'] == '1';
     pendingSheet = q['sheet'];
-    showDebug = q['clean'] != '1';
+    showDebug = (q.containsKey('stage') || q['debug'] == '1') && q['clean'] != '1';
+    if (showDebug && serverAddress.isEmpty) serverAddress = '192.168.1.23:5188';
     if (q['unread'] != null) unreadTalk = int.parse(q['unread']!);
     openedPages = int.tryParse(q['opened'] ?? '') ?? page;
     if (stage == Stage.inGame) {
@@ -103,24 +105,55 @@ class AppState extends ChangeNotifier {
 
   Role? get myRole => catalog.roles.where((r) => r.roleId == myRoleId).firstOrNull;
 
+  /// 把扫码或手输的地址整理成 `host:port`（没带端口时默认补 5188，忽略后面的路径）。
+  static String normalizeAddress(String raw) {
+    final s = raw.trim();
+    if (s.isEmpty) return '';
+    final withScheme = s.contains('://') ? s : 'http://$s';
+    final uri = Uri.tryParse(withScheme);
+    if (uri == null || uri.host.isEmpty) return '';
+    final host = uri.host.contains(':') ? '[${uri.host}]' : uri.host;
+    final port = uri.hasPort ? uri.port : 5188;
+    return '$host:$port';
+  }
+
   /// 连上电脑：地址存在本机，之后每 2 秒问一次电脑现在是什么状态。
   Future<void> connect(String address) async {
-    final trimmed = address.trim().replaceFirst(RegExp(r'^https?://'), '').replaceAll(RegExp(r'/+$'), '');
+    final trimmed = normalizeAddress(address);
+    if (trimmed.isEmpty) return;
     serverAddress = trimmed;
     api = TabletApi(Uri.parse('http://$trimmed/'), await TabletApi.deviceId());
     await TabletApi.saveAddress(trimmed);
     showDebug = false;
     page = 1;
+    handbookPage = 1;
     openedPages = 0;
     myRoleId = null;
+    ui = TableUi.waiting();
     messages.clear();
     _nextSequence = 0;
     _sessionId = null;
+    _generation = null;
     stage = Stage.waitingStory;
     notifyListeners();
     _poller?.cancel();
     await _poll();
     _poller = Timer.periodic(pollEvery, (_) => _poll());
+  }
+
+  /// 断开当前电脑，回到扫码/输地址页。
+  Future<void> disconnect() async {
+    _poller?.cancel();
+    _poller = null;
+    api = null;
+    await TabletApi.clearAddress();
+    myRoleId = null;
+    openedPages = 0;
+    page = 1;
+    online = true;
+    reconnectAttempt = 0;
+    stage = Stage.connect;
+    notifyListeners();
   }
 
   bool _polling = false;
@@ -133,15 +166,22 @@ class AppState extends ChangeNotifier {
       final cat = await api.json('/tablet/catalog');
       if (cat == null) throw StateError('catalog');
       final previousTitle = catalog.storyTitle;
+      final previousGen = _generation;
       catalog = Catalog.fromJson(cat);
+      _generation = catalog.generation;
       if (!online) setOnline(true);
+      final genChanged = previousGen != null && previousGen != catalog.generation;
       if (catalog.storyState == 'None') {
         _leaveRole(Stage.waitingStory);
       } else if (catalog.storyState == 'Preparing') {
         _leaveRole(Stage.preparing);
-      } else if (stage == Stage.waitingStory || stage == Stage.preparing || previousTitle != catalog.storyTitle) {
-        // 电脑上换了剧本或刚准备好：认领还在（App 重启）就直接回到阅读页。
-        stage = await _loadBook() ? Stage.inGame : Stage.pickRole;
+      } else if (stage == Stage.waitingStory || stage == Stage.preparing || previousTitle != catalog.storyTitle || genChanged) {
+        // 电脑上换了剧本、重新开始本局、或刚准备好：认领还在（App 重启）就直接回到阅读页，否则回选角色页。
+        if (await _loadBook()) {
+          stage = Stage.inGame;
+        } else {
+          _leaveRole(Stage.pickRole);
+        }
       } else if (stage == Stage.inGame && !catalog.claimedRoles.contains(myRoleId)) {
         _leaveRole(Stage.pickRole); // 电脑上释放了这个角色
       }
@@ -177,7 +217,7 @@ class AppState extends ChangeNotifier {
       hostSpeaking = host['speaking'] as bool;
     }
     final table = await api.json('/tablet/ui');
-    if (table != null) ui = TableUi.fromJson(table);
+    ui = table != null ? TableUi.fromJson(table) : TableUi.waiting();
   }
 
   void _leaveRole(Stage next) {
@@ -185,6 +225,7 @@ class AppState extends ChangeNotifier {
     myRoleId = null;
     openedPages = 0;
     page = 1;
+    ui = TableUi.waiting();
     stage = next;
   }
 
@@ -198,13 +239,18 @@ class AppState extends ChangeNotifier {
     rolePageCount = j['sourcePageCount'] as int;
     handbookPageCount = j['handbookPageCount'] as int;
     openedPages = j['openedPages'] as int;
+    if (handbookPageCount == 0 && section == Section.handbook) {
+      section = Section.book;
+    }
     final settings = (await api.json('/tablet/role/progress'))?['settings'] as Map<String, dynamic>?;
     if (settings != null) {
       fontSize = (settings['fontSize'] as num).toDouble();
       lineSpacing = double.tryParse(settings['lineSpacing'] as String) ?? lineSpacing;
-      textMode = settings['preferText'] as bool;
+      textMode = rolePageCount == 0 ? true : (settings['preferText'] as bool);
       page = (settings['sourcePageNumber'] as int).clamp(1, rolePageCount < 1 ? 1 : rolePageCount);
-      if (page > 1) pendingToast = '已回到第 $page 页，上次读到这里';
+      if (page > 1 && !textMode) pendingToast = '已回到第 $page 页，上次读到这里';
+    } else if (rolePageCount == 0) {
+      textMode = true;
     }
     return true;
   }
@@ -268,7 +314,7 @@ class AppState extends ChangeNotifier {
   }
 
   void setPage(int p) {
-    page = p.clamp(1, rolePageCount);
+    page = p.clamp(1, rolePageCount < 1 ? 1 : rolePageCount);
     _saveProgress();
     notifyListeners();
   }
@@ -285,6 +331,12 @@ class AppState extends ChangeNotifier {
     }).ignore();
   }
 
+  void updateReading(VoidCallback change) {
+    change();
+    _saveProgress();
+    notifyListeners();
+  }
+
   /// 按住翻开：只有下一页能翻，返回是否翻开。
   bool openPage(int p) {
     if (p != openedPages + 1) return false;
@@ -295,7 +347,7 @@ class AppState extends ChangeNotifier {
   }
 
   void setHandbookPage(int p) {
-    handbookPage = p.clamp(1, handbookPageCount);
+    handbookPage = p.clamp(1, handbookPageCount < 1 ? 1 : handbookPageCount);
     notifyListeners();
   }
 

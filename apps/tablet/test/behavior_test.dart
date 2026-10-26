@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localdm_tablet/data/app_state.dart';
 import 'package:localdm_tablet/main.dart';
+import 'package:localdm_tablet/screens/debug_panel.dart';
 import 'package:localdm_tablet/screens/reader.dart';
 
 // 只验行为：测试环境的字体是方块字，外观靠浏览器截图看。
@@ -117,5 +118,33 @@ void main() {
     expect([for (var p = 1; p <= 12; p++) if (state.pageCached(p)) p], [3, 4, 5, 6, 7]);
     state.setOnline(true);
     expect(state.pageCached(12), isTrue);
+  });
+
+  testWidgets('正式版默认不显示原型调试把手，只有原型参数下才显示', (tester) async {
+    final normal = await pump(tester, const Size(1180, 820), const {});
+    expect(normal.showDebug, isFalse);
+    expect(find.byType(DebugHandle), findsNothing);
+
+    final proto = await pump(tester, const Size(1180, 820), {'stage': 'waitingStory'});
+    expect(proto.showDebug, isTrue);
+    expect(find.byType(DebugHandle), findsOneWidget);
+  });
+
+  testWidgets('全部线索卡暂停分发时横屏不崩溃，显示等待提示', (tester) async {
+    final state = await pump(tester, const Size(1180, 820), {'stage': 'inGame', 'section': 'cards'});
+    state.update(() {
+      for (final c in state.catalog.cards) {
+        c.isAvailable = false;
+      }
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('还没有可用的线索卡，等主持人发放'), findsOneWidget);
+  });
+
+  test('地址规范化：自动补默认端口并去掉协议与路径', () {
+    expect(AppState.normalizeAddress('192.168.1.50'), '192.168.1.50:5188');
+    expect(AppState.normalizeAddress('http://192.168.1.50:5188/app/'), '192.168.1.50:5188');
+    expect(AppState.normalizeAddress('https://10.0.0.2:6000/'), '10.0.0.2:6000');
+    expect(AppState.normalizeAddress('   '), '');
   });
 }

@@ -26,7 +26,8 @@ class _CardsScreenState extends State<CardsScreen> {
     final cards = app.catalog.cards;
     return LayoutBuilder(builder: (context, c) {
       final twoPane = c.maxWidth >= 840;
-      final selected = cards.where((x) => x.cardId == _selected && x.isAvailable).firstOrNull ?? (twoPane ? cards.firstWhere((x) => x.isAvailable) : null);
+      final selected = cards.where((x) => x.cardId == _selected && x.isAvailable).firstOrNull ??
+          (twoPane ? cards.where((x) => x.isAvailable).firstOrNull : null);
       void open(ClueCard card) {
         if (twoPane) {
           setState(() => _selected = card.cardId);
@@ -42,12 +43,16 @@ class _CardsScreenState extends State<CardsScreen> {
 
       final wall = _CardWall(cards: cards, selectedId: twoPane ? selected?.cardId : null, onOpen: open, columns: twoPane ? 2 : 3);
       if (!twoPane) return wall;
+      final scheme = Theme.of(context).colorScheme;
       return Row(children: [
         SizedBox(width: math.min(440, c.maxWidth * 0.4), child: wall),
-        VerticalDivider(width: 1, color: Theme.of(context).colorScheme.outlineVariant),
+        VerticalDivider(width: 1, color: scheme.outlineVariant),
         Expanded(
           child: selected == null
-              ? const SizedBox()
+              ? Center(
+                  child: Text('还没有可用的线索卡，等主持人发放',
+                      style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 16)),
+                )
               : Padding(
                   padding: const EdgeInsets.fromLTRB(32, 24, 32, 24),
                   child: _CardDetail(key: ValueKey(selected.cardId), card: selected),

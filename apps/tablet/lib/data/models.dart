@@ -30,11 +30,13 @@ class Catalog {
   Catalog.fromJson(Map<String, dynamic> j)
       : storyTitle = j['storyTitle'] as String,
         storyState = j['storyState'] as String? ?? 'Ready',
+        generation = j['generation'] as int? ?? 0,
         roles = [for (final r in j['roles'] as List) Role.fromJson(r)],
         cards = [for (final c in j['cards'] as List) ClueCard.fromJson(c)],
         claimedRoles = {for (final r in j['claimedRoles'] as List) r as String};
   final String storyTitle;
   final String storyState; // None / Preparing / Ready
+  final int generation;
   final List<Role> roles;
   final List<ClueCard> cards;
   final Set<String> claimedRoles;
@@ -99,6 +101,17 @@ class TableUi {
         controlsNote = j['controlsNote'] as String,
         pendingMaterialCount = j['pendingMaterialCount'] as int,
         releasedMaterialCount = j['releasedMaterialCount'] as int;
+
+  TableUi.waiting()
+      : phaseTitle = '等待开局',
+        phaseIndex = 0,
+        phaseCount = 1,
+        hint = '全员选好角色后，由主持人在电脑上点击「开始这一局」。',
+        phases = const [],
+        controlsNote = '由主持人在电脑上操作',
+        pendingMaterialCount = 0,
+        releasedMaterialCount = 0;
+
   final String phaseTitle;
   final int phaseIndex;
   final int phaseCount;

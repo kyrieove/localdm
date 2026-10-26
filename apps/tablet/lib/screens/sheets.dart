@@ -56,7 +56,7 @@ Future<void> showReadingSheet(BuildContext context) => _sheet(context, (context)
                 max: 28,
                 divisions: 6,
                 label: '${app.fontSize.round()}',
-                onChanged: (v) => app.update(() => app.fontSize = v),
+                onChanged: (v) => app.updateReading(() => app.fontSize = v),
               ),
             ),
             const Text('A', style: TextStyle(fontSize: 24)),
@@ -72,7 +72,7 @@ Future<void> showReadingSheet(BuildContext context) => _sheet(context, (context)
               ButtonSegment(value: 2.3, label: Text('松')),
             ],
             selected: {app.lineSpacing},
-            onSelectionChanged: (v) => app.update(() => app.lineSpacing = v.first),
+            onSelectionChanged: (v) => app.updateReading(() => app.lineSpacing = v.first),
           ),
         ),
         _row(

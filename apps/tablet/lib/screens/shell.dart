@@ -245,7 +245,7 @@ class OfflineBanner extends StatelessWidget {
                           style: TextStyle(color: scheme.onSurface, fontSize: 15)),
                     ),
                     TextButton(
-                        onPressed: () => app.api == null ? app.setOnline(true) : app.go(Stage.connect),
+                        onPressed: () => app.api == null ? app.setOnline(true) : app.disconnect(),
                         child: const Text('重新扫码')),
                   ]),
                 ),

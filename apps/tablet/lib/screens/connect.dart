@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../data/app_state.dart';
 import '../main.dart';
@@ -14,22 +15,23 @@ class ConnectScreen extends StatelessWidget {
     final app = AppScope.of(context);
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    // 原型里点取景框当作扫到了；真 App 由相机识别二维码后自动继续。
-    void scanned() => app.go(defaultTargetPlatform == TargetPlatform.android ? Stage.waitingStory : Stage.localNetwork);
 
-    final viewfinder = GestureDetector(onTap: scanned, child: const _Viewfinder());
+    final viewfinder = _Viewfinder(
+      useFakeCamera: app.showDebug,
+      onScanned: (raw) => app.connect(raw),
+    );
     final info = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('连接主持电脑', style: text.displaySmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w600)),
         const SizedBox(height: 16),
-        Text('在电脑上打开主持软件，剧本库页顶部有平板入口，点开是一个大二维码。把平板对准它，连上后会自动进入。',
+        Text('在电脑上打开主持软件，左侧底部有平板图标，点开是一个大二维码。把平板对准它，连上后会自动进入。',
             style: text.titleMedium?.copyWith(color: scheme.onSurfaceVariant, height: 1.6)),
         const SizedBox(height: 28),
-        _Step(n: 1, text: '平板和电脑连同一个 Wi-Fi'),
-        _Step(n: 2, text: '对准电脑上的二维码'),
-        _Step(n: 3, text: '以后打开 App 会自动连上这台电脑'),
+        const _Step(n: 1, text: '平板和电脑连同一个 Wi-Fi'),
+        const _Step(n: 2, text: '对准电脑上的二维码'),
+        const _Step(n: 3, text: '以后打开 App 会自动连上这台电脑'),
         const SizedBox(height: 28),
         OutlinedButton.icon(
           icon: const Icon(Icons.keyboard_outlined),
@@ -75,7 +77,12 @@ class ConnectScreen extends StatelessWidget {
             controller: controller,
             autofocus: true,
             keyboardType: TextInputType.url,
-            decoration: const InputDecoration(border: OutlineInputBorder(), prefixText: 'http://'),
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              prefixText: 'http://',
+              hintText: '192.168.1.x:5188',
+            ),
+            onSubmitted: (_) => Navigator.pop(context, true),
           ),
         ]),
         actions: [
@@ -111,9 +118,11 @@ class _Step extends StatelessWidget {
   }
 }
 
-/// 相机取景框：原型用一块深色区域代替相机画面，扫描线在里面上下走。
+/// 相机取景框：真机调系统摄像头扫二维码；没有相机权限或原型模式下显示深色取景框与提示。
 class _Viewfinder extends StatefulWidget {
-  const _Viewfinder();
+  const _Viewfinder({required this.useFakeCamera, required this.onScanned});
+  final bool useFakeCamera;
+  final ValueChanged<String> onScanned;
 
   @override
   State<_Viewfinder> createState() => _ViewfinderState();
@@ -121,6 +130,7 @@ class _Viewfinder extends StatefulWidget {
 
 class _ViewfinderState extends State<_Viewfinder> with SingleTickerProviderStateMixin {
   late final _line = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat(reverse: true);
+  bool _handled = false;
 
   @override
   void dispose() {
@@ -128,9 +138,23 @@ class _ViewfinderState extends State<_Viewfinder> with SingleTickerProviderState
     super.dispose();
   }
 
+  void _onDetect(BarcodeCapture capture) {
+    if (_handled) return;
+    for (final code in capture.barcodes) {
+      final raw = code.rawValue?.trim();
+      if (raw == null || raw.isEmpty) continue;
+      if (AppState.normalizeAddress(raw).isEmpty) continue;
+      _handled = true;
+      widget.onScanned(raw);
+      return;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final canScan = !widget.useFakeCamera &&
+        (kIsWeb || defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android);
     return AspectRatio(
       aspectRatio: 1,
       child: ConstrainedBox(
@@ -141,25 +165,49 @@ class _ViewfinderState extends State<_Viewfinder> with SingleTickerProviderState
             color: const Color(0xFF070605),
             child: LayoutBuilder(builder: (context, c) {
               return Stack(children: [
-                Center(
-                  child: Icon(Icons.qr_code_2, size: c.maxWidth * 0.42, color: Colors.white.withValues(alpha: 0.09)),
-                ),
-                Positioned.fill(child: CustomPaint(painter: _Corners(scheme.primary))),
+                if (canScan)
+                  MobileScanner(
+                    onDetect: _onDetect,
+                    errorBuilder: (context, error) => Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.videocam_off_outlined, size: 48, color: Colors.white.withValues(alpha: 0.5)),
+                          const SizedBox(height: 12),
+                          Text(
+                            '未开启相机或没有摄像头\n请在系统设置里允许相机权限，或点右侧手动输入地址',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 14, height: 1.5),
+                          ),
+                        ]),
+                      ),
+                    ),
+                  )
+                else
+                  Center(
+                    child: Icon(Icons.qr_code_2, size: c.maxWidth * 0.42, color: Colors.white.withValues(alpha: 0.09)),
+                  ),
+                Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _Corners(scheme.primary)))),
                 AnimatedBuilder(
                   animation: _line,
                   builder: (context, _) => Positioned(
                     left: c.maxWidth * 0.14,
                     right: c.maxWidth * 0.14,
                     top: c.maxHeight * (0.16 + 0.66 * Curves.easeInOut.transform(_line.value)),
-                    child: Container(height: 2, color: scheme.primary.withValues(alpha: 0.8)),
+                    child: IgnorePointer(child: Container(height: 2, color: scheme.primary.withValues(alpha: 0.8))),
                   ),
                 ),
                 Positioned(
-                  left: 0,
-                  right: 0,
+                  left: 16,
+                  right: 16,
                   bottom: 22,
-                  child: Text('原型：点这里当作扫到了',
-                      textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14)),
+                  child: IgnorePointer(
+                    child: Text(
+                      canScan ? '将电脑上的二维码放进框内' : '请对准二维码，或点右侧手动输入地址',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 14),
+                    ),
+                  ),
                 ),
               ]);
             }),

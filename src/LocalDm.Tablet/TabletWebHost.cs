@@ -135,6 +135,7 @@ public static class TabletWebHost
         {
             storyTitle = content.StoryTitle,
             storyState = content.StoryState.ToString(),
+            generation = state.ContentGeneration,
             roles = content.Roles,
             cards = content.Cards,
             claimedRoles = state.ClaimedRoles,

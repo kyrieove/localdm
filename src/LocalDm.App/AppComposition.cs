@@ -311,38 +311,48 @@ public sealed class AppComposition : IDisposable
               + "为了不跳过环节，不会用新包继续这一局；请找回原来的冻结包，或按新流程重开一局。";
     }
 
-    /// <summary>找出进度最靠前的一局未完成存档。</summary>
+    /// <summary>
+    /// 找出最近动过的一局未完成存档（按存储层的 updated_at 降序）。
+    /// 若主持台当前已经装载着这一局，则不再重复显示「上一局还没走完」（左侧导航栏已有「本局」入口）；
+    /// 若主持台刚翻开一本新剧本（尚未点开始，Revision == 0），也不拿旧局出来顶替当前正在准备的这一局。
+    /// </summary>
     private async Task<(ScriptPackage Package, Session Session)?> FindResumableAsync(
         LibraryViewModel library,
         CancellationToken cancellationToken)
     {
-        ScriptPackage? bestPackage = null;
-        Session? bestSession = null;
+        if (_host?.Session.Package is not null)
+        {
+            return null;
+        }
 
         // 包目录里的剧本 + 内置演示剧本（演示不在目录里，但它的存档也可能没走完）
-        var candidates = library.AllPackages
-            .Select(r => (Package: r.Package, SessionId: SessionIds.For(r.Package)))
-            .ToList();
-        candidates.Add((DemoPackage.Create(), DemoPackage.SessionId));
+        var byPackageId = library.AllPackages
+            .Select(r => r.Package)
+            .Append(DemoPackage.Create())
+            .GroupBy(p => p.PackageId, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
 
-        foreach (var (package, sessionId) in candidates)
+        var stored = await _context.Store.ListSessionsAsync(cancellationToken);
+        foreach (var item in stored)
         {
-            var session = await _context.Store.LoadSessionAsync(sessionId, cancellationToken);
-            if (session is null || session.State == SessionState.Completed || session.Revision == 0)
+            if (item.State == SessionState.Completed || item.Revision == 0)
             {
                 continue;
             }
 
-            if (bestSession is null || session.Revision > bestSession.Revision)
+            if (!byPackageId.TryGetValue(item.PackageId, out var package))
             {
-                bestPackage = package;
-                bestSession = session;
+                continue;
+            }
+
+            var session = await _context.Store.LoadSessionAsync(item.SessionId, cancellationToken);
+            if (session is not null && session.State != SessionState.Completed && session.Revision > 0)
+            {
+                return (package, session);
             }
         }
 
-        return bestPackage is null || bestSession is null
-            ? null
-            : (bestPackage, bestSession);
+        return null;
     }
 
     /// <summary>最近一次读到的设置；主持页每次发送前重新读取，避免使用过期 model ID。</summary>

@@ -402,6 +402,7 @@ public sealed class TabletAppTests : IDisposable
         using var catalog = System.Text.Json.JsonDocument.Parse(await app.GetStringAsync("/tablet/catalog", ct));
         var root = catalog.RootElement;
         Assert.Equal("Ready", root.GetProperty("storyState").GetString());
+        Assert.Equal(0, root.GetProperty("generation").GetInt32());
         Assert.Equal(System.Text.Json.JsonValueKind.String, root.GetProperty("storyTitle").ValueKind);
         var card = root.GetProperty("cards")[0];
         foreach (var name in new[] { "cardId", "displayName", "label", "groupName" })

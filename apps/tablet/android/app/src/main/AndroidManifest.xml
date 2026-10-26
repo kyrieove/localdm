@@ -1,6 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- 连局域网里的主持电脑：明文 HTTP（ADR 0012 细节 2） -->
+    <!-- 连局域网里的主持电脑：明文 HTTP（ADR 0012 细节 2）与相机扫码 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
     <application
         android:usesCleartextTraffic="true"
         android:label="Dungeon Master"

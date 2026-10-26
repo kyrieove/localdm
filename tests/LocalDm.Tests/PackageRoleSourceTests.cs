@@ -261,6 +261,30 @@ public sealed class PackageRoleSourceTests : IDisposable
         Assert.Equal(TabletQueryFailure.GroupNotReady, failure);
     }
 
+    [Fact]
+    public void Package_content_preserves_has_back_flag_from_manifest()
+    {
+        var cards = new Dictionary<string, TabletCard>(StringComparer.Ordinal)
+        {
+            ["card-a"] = Card("card-a", "asset-a") with { BackAssetId = "asset-a-back" },
+            ["card-b"] = Card("card-b", "asset-b"),
+        };
+        var manifest = TabletManifest.Empty with
+        {
+            AssetRootFingerprint = new string('c', 64),
+            Cards = cards,
+            Groups = new Dictionary<string, TabletGroupPreparationState>(StringComparer.Ordinal)
+            {
+                ["group"] = new TabletGroupPreparationState { GroupName = "group", Readiness = TabletGroupReadiness.Ready },
+            },
+        };
+        var package = CreatePackage([], [], [], []) with { Roles = [], Tablet = manifest };
+        var content = new PackageTabletContent(package, Path.Combine(_root, "has-back"));
+
+        Assert.True(content.Cards.Single(c => c.CardId == "card-a").HasBack);
+        Assert.False(content.Cards.Single(c => c.CardId == "card-b").HasBack);
+    }
+
     private static ScriptPackage CreatePackage(
         IReadOnlyList<SourceFile> files,
         IReadOnlyList<SourceSpan> spans,

@@ -168,6 +168,11 @@ public sealed class HostDeskVisualTests
 
                 Assert.Equal("搜证", shell.Host.Session.PhaseTitle);
                 Assert.Equal(2, shell.Host.Session.Revision);
+
+                // 已经装载在主持台时，切回剧本库不再重复挂出「上一局还没走完」（左侧导航栏已有「本局」）。
+                shell.ShowLibraryCommand.Execute(null);
+                await WaitForRenderAsync();
+                Assert.False(shell.Library.HasResumableSession, "当前局已装载，不应再显示旧局提示。");
             }
         });
     }

@@ -32,6 +32,9 @@ class TabletApi {
   static Future<void> saveAddress(String address) async =>
       (await SharedPreferences.getInstance()).setString('address', address);
 
+  static Future<void> clearAddress() async =>
+      (await SharedPreferences.getInstance()).remove('address');
+
   Future<http.Response> get(String path) =>
       _client.get(base.resolve(path), headers: _headers).timeout(const Duration(seconds: 6));
 

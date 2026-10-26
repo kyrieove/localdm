@@ -66,6 +66,8 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>扫描主持电脑屏幕上的二维码，连接本局。</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>连接同一 Wi-Fi 下的主持电脑，读取你的角色本和线索卡。</string>
 	<key>NSAppTransportSecurity</key>

@@ -28,18 +28,7 @@ public sealed class PackageTabletContent : ITabletContent
         _manifest = package.Tablet
             ?? throw new InvalidOperationException("这个剧本包没有平板清单，要重新准备后才能上平板。");
 
-        Cards = TabletQueries.BuildCatalog(_manifest)
-            .Select(item => new TabletCatalogItem
-            {
-                CardId = item.CardId,
-                DisplayName = item.DisplayName,
-                Label = item.Label,
-                GroupName = item.GroupName,
-                SourceOrder = item.SourceOrder,
-                IsAvailable = item.IsAvailable,
-                NotReadyReason = item.NotReadyReason,
-            })
-            .ToArray();
+        Cards = TabletQueries.BuildCatalog(_manifest);
 
         Roles = package.Roles.Select(role => new TabletRole(role.RoleId, role.RoleId)).ToArray();
         _roleSourcePages = BuildRoleSourcePages(package, _manifest.Assets);

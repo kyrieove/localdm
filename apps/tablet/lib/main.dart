@@ -75,7 +75,7 @@ class RootScreen extends StatelessWidget {
       Stage.inGame => const Shell(),
     };
     return Scaffold(
-      endDrawer: const DebugPanel(),
+      endDrawer: app.showDebug ? const DebugPanel() : null,
       body: Stack(children: [
         // 各步之间用淡入淡出（Material 的 fade through），不是网页式整页跳转。
         AnimatedSwitcher(
