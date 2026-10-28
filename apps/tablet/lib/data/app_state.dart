@@ -296,6 +296,30 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
+  /// POST /tablet/say：频次、字数、主持忙等规则都由电脑判（ADR 0007），这里只把电脑给的文案带回去。
+  Future<({bool ok, String message})> say(String text) async {
+    final api = this.api;
+    if (api == null) {
+      messages.add(PublicMessage(messages.length + 1, 'Player', 'PlayerSpeech', text));
+      notifyListeners();
+      return (ok: true, message: '已发送');
+    }
+    try {
+      final response = await api.post('/tablet/say', {'text': text});
+      final j = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final ok = j['ok'] == true;
+      if (ok) {
+        hostBusy = true; // 下一轮轮询前就把发送键灰掉，免得连点
+        notifyListeners();
+      }
+      return (ok: ok, message: j['message'] as String? ?? '没发出去，请再试一次');
+    } catch (_) {
+      return (ok: false, message: '没连上电脑，请稍后再发');
+    }
+  }
+
+  void stopSpeaking() => api?.post('/tablet/say/stop').ignore();
+
   void release() {
     api?.post('/tablet/release').ignore();
     catalog.claimedRoles.remove(myRoleId);

@@ -445,6 +445,58 @@ public sealed class TabletSpeechTests
         }
     }
 
+    /// <summary>平板 App 不带 Cookie，只靠 <c>X-LocalDm-Device</c> 请求头发言（ADR 0012 决定 4 修订）。</summary>
+    [Fact]
+    public async Task App_device_header_can_say_after_claiming_and_gets_the_contract_fields()
+    {
+        var freePort = FreePort();
+        var tempDir = Path.Combine(Path.GetTempPath(), "localdm-say-app-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var app = TabletWebHost.Create(
+                new MinimalTabletContent(),
+                new EmptyPublicFeedSource(),
+                ["--urls", $"http://127.0.0.1:{freePort}"],
+                tempDir,
+                new FakeSpeech(),
+                new ManualTime(DateTimeOffset.UtcNow));
+            var ct = TestContext.Current.CancellationToken;
+            await app.StartAsync(ct);
+
+            using var handler = new HttpClientHandler { UseCookies = false };
+            using var client = new HttpClient(handler) { BaseAddress = new Uri($"http://127.0.0.1:{freePort}") };
+            client.DefaultRequestHeaders.Add("X-LocalDm-Device", "device0123456789abcdef");
+
+            var unclaimed = await client.PostAsJsonAsync("/tablet/say", new { text = "你好" }, ct);
+            Assert.Equal(HttpStatusCode.Forbidden, unclaimed.StatusCode);
+            Assert.Equal("NO_ROLE", (await unclaimed.Content.ReadFromJsonAsync<System.Text.Json.Nodes.JsonObject>(cancellationToken: ct))?["code"]?.ToString());
+
+            Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/tablet/claim?roleId=role-1", null, ct)).StatusCode);
+            var said = await client.PostAsJsonAsync("/tablet/say", new { text = "你好" }, ct);
+            Assert.Equal(HttpStatusCode.Accepted, said.StatusCode);
+            var json = await said.Content.ReadFromJsonAsync<System.Text.Json.Nodes.JsonObject>(cancellationToken: ct);
+            // App 读这三个字段（apps/tablet/lib/data/app_state.dart 的 say）
+            Assert.Equal(true, json?["ok"]?.GetValue<bool>());
+            Assert.Equal("ACCEPTED", json?["code"]?.ToString());
+            Assert.Equal("已发送", json?["message"]?.ToString());
+
+            Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/tablet/say/stop", null, ct)).StatusCode);
+            await app.StopAsync(ct);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
     [Fact]
     public async Task Spike_speech_accepts_once_then_is_busy_until_the_deadline()
     {

@@ -141,6 +141,24 @@ void main() {
     expect(find.text('还没有可用的线索卡，等主持人发放'), findsOneWidget);
   });
 
+  testWidgets('公开对话页能发言；主持忙时发送键灰掉，正在朗读时换成停止键', (tester) async {
+    final state = await pump(tester, const Size(1180, 820), {'stage': 'inGame', 'section': 'talk'});
+    final before = state.messages.length;
+    await tester.enterText(find.byType(TextField), '我想问一下');
+    await tester.tap(find.byTooltip('发送'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(state.messages.length, before + 1);
+    expect(state.messages.last.text, '我想问一下');
+
+    state.update(() => state.hostBusy = true);
+    await tester.pump();
+    expect(tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.send_rounded)).onPressed, isNull);
+
+    state.update(() => state.hostSpeaking = true);
+    await tester.pump();
+    expect(find.byTooltip('停止朗读'), findsOneWidget);
+  });
+
   test('地址规范化：自动补默认端口并去掉协议与路径', () {
     expect(AppState.normalizeAddress('192.168.1.50'), '192.168.1.50:5188');
     expect(AppState.normalizeAddress('http://192.168.1.50:5188/app/'), '192.168.1.50:5188');

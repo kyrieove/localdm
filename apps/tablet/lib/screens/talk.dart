@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/models.dart';
 import '../main.dart';
 
-/// 公开对话：只读。平板不能发言（ADR 0012 决定 4），要说话到电脑前。
+/// 公开对话：全桌可见，认领角色后可以发言（ADR 0012 决定 4，2026-10-28 修订）。
 class TalkScreen extends StatefulWidget {
   const TalkScreen({super.key});
 
@@ -50,14 +50,70 @@ class _TalkScreenState extends State<TalkScreen> {
       ),
       Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 28),
         color: scheme.surfaceContainerLow,
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.mic_none_rounded, color: scheme.onSurfaceVariant, size: 20),
-          const SizedBox(width: 8),
-          Text('想问主持人，到电脑前按住说话', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 15)),
-        ]),
+        child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: const _SayBar())),
       ),
+    ]);
+  }
+}
+
+/// 发言条：发出的话全桌可见，由电脑署名进 AI 对话。语音用键盘自带的听写，App 不录音（ADR 0012 决定 4）。
+class _SayBar extends StatefulWidget {
+  const _SayBar();
+
+  @override
+  State<_SayBar> createState() => _SayBarState();
+}
+
+class _SayBarState extends State<_SayBar> {
+  final _text = TextEditingController();
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final text = _text.text.trim();
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    final result = await AppScope.of(context).say(text);
+    if (!mounted) return;
+    setState(() => _sending = false);
+    if (result.ok) _text.clear();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppScope.of(context);
+    final locked = app.hostBusy || _sending;
+    return Row(children: [
+      Expanded(
+        child: TextField(
+          controller: _text,
+          enabled: !locked,
+          maxLength: 300,
+          minLines: 1,
+          maxLines: 4,
+          textInputAction: TextInputAction.send,
+          onSubmitted: (_) => _send(),
+          decoration: InputDecoration(
+            hintText: locked ? '主持正在回应' : '对主持人说…（可用键盘上的话筒听写）',
+            counterText: '',
+            border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(24))),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          ),
+        ),
+      ),
+      const SizedBox(width: 10),
+      if (app.hostSpeaking)
+        IconButton.filledTonal(onPressed: app.stopSpeaking, tooltip: '停止朗读', icon: const Icon(Icons.stop_rounded))
+      else
+        IconButton.filled(onPressed: locked ? null : _send, tooltip: '发送', icon: const Icon(Icons.send_rounded)),
     ]);
   }
 }

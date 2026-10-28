@@ -21,8 +21,13 @@
    - 纯文本角色本（`rolePageCount == 0`）防越界（`app_state.dart`、`reader.dart`、`sheets.dart`）：隐藏原稿切换、强制文字版、`clamp` 下界保护。
    - 阅读字号/行距/版式修改立即同步服务端（`app_state.dart` `updateReading`）。
 
+## 2026-10-28
+- 平板 App 公开对话页加了发言条（`apps/tablet/lib/screens/talk.dart`，调已有 `/tablet/say`、`/tablet/say/stop`），ADR 0012 第 2、3、4 条已修订（保留发言、不用 Tailscale）。只过了自动测试，没上真机。
+- 发言条只在「公开对话」页；10-23 设计说「看角色本和线索卡时也能发言」，App 里还没做。
+- 远程（隧道 + 口令 / 谷歌登录）只调研留档：`docs/plans/2026-10-28-tablet-talk-and-remote.md` 第二节，用户定了暂时只用局域网。
+
 ## 下一步
-1. 用户说了「推」再推送 main，由 `.github/workflows/tablet-ipa.yml` 出 ipa，用户用 iloader 装 iPad，连电脑实测。
+1. 用户说了「推」再推送 main，由 `.github/workflows/tablet-ipa.yml` 出 ipa，用户用 iloader 装 iPad，连电脑实测（含发言）。
 2. 网页版要进发布包的话，打进 publish；现在只在源码目录里找。
 
 ## 等用户
