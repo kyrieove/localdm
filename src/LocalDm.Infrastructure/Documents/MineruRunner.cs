@@ -559,9 +559,11 @@ public sealed class MineruRunner : IDocumentTool, IDisposable
         {
             await process.WaitForExitAsync(timeout.Token);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+            // 超时和用户取消都要结束进程树：否则取消导入后识别还在后台跑。
             TryKill(process);
+            cancellationToken.ThrowIfCancellationRequested();
             throw new DomainRuleException(DomainErrorCode.TOOL_NOT_READY, "文档工具超时未返回。");
         }
 

@@ -801,12 +801,26 @@ public sealed class ImportWizardViewModel : ObservableObject
             row.IsHidden = false;
         }
 
-        foreach (var hit in hits.Where(hit => hit.Field == "提示"))
+        foreach (var hit in hits.Where(hit => hit.StepIndex < FlowSteps.Count))
         {
-            if (hit.StepIndex < FlowSteps.Count)
+            var row = FlowSteps[hit.StepIndex];
+            if (hit.Field == "提示")
             {
-                FlowSteps[hit.StepIndex].IsHidden = true;
+                row.IsHidden = true;
             }
+            else if (hit.Field == "标题")
+            {
+                row.Title = string.Empty; // 标题是可编辑文本框，不能留原文；空标题本身就挡住建包
+            }
+        }
+
+        // 条件同理：照抄真相的那几条直接去掉，不显示原文。
+        foreach (var group in hits.Where(hit => hit.Field.StartsWith("条件", StringComparison.Ordinal) && hit.StepIndex < FlowSteps.Count)
+                     .GroupBy(hit => hit.StepIndex))
+        {
+            var row = FlowSteps[group.Key];
+            var copied = group.Select(hit => int.Parse(hit.Field["条件 ".Length..], System.Globalization.CultureInfo.InvariantCulture) - 1).ToHashSet();
+            row.ConditionsText = string.Join('\n', row.Conditions.Where((_, i) => !copied.Contains(i)));
         }
 
         OnPropertyChanged(nameof(CanBuild));

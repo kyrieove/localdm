@@ -218,7 +218,7 @@ public static class GameEngine
     /// 于是揭秘时第一轮看起来又没投过。
     /// 旧存档没有历史（当时只支持单个投票环节）：那种剧本按「属于本轮」处理，不会卡死。
     /// </summary>
-    private static bool HasSummaryFor(Session session, ScriptPackage package, ScriptPhase phase)
+    internal static bool HasSummaryFor(Session session, ScriptPackage package, ScriptPhase phase)
     {
         if (session.VoteHistory.Any(r => string.Equals(r.PhaseId, phase.PhaseId, StringComparison.Ordinal)))
         {

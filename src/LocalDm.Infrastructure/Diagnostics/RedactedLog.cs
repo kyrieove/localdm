@@ -5,14 +5,6 @@ namespace LocalDm.Infrastructure.Diagnostics;
 /// </summary>
 public static partial class RedactedLog
 {
-    private static readonly string[] SensitiveHeaders =
-    [
-        "authorization",
-        "proxy-authorization",
-        "api-key",
-        "x-api-key",
-    ];
-
     /// <summary>
     /// 移除常见凭据形态（Bearer 头、sk-/sk- 前缀 token、key=value）后再返回可显示的文本。
     /// 已知上限：不做语义判断，仅按固定形态擦除；不能替代不记录敏感字段的设计。

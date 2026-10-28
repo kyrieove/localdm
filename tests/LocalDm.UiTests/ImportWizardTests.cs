@@ -157,6 +157,35 @@ public sealed class ImportWizardTests
     }
 
     [Fact]
+    public async Task Flow_page_also_strips_copied_titles_and_conditions()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            var wizard = NewWizard(root.Path, new FakeGateway(truthInTitleAndCondition: true));
+            var window = Show(WizardView(wizard));
+            try
+            {
+                wizard.SetFolder(NewStory(root.Path));
+                await wizard.ScanAsync();
+                await wizard.ExtractAndDraftAsync();
+
+                // 标题、条件是可编辑文本框：照抄真相的原文不能留在界面上，空标题挡住建包。
+                await WaitForRenderAsync();
+                var texts = CollectTexts(window);
+                Assert.DoesNotContain(texts, text => text.Contains(TruthSentence, StringComparison.Ordinal));
+                Assert.Contains(wizard.FlowSteps, row => row.Title.Length == 0);
+                Assert.Equal(["全员读完"], wizard.FlowSteps[0].Conditions);
+                Assert.False(wizard.CanBuild);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
     public async Task Flow_page_rewriting_hidden_hint_notifies_build_command_and_makes_it_executable()
     {
         await WpfRunner.RunAsync(async () =>
@@ -489,7 +518,7 @@ public sealed class ImportWizardTests
             .OrderByDescending(File.GetLastWriteTimeUtc)
             .First();
 
-    private static ImportWizardViewModel NewWizard(string root)
+    private static ImportWizardViewModel NewWizard(string root, FakeGateway? gateway = null)
     {
         var dataRoot = Path.Combine(root, "data");
         Directory.CreateDirectory(dataRoot);
@@ -504,7 +533,7 @@ public sealed class ImportWizardTests
                 DataRoot = dataRoot,
                 Extractor = new FakeExtractor(),
             }),
-            new FlowDrafter(new FakeGateway()),
+            new FlowDrafter(gateway ?? new FakeGateway()),
             () => "ui-test-model");
     }
 
@@ -638,8 +667,11 @@ public sealed class ImportWizardTests
     }
 
     /// <summary>假模型：给一份结构合法、但有一条提示照抄了真相的流程。</summary>
-    private sealed class FakeGateway : IMagpieGateway
+    private sealed class FakeGateway(bool truthInTitleAndCondition = false) : IMagpieGateway
     {
+        private readonly string _searchTitle = truthInTitleAndCondition ? TruthSentence : "搜证";
+        private readonly string _readCondition = truthInTitleAndCondition ? TruthSentence : "主持人确认";
+
         public Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<string>>(["ui-test-model"]);
 
@@ -651,8 +683,8 @@ public sealed class ImportWizardTests
                   "steps": [
                     { "stepId": "read", "title": "阅本", "kind": "Read",
                       "hint": "拿到角色本，读到写着先不要翻页的地方为止。",
-                      "conditions": ["全员读完"], "sourceRef": "组织者手册第 1 页", "offersOpeningSpeech": true },
-                    { "stepId": "search", "title": "搜证", "kind": "Search",
+                      "conditions": ["全员读完", "{{_readCondition}}"], "sourceRef": "组织者手册第 1 页", "offersOpeningSpeech": true },
+                    { "stepId": "search", "title": "{{_searchTitle}}", "kind": "Search",
                       "hint": "{{TruthSentence}}", "conditions": [], "sourceRef": "组织者手册第 2 页" },
                     { "stepId": "reveal", "title": "揭秘", "kind": "Reveal",
                       "hint": "公开真相。", "conditions": [], "sourceRef": "组织者手册第 2 页" }

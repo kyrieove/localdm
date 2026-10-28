@@ -37,7 +37,8 @@ public sealed partial class RapidOcrFallback : IFallbackOcr
         string imagePath,
         CancellationToken cancellationToken)
     {
-        if (!File.Exists(_pythonPath) || !File.Exists(_scriptPath))
+        // 裸命令（默认 "python"）交给进程启动按 PATH 找；File.Exists 不查 PATH。
+        if ((Path.IsPathRooted(_pythonPath) && !File.Exists(_pythonPath)) || !File.Exists(_scriptPath))
         {
             return [];
         }

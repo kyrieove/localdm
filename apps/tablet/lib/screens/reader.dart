@@ -672,7 +672,8 @@ class TextReader extends StatelessWidget {
     final app = AppScope.of(context);
     final scheme = Theme.of(context).colorScheme;
     final body = TextStyle(fontSize: app.fontSize, height: app.lineSpacing, color: scheme.onSurface);
-    bool visible(int? p) => p == null || p <= app.openedPages;
+    // 没有原稿图就没有「按住翻开」的地方：文字全部显示，否则整本是空的。
+    bool visible(int? p) => p == null || app.rolePageCount == 0 || p <= app.openedPages;
     final hiddenLeft = app.book.chapters.any((c) => c.blocks.any((b) => !visible(b.sourcePageNumber)));
     return Column(children: [
       Material(

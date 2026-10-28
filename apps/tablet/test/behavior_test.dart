@@ -159,6 +159,13 @@ void main() {
     expect(find.byTooltip('停止朗读'), findsOneWidget);
   });
 
+  testWidgets('没有原稿图的角色本：文字版不受翻开限制，全部显示', (tester) async {
+    final state = await pump(tester, const Size(1180, 820), {'stage': 'inGame', 'section': 'book', 'text': '1', 'opened': '0'});
+    state.update(() => state.rolePageCount = 0);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('后面的内容还盖着'), findsNothing);
+  });
+
   test('地址规范化：自动补默认端口并去掉协议与路径', () {
     expect(AppState.normalizeAddress('192.168.1.50'), '192.168.1.50:5188');
     expect(AppState.normalizeAddress('http://192.168.1.50:5188/app/'), '192.168.1.50:5188');

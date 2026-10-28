@@ -155,7 +155,11 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             }
             finally
             {
-                _session.SetNarrationBusy(false);
+                // 被停掉的旧播报可能晚回来：这时新的一轮正在跑，锁归它解，这里不能抢先放开。
+                if (!IsBusy)
+                {
+                    _session.SetNarrationBusy(false);
+                }
             }
         };
 
@@ -697,6 +701,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             LocalDm.Core.Diagnostics.RunLog.Write("Host", $"重新开始《{package.Title}》，上一局已归档：{System.IO.Path.GetFileName(archived)}");
         }
 
+        _publicFeed?.Discard();
         await store.DeleteSessionAsync(SessionIds.For(package), CancellationToken.None);
         _conversationSessionId = null; // 同一个存档 id：不清掉的话屏幕上还留着上一局的对话
         await LoadPackageAsync(package);

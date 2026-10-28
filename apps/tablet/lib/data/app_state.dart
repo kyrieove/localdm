@@ -171,6 +171,12 @@ class AppState extends ChangeNotifier {
       _generation = catalog.generation;
       if (!online) setOnline(true);
       final genChanged = previousGen != null && previousGen != catalog.generation;
+      if (genChanged) {
+        // 重新开始本局沿用同一个存档 ID、序号从 1 重数：只看 sessionId 认不出来，旧对话和读取位置要在这里清掉。
+        messages.clear();
+        _nextSequence = 0;
+        unreadTalk = 0;
+      }
       if (catalog.storyState == 'None') {
         _leaveRole(Stage.waitingStory);
       } else if (catalog.storyState == 'Preparing') {

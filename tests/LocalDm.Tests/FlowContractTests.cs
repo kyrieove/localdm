@@ -226,6 +226,9 @@ public sealed class FlowContractTests
         session = Advance(session, package, "op-2");          // vote-one → vote-two
         Assert.Equal("vote-two", session.CurrentPhaseId);
 
+        // 公开投影也不能把第一轮的票当成这一轮的：否则界面藏起录票入口，又推进不了
+        Assert.Null(PublicSessionProjector.Project(package, session).VoteSummary);
+
         // 第二轮还没投票：不能拿第一轮的汇总直接推进
         var blocked = Assert.Throws<DomainRuleException>(() => GameEngine.Apply(
             session, package, Command(GameCommandType.Advance, session.Revision, "op-3")));

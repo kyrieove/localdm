@@ -51,24 +51,30 @@ public static class BuildPackageProbe
             Console.WriteLine($"  [{group.Kind}] {group.Name}（{group.PageCount} 页，{group.FileTypeLabel}）— {group.GuessReason}");
         }
 
-        if (scan.NeedsOrganizerChoice)
+        var chosen = ArgumentValue(args, "--organizer");
+        if (chosen is null && scan.NeedsOrganizerChoice)
         {
             Console.WriteLine("! 没有分组像是组织者手册：请用 --organizer <分组名> 指定，或把手册放在名为「组织」「主持」「手册」的文件夹里。");
             return 2;
         }
 
-        if (scan.HasMultipleOrganizerCandidates)
+        if (chosen is null && scan.HasMultipleOrganizerCandidates)
         {
             Console.WriteLine("! 有多个分组像是组织者手册：请用 --organizer <分组名> 指定一个。");
             return 2;
         }
 
-        var organizer = ArgumentValue(args, "--organizer") ?? scan.OrganizerGroupName!;
+        var organizer = chosen ?? scan.OrganizerGroupName!;
+        // 手动指定时只认这一个：建包只接受一个手册，其余被猜成手册的分组不入包，并打印出来。
         var groups = scan.Groups
             .Select(group => string.Equals(group.Name, organizer, StringComparison.Ordinal)
                 ? group with { Kind = ScriptGroupKind.Organizer }
-                : group)
+                : group.Kind == ScriptGroupKind.Organizer ? group with { Kind = ScriptGroupKind.Ignore } : group)
             .ToArray();
+        foreach (var dropped in scan.Groups.Where(g => g.Kind == ScriptGroupKind.Organizer && g.Name != organizer))
+        {
+            Console.WriteLine($"  不入包：{dropped.Name}（也像手册，但已指定 {organizer}）");
+        }
         if (groups.All(group => group.Kind != ScriptGroupKind.Organizer))
         {
             Console.WriteLine($"! 指定的组织者手册分组不存在：{organizer}");

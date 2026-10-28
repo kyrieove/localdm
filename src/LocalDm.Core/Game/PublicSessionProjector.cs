@@ -24,6 +24,12 @@ public static class PublicSessionProjector
                 s.SegmentId == id && s.Visibility == SegmentVisibility.Public))
             .ToArray();
 
+        // 投票环节只显示本轮自己的汇总：上一轮的票不能让界面以为这一轮已经录过。
+        var votes = !phase.IsVotePhase
+            ? session.VoteSummary
+            : session.VoteHistory.FirstOrDefault(r => r.PhaseId == phase.PhaseId)?.Summary
+              ?? (GameEngine.HasSummaryFor(session, package, phase) ? session.VoteSummary : null);
+
         var unlocked = TruthAccess.IsUnlocked(session);
         var revealed = unlocked
             ? TruthAccess.RevealedTexts(package, session).ToArray()
@@ -54,14 +60,14 @@ public static class PublicSessionProjector
                 .Select(p => new PublicPhaseTrackItem { PhaseId = p.PhaseId, Title = p.Title })
                 .ToArray(),
             ReleasedMaterialIds = session.ReleasedMaterialIds,
-            VoteSummary = session.VoteSummary is null
+            VoteSummary = votes is null
                 ? null
                 : new PublicVoteSummaryView
                 {
-                    Counts = session.VoteSummary.Counts
+                    Counts = votes.Counts
                         .Select(c => new PublicVoteCount { Option = c.Option, Count = c.Count })
                         .ToArray(),
-                    TotalVotes = session.VoteSummary.Total,
+                    TotalVotes = votes.Total,
                 },
             RevealedTexts = revealed,
         };

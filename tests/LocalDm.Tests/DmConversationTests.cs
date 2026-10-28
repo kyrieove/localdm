@@ -835,6 +835,39 @@ public sealed class DmConversationTests : IDisposable
         Assert.False(host.HasPendingCorrection);
     }
 
+    [Fact]
+    public async Task Late_stopped_narration_does_not_unlock_phase_buttons_while_a_newer_turn_runs()
+    {
+        var gateway = new ScriptedGateway();
+        using var host = await NewHostAsync(gateway);
+        await host.LoadDemoAsync();
+
+        // A：开局播报卡在模型里
+        var lateNarration = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        gateway.TurnGate = lateNarration;
+        await host.Session.ExecuteAsync(GameCommandType.Start);
+        await WaitUntilAsync(() => host.IsGenerating);
+        host.StopCommand.Execute(null);
+        await WaitUntilAsync(() => !host.IsBusy);
+
+        // B：玩家提问，也卡住
+        var newerTurn = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        gateway.TurnGate = newerTurn;
+        host.InputText = "我想问一下";
+        var sending = host.SendAsync();
+        await WaitUntilAsync(() => host.IsGenerating);
+
+        // A 晚到返回：B 还在生成，推进锁不能被 A 放开
+        lateNarration.SetResult();
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+        Assert.True(host.Session.Busy);
+
+        newerTurn.SetResult();
+        await sending;
+        await WaitUntilAsync(() => !host.Session.Busy);
+        Assert.False(host.Session.Busy);
+    }
+
     // ===== 夹具 =====
 
     private async Task<HostViewModel> NewHostAsync(ScriptedGateway gateway) =>
@@ -991,6 +1024,9 @@ public sealed class DmConversationTests : IDisposable
         /// <summary>正常主持请求要失败。</summary>
         public bool FailTurn { get; set; }
 
+        /// <summary>下一次正常主持请求卡在这里，并且无视取消（模拟上游停不下来、晚到返回）。</summary>
+        public TaskCompletionSource? TurnGate { get; set; }
+
         public Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<string>>(["test-model"]);
 
@@ -1011,6 +1047,12 @@ public sealed class DmConversationTests : IDisposable
             if (!IsCompaction(request) && FailTurn)
             {
                 throw new DomainRuleException(DomainErrorCode.MODEL_FAILED, "模型这次没有给出可用内容。");
+            }
+
+            if (!IsCompaction(request) && TurnGate is { } turnGate)
+            {
+                TurnGate = null;
+                await turnGate.Task;
             }
 
             var usage = (UsageFor is { } provider ? provider(_host!, request) : null) ?? Usage ?? RequestUsage(request);

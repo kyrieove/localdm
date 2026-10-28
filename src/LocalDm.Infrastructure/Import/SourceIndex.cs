@@ -111,28 +111,4 @@ public static class SourceIndex
             : 0;
         return (page, block);
     }
-
-    /// <summary>覆盖核对：每个文件每一页都必须有来源。</summary>
-    public static IReadOnlyList<string> FindUncoveredPages(
-        IReadOnlyList<SourceFile> files,
-        IReadOnlyList<SourceSpan> spans)
-    {
-        var missing = new List<string>();
-        foreach (var file in files)
-        {
-            var covered = spans
-                .Where(s => s.FileId == file.FileId)
-                .Select(s => s.PageNumber)
-                .ToHashSet();
-            for (var page = 1; page <= file.PageCount; page++)
-            {
-                if (!covered.Contains(page))
-                {
-                    missing.Add($"{file.FileId}#{page}");
-                }
-            }
-        }
-
-        return missing;
-    }
 }

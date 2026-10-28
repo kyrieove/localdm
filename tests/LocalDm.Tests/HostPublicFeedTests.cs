@@ -121,6 +121,32 @@ public sealed class HostPublicFeedTests : IDisposable
     }
 
     [Fact]
+    public async Task Restarting_drops_unsynced_messages_of_the_previous_round()
+    {
+        var path = Path.Combine(_root, "sessions.db");
+        using var store = new SessionStore(path);
+        await store.InitializeAsync(TestContext.Current.CancellationToken);
+        await BreakPublicMessageTableAsync(path);
+
+        var host = NewHost(store, out _);
+        await host.LoadDemoAsync();
+        host.InputText = "上一局的话。";
+        await host.SendAsync();
+        await WaitUntilAsync(() => host.HasPublicSyncError);
+
+        // 重开同一本：新局沿用同一个存档 ID，上一局没写进去的消息不能再写进来
+        await RepairPublicMessageTableAsync(path);
+        await host.RestartPackageAsync(host.Session.Package!);
+        Assert.False(host.HasPublicSyncError);
+        host.InputText = "新一局的话。";
+        await host.SendAsync();
+
+        var feed = await WaitForFeedAsync(store, "session-demo", 1);
+        Assert.DoesNotContain(feed, m => m.Text.Contains("上一局的话", StringComparison.Ordinal));
+        Assert.Contains(feed, m => m.Text.Contains("新一局的话", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Two_sessions_keep_their_own_public_feeds()
     {
         using var store = await NewStoreAsync();

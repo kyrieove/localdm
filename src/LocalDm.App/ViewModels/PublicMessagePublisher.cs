@@ -106,6 +106,25 @@ public sealed class PublicMessagePublisher
         EnsureFlushing();
     }
 
+    /// <summary>重新开局：上一局没写进去的消息作废，不能在重试时写进同 ID 的新局。</summary>
+    public void Discard()
+    {
+        bool wasFailed;
+        lock (_gate)
+        {
+            wasFailed = _failed;
+            _pending.Clear();
+            _failed = false;
+            _failure = null;
+            _recovering = false;
+        }
+
+        if (wasFailed)
+        {
+            Recovered?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
     private void EnsureFlushing()
     {
         lock (_gate)
@@ -181,7 +200,7 @@ public sealed class PublicMessagePublisher
 
                 lock (_gate)
                 {
-                    _pending.RemoveAt(0);
+                    _pending.Remove(next); // 写的途中可能被 Discard 清空过
                 }
 
                 Committed?.Invoke(this, stored);
