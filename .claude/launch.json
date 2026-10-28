@@ -6,6 +6,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8790", "-b", "127.0.0.1", "-d", "apps/tablet/build/web"],
       "port": 8790
+    },
+    {
+      "name": "tablet-standalone",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/LocalDm.Tablet", "--", "--urls", "http://127.0.0.1:5190"],
+      "port": 5190
     }
   ]
 }
