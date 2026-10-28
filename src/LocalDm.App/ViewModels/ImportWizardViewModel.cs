@@ -300,6 +300,7 @@ public sealed class ImportWizardViewModel : ObservableObject
     private string _progressText = string.Empty;
     private string _estimatedRemainingText = string.Empty;
     private string _failedPagesText = string.Empty;
+    private bool _blankFilesConfirmed;
     private bool _busy;
     private ScriptScanResult? _scan;
     private ScriptExtraction? _extraction;
@@ -501,7 +502,60 @@ public sealed class ImportWizardViewModel : ObservableObject
         !Busy
         && FlowSteps.Count > 0
         && FlowSteps.All(row => !row.IsHidden && !string.IsNullOrWhiteSpace(row.Title))
-        && FlowSteps.Count(row => row.Kind == ScriptStepKind.Reveal) == 1;
+        && FlowSteps.Count(row => row.Kind == ScriptStepKind.Reveal) == 1
+        && _extraction?.FailedPages.Count is null or 0
+        && (_extraction?.BlankFiles.Count is null or 0 || BlankFilesConfirmed);
+
+    /// <summary>④ 页上方的识别问题：工具报错的文件挡住建包；没识别出文字的文件要人确认是插图或空白页。</summary>
+    public string ExtractionIssueText
+    {
+        get
+        {
+            if (_extraction is null)
+            {
+                return string.Empty;
+            }
+
+            var lines = new List<string>();
+            if (_extraction.FailedPages.Count > 0)
+            {
+                lines.Add($"{_extraction.FailedPages.Count} 个文件识别出错，内容没进包，不能建包：{string.Join("、", _extraction.FailedPages)}。请回上一步重新识别，或把它们移出剧本文件夹。");
+            }
+
+            if (_extraction.BlankFiles.Count > 0)
+            {
+                lines.Add($"{_extraction.BlankFiles.Count} 个文件没有识别出文字，不会进包：{string.Join("、", _extraction.BlankFiles)}。");
+            }
+
+            return string.Join("\n", lines);
+        }
+    }
+
+    public bool HasBlankFiles => _extraction?.BlankFiles.Count > 0;
+
+    /// <summary>主持人确认这些没字的文件确实是插图或空白页；没确认前不能建包。</summary>
+    public bool BlankFilesConfirmed
+    {
+        get => _blankFilesConfirmed;
+        set
+        {
+            if (SetProperty(ref _blankFilesConfirmed, value))
+            {
+                OnPropertyChanged(nameof(CanBuild));
+                RaiseCommandStates();
+            }
+        }
+    }
+
+    private void SetExtraction(ScriptExtraction? extraction)
+    {
+        _extraction = extraction;
+        _blankFilesConfirmed = false;
+        OnPropertyChanged(nameof(BlankFilesConfirmed));
+        OnPropertyChanged(nameof(ExtractionIssueText));
+        OnPropertyChanged(nameof(HasBlankFiles));
+        OnPropertyChanged(nameof(CanBuild));
+    }
 
     public RelayCommand NextCommand { get; }
 
@@ -527,7 +581,7 @@ public sealed class ImportWizardViewModel : ObservableObject
         ClearFlowSteps();
         LayeringPages.Clear();
         _scan = null;
-        _extraction = null;
+        SetExtraction(null);
         _truthPageTexts = [];
         Status = "选一个剧本文件夹，软件会先看目录结构，不读内容。";
         ProgressText = string.Empty;
@@ -686,7 +740,7 @@ public sealed class ImportWizardViewModel : ObservableObject
                 return;
             }
 
-            _extraction = extraction;
+            SetExtraction(extraction);
             _truthPageTexts = extraction.Pages
                 .Where(page => string.Equals(page.Group, OrganizerGroupName, StringComparison.Ordinal))
                 .Select(page => page.Text)
@@ -1210,7 +1264,7 @@ public sealed class ImportWizardViewModel : ObservableObject
                 return;
             }
 
-            _extraction = extraction;
+            SetExtraction(extraction);
             _truthPageTexts = extraction.Pages
                 .Where(page => string.Equals(page.Group, OrganizerGroupName, StringComparison.Ordinal))
                 .Select(page => page.Text)

@@ -126,6 +126,7 @@ public static class BuildPackageProbe
             pagesExtracted = extraction.Pages.Count,
             totalPages = groups.Where(g => g.Kind != ScriptGroupKind.Ignore).Sum(g => g.PageCount),
             failedPages = extraction.FailedPages.Count,
+            blankFiles = extraction.BlankFiles.Count,
             segmentCounts = built.SegmentCounts.ToDictionary(k => k.Key.ToString(), v => v.Value),
             truthCharacters = built.TruthCharacters,
             roleGroupCount = built.RoleGroupCount,
@@ -158,7 +159,12 @@ public static class BuildPackageProbe
 
         if (extraction.FailedPages.Count > 0)
         {
-            Console.WriteLine($"  ! {extraction.FailedPages.Count} 页没有识别出文字：{string.Join("、", extraction.FailedPages)}");
+            Console.WriteLine($"  ! {extraction.FailedPages.Count} 个文件识别出错，内容没进包：{string.Join("、", extraction.FailedPages)}");
+        }
+
+        if (extraction.BlankFiles.Count > 0)
+        {
+            Console.WriteLine($"  {extraction.BlankFiles.Count} 个文件没有识别出文字（插图或空白页）：{string.Join("、", extraction.BlankFiles)}");
         }
 
         if (built.MaterialGroupCount == 0)

@@ -58,6 +58,34 @@ public sealed class ScriptImportServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Tool_errors_and_blank_files_are_reported_separately()
+    {
+        var story = NewStory(rolePages: 2, materialPages: 1);
+        var extractor = new FakeExtractor
+        {
+            // 第 2 个文件工具报错，第 3 个文件工具正常但没有字（插图）
+            Override = (call, fileId) => call switch
+            {
+                2 => ImportFileResult.Failed(fileId, "TOOL_NOT_READY", "文档工具超时未返回。"),
+                3 => new ImportFileResult(fileId, ImportFileState.Complete, true, null, [], [], null, null),
+                _ => null,
+            },
+        };
+        var service = NewService(extractor);
+
+        var extraction = await service.ExtractAsync(
+            story,
+            service.Scan(story).Groups,
+            progress: null,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, extraction.Pages.Count);
+        Assert.Single(extraction.FailedPages);
+        Assert.Single(extraction.BlankFiles);
+        Assert.NotEqual(extraction.FailedPages[0], extraction.BlankFiles[0]);
+    }
+
+    [Fact]
     public async Task Cancelling_stops_the_run_and_writes_no_package_file()
     {
         var story = NewStory(rolePages: 3, materialPages: 1);
@@ -264,6 +292,9 @@ public sealed class ScriptImportServiceTests : IDisposable
     {
         public int Calls { get; private set; }
 
+        /// <summary>按第几次调用改结果：返回 null 时照常给一段文字。</summary>
+        public Func<int, string, ImportFileResult?>? Override { get; init; }
+
         public Task<ToolIdentity> GetIdentityAsync(CancellationToken cancellationToken) =>
             Task.FromResult(new ToolIdentity { Tool = "fake-mineru", Version = "1.0", AppOwnedHome = "fake-home" });
 
@@ -274,6 +305,11 @@ public sealed class ScriptImportServiceTests : IDisposable
             CancellationToken cancellationToken)
         {
             Calls++;
+            if (Override?.Invoke(Calls, fileId) is { } overridden)
+            {
+                return Task.FromResult(overridden);
+            }
+
             var source = SourceIndex.BuildSourceFile(
                 fileId,
                 absolutePath,

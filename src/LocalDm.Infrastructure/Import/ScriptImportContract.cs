@@ -69,8 +69,11 @@ public sealed record ScriptExtraction
 
     public required IReadOnlyList<SourceFile> Sources { get; init; }
 
-    /// <summary>识别失败或没有文字的页标签（只有文件名）。</summary>
+    /// <summary>识别工具报错的文件（分组-文件名）：这些文件的内容没进包，不能建包。</summary>
     public IReadOnlyList<string> FailedPages { get; init; } = [];
+
+    /// <summary>工具正常跑完但没识别出文字的文件（分组-文件名）：多半是插图或空白页，要人确认后才放行。</summary>
+    public IReadOnlyList<string> BlankFiles { get; init; } = [];
 
     /// <summary>隐私预检或授权未通过时的脱敏原因；非空表示这次识别被挡住。</summary>
     public string? BlockedReason { get; init; }

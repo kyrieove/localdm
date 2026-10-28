@@ -66,6 +66,7 @@ public sealed partial class ScriptImportService
         var pages = new List<RealScriptPackageBuilder.ExtractedPage>();
         var sources = new List<SourceFile>();
         var failed = new List<string>();
+        var blank = new List<string>();
         var stopwatch = Stopwatch.StartNew();
         var completed = 0;
 
@@ -85,9 +86,13 @@ public sealed partial class ScriptImportService
 
             // 进度按页走：一个文件识别完，把它那几页一次算上。
             completed += job.PageCount;
-            if (extracted.Source is null || extracted.Spans.Count == 0)
+            if (extracted.Source is null || extracted.ToolFailed)
             {
-                failed.Add(label);
+                failed.Add(fileId);
+            }
+            else if (extracted.Spans.Count == 0)
+            {
+                blank.Add(fileId); // 工具正常跑完但没有字：多半是插图或空白页
             }
             else
             {
@@ -105,7 +110,7 @@ public sealed partial class ScriptImportService
             });
         }
 
-        return new ScriptExtraction { Pages = pages, Sources = sources, FailedPages = failed };
+        return new ScriptExtraction { Pages = pages, Sources = sources, FailedPages = failed, BlankFiles = blank };
     }
 
     /// <summary>
@@ -251,7 +256,7 @@ public sealed partial class ScriptImportService
 
         if (result.Spans.Count == 0)
         {
-            return new ExtractedOne(source, [], null);
+            return new ExtractedOne(source, [], null, ToolFailed: result.State is not ImportFileState.Complete);
         }
 
         WriteCache(hash, result.Spans);
@@ -399,7 +404,8 @@ public sealed partial class ScriptImportService
     private sealed record ExtractedOne(
         SourceFile? Source,
         IReadOnlyList<SourceSpan> Spans,
-        (string Code, string Reason)? Blocked);
+        (string Code, string Reason)? Blocked,
+        bool ToolFailed = false);
 
     private sealed record CachedPage(int Version, IReadOnlyList<CachedBatch> Batches);
 

@@ -157,6 +157,35 @@ public sealed class ImportWizardTests
     }
 
     [Fact]
+    public async Task Blank_files_are_listed_and_block_building_until_confirmed()
+    {
+        await WpfRunner.RunAsync(async () =>
+        {
+            using var root = new TempRoot();
+            var wizard = NewWizard(root.Path, blankFileId: "书房");
+            var window = Show(WizardView(wizard));
+            try
+            {
+                wizard.SetFolder(NewStory(root.Path));
+                await wizard.ScanAsync();
+                await wizard.ExtractAndDraftAsync();
+                wizard.FlowSteps.First(row => row.IsHidden).Hint = "翻开线索卡，逐张读完。";
+
+                Assert.Contains("书房", wizard.ExtractionIssueText, StringComparison.Ordinal);
+                Assert.True(wizard.HasBlankFiles);
+                Assert.False(wizard.CanBuild);
+
+                wizard.BlankFilesConfirmed = true;
+                Assert.True(wizard.CanBuild);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
     public async Task Flow_page_also_strips_copied_titles_and_conditions()
     {
         await WpfRunner.RunAsync(async () =>
@@ -518,7 +547,7 @@ public sealed class ImportWizardTests
             .OrderByDescending(File.GetLastWriteTimeUtc)
             .First();
 
-    private static ImportWizardViewModel NewWizard(string root, FakeGateway? gateway = null)
+    private static ImportWizardViewModel NewWizard(string root, FakeGateway? gateway = null, string? blankFileId = null)
     {
         var dataRoot = Path.Combine(root, "data");
         Directory.CreateDirectory(dataRoot);
@@ -531,7 +560,7 @@ public sealed class ImportWizardTests
             () => new ScriptImportService(new ScriptImportOptions
             {
                 DataRoot = dataRoot,
-                Extractor = new FakeExtractor(),
+                Extractor = new FakeExtractor(blankFileId),
             }),
             new FlowDrafter(gateway ?? new FakeGateway()),
             () => "ui-test-model");
@@ -622,7 +651,8 @@ public sealed class ImportWizardTests
     }
 
     /// <summary>假识别：每页回一段带标记的文字；组织者手册第 2 页里放一句「真相」。</summary>
-    private sealed class FakeExtractor : IPageExtractor
+    /// <summary>假识别：文件 ID 含 <paramref name="blankFileId"/> 的文件工具正常跑完但没有字（插图）。</summary>
+    private sealed class FakeExtractor(string? blankFileId = null) : IPageExtractor
     {
         public Task<ToolIdentity> GetIdentityAsync(CancellationToken cancellationToken) =>
             Task.FromResult(new ToolIdentity { Tool = "fake-mineru", Version = "1.0", AppOwnedHome = "fake-home" });
@@ -659,7 +689,7 @@ public sealed class ImportWizardTests
                 ImportFileState.Complete,
                 ToolComplete: true,
                 source,
-                [span],
+                blankFileId is not null && fileId.Contains(blankFileId, StringComparison.Ordinal) ? [] : [span],
                 [],
                 ErrorCode: null,
                 PublicReason: null));
