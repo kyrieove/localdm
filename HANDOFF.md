@@ -24,7 +24,7 @@
 ## 2026-10-28
 - 平板 App 公开对话页加了发言条（`apps/tablet/lib/screens/talk.dart`，调已有 `/tablet/say`、`/tablet/say/stop`），ADR 0012 第 2、3、4 条已修订（保留发言、不用 Tailscale）。只过了自动测试，没上真机。
 - 发言条只在「公开对话」页；10-23 设计说「看角色本和线索卡时也能发言」，App 里还没做。
-- 远程（隧道 + 口令 / 谷歌登录）只调研留档：`docs/plans/2026-10-28-tablet-talk-and-remote.md` 第二节，用户定了暂时只用局域网。
+- 远程（隧道 + 口令 / 谷歌登录）只调研留档：`docs/plans/2026-10-28-tablet-talk-and-remote.md` 第二节。10-28 用户再次确认搁置：玩家都在一个屋，远程玩家听不到电脑语音也按不到说话键，先真机实测局域网。
 
 - 整仓审查（sol）后修了 9 项，提交 `92613d0`。没修：OCR 失败文件不挡建包（「工具报错」和「空白插图页」现在分不开，直接挡会让正常剧本建不了包，待用户定）。
 - deferred（复查 P2）：
@@ -33,7 +33,7 @@
 - 平板 App 重开局清对话、MinerU 取消杀进程、备用 OCR 走 PATH：这三处没有自动测试。
 
 ## 下一步
-1. 用户说了「推」再推送 main，由 `.github/workflows/tablet-ipa.yml` 出 ipa，用户用 iloader 装 iPad，连电脑实测（含发言）。
+1. 用户说了「推」再推送 main，由 `.github/workflows/tablet-ipa.yml` 出 ipa，用户用 iloader 装 iPad，连电脑实测（含发言）。Wi-Fi 有 AP 隔离（平板连不上电脑）时，先试电脑开 Windows「移动热点」让平板连热点，未验证。
 2. 网页版要进发布包的话，打进 publish；现在只在源码目录里找。
 
 ## 等用户
