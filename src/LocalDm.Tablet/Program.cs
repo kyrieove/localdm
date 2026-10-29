@@ -214,40 +214,15 @@ internal static class PngWriter
 
     private static byte[] Compress(byte[] raw)
     {
-        // PNG 的 IDAT 装的是 zlib 流（2 字节头 + deflate + 4 字节 Adler-32 校验）。
-        // 直接写裸 deflate 的话，Windows 的 WIC 会容错解出来，浏览器却解成全透明/全黑，
-        // 于是「HTTP 200 + 自然尺寸正确 + 截图一片白」会同时成立。必须补 zlib 包装。
+        // PNG 的 IDAT 装的是 zlib 流，不是裸 deflate：裸 deflate 时 Windows 的 WIC 会容错解出来，
+        // 浏览器却解成全透明/全黑，于是「HTTP 200 + 自然尺寸正确 + 截图一片白」会同时成立。
         using var output = new MemoryStream();
-        using (var deflate = new System.IO.Compression.DeflateStream(output, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true))
+        using (var zlib = new System.IO.Compression.ZLibStream(output, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true))
         {
-            deflate.Write(raw, 0, raw.Length);
+            zlib.Write(raw, 0, raw.Length);
         }
 
-        var deflated = output.ToArray();
-        var zlib = new byte[2 + deflated.Length + 4];
-        zlib[0] = 0x78; // CMF：deflate + 32K 窗口
-        zlib[1] = 0x9C; // FLG：默认压缩级，无字典，校验通过
-        Array.Copy(deflated, 0, zlib, 2, deflated.Length);
-        var adler = Adler32(raw);
-        zlib[^4] = (byte)(adler >> 24);
-        zlib[^3] = (byte)(adler >> 16);
-        zlib[^2] = (byte)(adler >> 8);
-        zlib[^1] = (byte)adler;
-        return zlib;
-    }
-
-    private static uint Adler32(byte[] data)
-    {
-        const uint modulo = 65521;
-        uint a = 1;
-        uint b = 0;
-        foreach (var value in data)
-        {
-            a = (a + value) % modulo;
-            b = (b + a) % modulo;
-        }
-
-        return (b << 16) | a;
+        return output.ToArray();
     }
 
     private static void WriteChunk(Stream stream, string type, byte[] data)

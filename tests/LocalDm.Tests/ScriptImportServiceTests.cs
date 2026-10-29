@@ -86,6 +86,55 @@ public sealed class ScriptImportServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Partial_text_from_an_unfinished_run_is_a_failure_that_blocks_building_and_is_not_cached()
+    {
+        var story = NewStory(rolePages: 2, materialPages: 1);
+        var extractor = new FakeExtractor { IncompleteCall = 2 };
+        var service = NewService(extractor);
+        var groups = service.Scan(story).Groups;
+
+        var extraction = await service.ExtractAsync(story, groups, progress: null, TestContext.Current.CancellationToken);
+
+        Assert.Single(extraction.FailedPages);
+        Assert.Empty(extraction.BlankFiles);
+        await Assert.ThrowsAsync<DomainRuleException>(() => service.BuildAsync(
+            extraction, "合成测试剧本", 4, MinimalFlow(organizerGroup: "组织"), TestContext.Current.CancellationToken));
+
+        // 没跑完的那个文件不进缓存：再识别一次只重跑它。
+        var callsBefore = extractor.Calls;
+        var second = await service.ExtractAsync(story, groups, progress: null, TestContext.Current.CancellationToken);
+        Assert.Equal(callsBefore + 1, extractor.Calls);
+        Assert.Empty(second.FailedPages);
+    }
+
+    [Fact]
+    public async Task Blank_files_block_building_until_someone_confirms_them()
+    {
+        var story = NewStory(rolePages: 2, materialPages: 1);
+        var extractor = new FakeExtractor
+        {
+            Override = (call, fileId) => call == 3
+                ? new ImportFileResult(fileId, ImportFileState.Complete, true, null, [], [], null, null)
+                : null,
+        };
+        var service = NewService(extractor);
+        var extraction = await service.ExtractAsync(
+            story, service.Scan(story).Groups, progress: null, TestContext.Current.CancellationToken);
+        Assert.Single(extraction.BlankFiles);
+
+        await Assert.ThrowsAsync<DomainRuleException>(() => service.BuildAsync(
+            extraction, "合成测试剧本", 4, MinimalFlow(organizerGroup: "组织"), TestContext.Current.CancellationToken));
+
+        var result = await service.BuildAsync(
+            extraction with { BlankFilesConfirmed = true },
+            "合成测试剧本",
+            4,
+            MinimalFlow(organizerGroup: "组织"),
+            TestContext.Current.CancellationToken);
+        Assert.True(File.Exists(result.PackagePath));
+    }
+
+    [Fact]
     public async Task Cancelling_stops_the_run_and_writes_no_package_file()
     {
         var story = NewStory(rolePages: 3, materialPages: 1);
@@ -295,6 +344,9 @@ public sealed class ScriptImportServiceTests : IDisposable
         /// <summary>按第几次调用改结果：返回 null 时照常给一段文字。</summary>
         public Func<int, string, ImportFileResult?>? Override { get; init; }
 
+        /// <summary>第几次调用照常给文字，但工具没跑完。</summary>
+        public int? IncompleteCall { get; init; }
+
         public Task<ToolIdentity> GetIdentityAsync(CancellationToken cancellationToken) =>
             Task.FromResult(new ToolIdentity { Tool = "fake-mineru", Version = "1.0", AppOwnedHome = "fake-home" });
 
@@ -328,10 +380,11 @@ public sealed class ScriptImportServiceTests : IDisposable
                 TextHash = SourceIndex.ComputeTextHash(text),
                 OriginalText = text,
             };
+            var complete = Calls != IncompleteCall;
             return Task.FromResult(new ImportFileResult(
                 fileId,
-                ImportFileState.Complete,
-                ToolComplete: true,
+                complete ? ImportFileState.Complete : ImportFileState.Incomplete,
+                ToolComplete: complete,
                 source,
                 [span],
                 [],

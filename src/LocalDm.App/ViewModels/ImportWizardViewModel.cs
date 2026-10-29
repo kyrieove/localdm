@@ -100,6 +100,7 @@ public sealed class ImportFlowStepRow : ObservableObject
     private string _hint = string.Empty;
     private string _conditionsText = string.Empty;
     private bool _isHidden;
+    private bool _conditionsRemoved;
     private string? _sourceRef;
 
     public event EventHandler? Changed;
@@ -193,7 +194,26 @@ public sealed class ImportFlowStepRow : ObservableObject
     public string ConditionsText
     {
         get => _conditionsText;
-        set => SetProperty(ref _conditionsText, value);
+        set
+        {
+            if (SetProperty(ref _conditionsText, value))
+            {
+                ConditionsRemoved = false; // 主持人动过条件，就算复核过了
+            }
+        }
+    }
+
+    /// <summary>照抄真相的条件被删掉了：要主持人补写或改动一下确认，不然流程条件悄悄少了。</summary>
+    public bool ConditionsRemoved
+    {
+        get => _conditionsRemoved;
+        internal set
+        {
+            if (SetProperty(ref _conditionsRemoved, value))
+            {
+                Changed?.Invoke(this, EventArgs.Empty);
+            }
+        }
     }
 
     /// <summary>依据页：只显示「手册第 N 页」，不显示那一页的任何内容。</summary>
@@ -501,7 +521,7 @@ public sealed class ImportWizardViewModel : ObservableObject
     public bool CanBuild =>
         !Busy
         && FlowSteps.Count > 0
-        && FlowSteps.All(row => !row.IsHidden && !string.IsNullOrWhiteSpace(row.Title))
+        && FlowSteps.All(row => !row.IsHidden && !row.ConditionsRemoved && !string.IsNullOrWhiteSpace(row.Title))
         && FlowSteps.Count(row => row.Kind == ScriptStepKind.Reveal) == 1
         && _extraction?.FailedPages.Count is null or 0
         && (_extraction?.BlankFiles.Count is null or 0 || BlankFilesConfirmed);
@@ -875,6 +895,7 @@ public sealed class ImportWizardViewModel : ObservableObject
             var row = FlowSteps[group.Key];
             var copied = group.Select(hit => int.Parse(hit.Field["条件 ".Length..], System.Globalization.CultureInfo.InvariantCulture) - 1).ToHashSet();
             row.ConditionsText = string.Join('\n', row.Conditions.Where((_, i) => !copied.Contains(i)));
+            row.ConditionsRemoved = true;
         }
 
         OnPropertyChanged(nameof(CanBuild));
@@ -1151,7 +1172,8 @@ public sealed class ImportWizardViewModel : ObservableObject
         Busy = true;
         try
         {
-            var result = await _serviceFactory().BuildAsync(_extraction, Title, PlayerCount, flow, CancellationToken.None);
+            var result = await _serviceFactory().BuildAsync(
+                _extraction with { BlankFilesConfirmed = BlankFilesConfirmed }, Title, PlayerCount, flow, CancellationToken.None);
             _built = result.Build.Package;
             _canStartAfterBuild = result.Build.Readiness.CanStart;
             ReadinessText = result.Build.Readiness.CanStart

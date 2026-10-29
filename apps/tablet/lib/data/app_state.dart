@@ -164,6 +164,8 @@ class AppState extends ChangeNotifier {
     _polling = true;
     try {
       final cat = await api.json('/tablet/catalog');
+      // 等回来时可能已换了电脑或断开：旧连接的结果不能写进新状态。
+      if (!identical(api, this.api)) return;
       if (cat == null) throw StateError('catalog');
       final previousTitle = catalog.storyTitle;
       final previousGen = _generation;
@@ -183,7 +185,9 @@ class AppState extends ChangeNotifier {
         _leaveRole(Stage.preparing);
       } else if (stage == Stage.waitingStory || stage == Stage.preparing || previousTitle != catalog.storyTitle || genChanged) {
         // 电脑上换了剧本、重新开始本局、或刚准备好：认领还在（App 重启）就直接回到阅读页，否则回选角色页。
-        if (await _loadBook()) {
+        final loaded = await _loadBook(api);
+        if (!identical(api, this.api)) return;
+        if (loaded) {
           stage = Stage.inGame;
         } else {
           _leaveRole(Stage.pickRole);
@@ -191,9 +195,12 @@ class AppState extends ChangeNotifier {
       } else if (stage == Stage.inGame && !catalog.claimedRoles.contains(myRoleId)) {
         _leaveRole(Stage.pickRole); // 电脑上释放了这个角色
       }
+      if (!identical(api, this.api)) return;
       if (stage == Stage.inGame) await _pollTable(api);
+      if (!identical(api, this.api)) return;
       notifyListeners();
     } catch (_) {
+      if (!identical(api, this.api)) return; // 旧连接出错与新连接无关
       if (online) setOnline(false);
       reconnectAttempt++;
       notifyListeners();
@@ -204,6 +211,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> _pollTable(TabletApi api) async {
     final pub = await api.json('/tablet/public?after=$_nextSequence');
+    if (!identical(api, this.api)) return;
     if (pub != null) {
       if (pub['sessionId'] != _sessionId) {
         // 电脑上重新开了一局：序号从头数，旧对话清掉，下一轮从 0 取。
@@ -223,7 +231,8 @@ class AppState extends ChangeNotifier {
       hostSpeaking = host['speaking'] as bool;
     }
     final table = await api.json('/tablet/ui');
-    ui = table != null ? TableUi.fromJson(table) : TableUi.waiting();
+    if (!identical(api, this.api)) return;
+    ui =table != null ? TableUi.fromJson(table) : TableUi.waiting();
   }
 
   void _leaveRole(Stage next) {
@@ -236,10 +245,9 @@ class AppState extends ChangeNotifier {
   }
 
   /// 取本人角色本和阅读进度；没认领（404）返回 false。
-  Future<bool> _loadBook() async {
-    final api = this.api!;
+  Future<bool> _loadBook(TabletApi api) async {
     final j = await api.json('/tablet/role/book');
-    if (j == null) return false;
+    if (j == null || !identical(api, this.api)) return false;
     book = RoleBook.fromJson(j);
     myRoleId = j['roleId'] as String;
     rolePageCount = j['sourcePageCount'] as int;
@@ -249,6 +257,7 @@ class AppState extends ChangeNotifier {
       section = Section.book;
     }
     final settings = (await api.json('/tablet/role/progress'))?['settings'] as Map<String, dynamic>?;
+    if (!identical(api, this.api)) return false;
     if (settings != null) {
       fontSize = (settings['fontSize'] as num).toDouble();
       lineSpacing = double.tryParse(settings['lineSpacing'] as String) ?? lineSpacing;
@@ -262,7 +271,10 @@ class AppState extends ChangeNotifier {
   }
 
   /// 原稿页、卡面的图片：连着电脑走接口，原型走打包进 App 的假图。
-  ImageProvider image(String apiPath, String fakeAsset) => api?.image(apiPath) ?? AssetImage(fakeAsset);
+  /// 不同剧本、角色、局的原稿共用同一路径，Flutter 按网址缓存解码后的图，所以网址带上这三样，换了就不会拿到旧图。
+  ImageProvider image(String apiPath, String fakeAsset) =>
+      api?.image('$apiPath?v=${Uri.encodeQueryComponent('${catalog.storyTitle}|${catalog.generation}|$myRoleId')}') ??
+      AssetImage(fakeAsset);
 
   void go(Stage s) {
     stage = s;
@@ -282,7 +294,7 @@ class AppState extends ChangeNotifier {
     if (api != null) {
       final response = await api.post('/tablet/claim?roleId=${Uri.encodeQueryComponent(roleId)}');
       catalog.claimedRoles.add(roleId);
-      final ok = response.statusCode == 200 && await _loadBook();
+      final ok = response.statusCode == 200 && await _loadBook(api);
       if (ok) stage = Stage.inGame;
       notifyListeners();
       return ok;
@@ -371,7 +383,21 @@ class AppState extends ChangeNotifier {
   bool openPage(int p) {
     if (p != openedPages + 1) return false;
     openedPages = p;
-    api?.post('/tablet/role/open/$p').ignore();
+    final api = this.api;
+    final role = myRoleId;
+    final generation = _generation;
+    if (api != null) {
+      // 电脑只认「下一页」：请求丢了或被拒，就退回电脑记的页数，否则后面每页都会被拒。
+      // 回来时已换了电脑、角色或局，就不动新的进度。
+      api.post('/tablet/role/open/$p').then<int?>((r) {
+        if (r.statusCode == 200) return null;
+        return (jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>)['openedPages'] as int?;
+      }).catchError((Object _) => p - 1).then((back) {
+        if (back == null || !identical(api, this.api) || myRoleId != role || _generation != generation || openedPages < p) return;
+        openedPages = back;
+        notifyListeners();
+      });
+    }
     notifyListeners();
     return true;
   }

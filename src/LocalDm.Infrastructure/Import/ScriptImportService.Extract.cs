@@ -11,7 +11,7 @@ namespace LocalDm.Infrastructure.Import;
 public sealed partial class ScriptImportService
 {
     /// <summary>识别缓存的版本号：缓存内容一旦改结构就加一，旧缓存自然失效。</summary>
-    private const int CacheVersion = 1;
+    private const int CacheVersion = 2; // 2：版本 1 可能存过没跑完的识别，作废重识别
 
     /// <summary>
     /// 逐页识别。progress 每完成一页报一次；可取消；已识别的页走缓存。
@@ -178,6 +178,21 @@ public sealed partial class ScriptImportService
             throw new DomainRuleException(DomainErrorCode.CONSENT_REQUIRED, extraction.BlockedReason!);
         }
 
+        // 向导已挡住，这里再挡一次：命令行建包不经过向导。
+        if (extraction.FailedPages.Count > 0)
+        {
+            throw new DomainRuleException(
+                DomainErrorCode.MISSING_SOURCE,
+                $"{extraction.FailedPages.Count} 个文件识别出错，不能建包：{string.Join("、", extraction.FailedPages)}。");
+        }
+
+        if (extraction.BlankFiles.Count > 0 && !extraction.BlankFilesConfirmed)
+        {
+            throw new DomainRuleException(
+                DomainErrorCode.MISSING_SOURCE,
+                $"{extraction.BlankFiles.Count} 个文件没识别出文字，确认是插图或空白页后才能建包：{string.Join("、", extraction.BlankFiles)}。");
+        }
+
         var built = RealScriptPackageBuilder.Build(
             title,
             playerCount,
@@ -254,9 +269,15 @@ public sealed partial class ScriptImportService
             return new ExtractedOne(null, [], (result.ErrorCode ?? "BLOCKED", result.PublicReason ?? "识别未获授权。"));
         }
 
+        // 没跑完的识别哪怕带了部分文字也算失败：正文可能缺页，不能进缓存冒充完整结果。
+        if (result.State is not ImportFileState.Complete)
+        {
+            return new ExtractedOne(source, [], null, ToolFailed: true);
+        }
+
         if (result.Spans.Count == 0)
         {
-            return new ExtractedOne(source, [], null, ToolFailed: result.State is not ImportFileState.Complete);
+            return new ExtractedOne(source, [], null);
         }
 
         WriteCache(hash, result.Spans);

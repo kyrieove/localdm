@@ -63,7 +63,7 @@ public static class FlowSpoilerCheck
         }
 
         // 逐句比对：卡片与手册的标点常常和主持人的写法不一样，整段比对会漏掉。
-        foreach (var sentence in Sentences(text))
+        foreach (var sentence in DmMemoCheck.Sentences(text))
         {
             if (truthPageTexts.Any(page => SharedRun(sentence, page) >= VerbatimRunLength))
             {
@@ -104,32 +104,5 @@ public static class FlowSpoilerCheck
         }
 
         return longest;
-    }
-
-    private static IEnumerable<string> Sentences(string text)
-    {
-        var builder = new System.Text.StringBuilder();
-        foreach (var ch in text)
-        {
-            if (ch is '。' or '；' or '！' or '？' or '\n' or '，' or '、' or '：' or '!' or '?' or ';' or ',' or ':')
-            {
-                var sentence = builder.ToString().Trim();
-                if (sentence.Length > 0)
-                {
-                    yield return sentence;
-                }
-
-                builder.Clear();
-                continue;
-            }
-
-            builder.Append(ch);
-        }
-
-        var last = builder.ToString().Trim();
-        if (last.Length > 0)
-        {
-            yield return last;
-        }
     }
 }

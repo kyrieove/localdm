@@ -141,7 +141,8 @@ public sealed class MagpieGateway : IMagpieGateway, IDisposable
     {
         try
         {
-            return await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            // 非流式回复整段读进内存再返回：这样 _http.Timeout 管到正文读完，正文卡住也会超时。
+            return await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

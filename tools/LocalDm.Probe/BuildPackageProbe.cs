@@ -20,11 +20,11 @@ public static class BuildPackageProbe
     /// <summary>测试用重载：传入假的识别实现，其余流程与命令行完全相同。</summary>
     public static async Task<int> RunAsync(string[] args, IPageExtractor? extractor)
     {
-        var storyRoot = ArgumentValue(args, "--story")
+        var storyRoot = DmAcceptanceProbe.ArgumentValue(args, "--story")
             ?? throw new ArgumentException("需要 --story <剧本根目录>");
-        var outDir = ArgumentValue(args, "--out") ?? "docs/evidence/us3";
-        var dataRoot = ArgumentValue(args, "--data") ?? Path.Combine(FindRepoRoot(), ".appdata", "localdm-data");
-        var flow = LoadFlow(ArgumentValue(args, "--flow"));
+        var outDir = DmAcceptanceProbe.ArgumentValue(args, "--out") ?? "docs/evidence/us3";
+        var dataRoot = DmAcceptanceProbe.ArgumentValue(args, "--data") ?? Path.Combine(DmAcceptanceProbe.FindRepoRoot(), ".appdata", "localdm-data");
+        var flow = LoadFlow(DmAcceptanceProbe.ArgumentValue(args, "--flow"));
 
         Directory.CreateDirectory(outDir);
         Directory.CreateDirectory(dataRoot);
@@ -32,17 +32,17 @@ public static class BuildPackageProbe
         var service = new ScriptImportService(new ScriptImportOptions
         {
             DataRoot = dataRoot,
-            MineruExecutable = ArgumentValue(args, "--mineru"),
-            MineruHome = ArgumentValue(args, "--home"),
-            OcrPythonPath = ArgumentValue(args, "--ocr-python"),
+            MineruExecutable = DmAcceptanceProbe.ArgumentValue(args, "--mineru"),
+            MineruHome = DmAcceptanceProbe.ArgumentValue(args, "--home"),
+            OcrPythonPath = DmAcceptanceProbe.ArgumentValue(args, "--ocr-python"),
             Extractor = extractor,
         });
 
         var scan = service.Scan(storyRoot);
 
         // 标题不再写死某本剧本的名字：命令行没给就用文件夹名。
-        var title = ArgumentValue(args, "--title") ?? Path.GetFileName(Path.GetFullPath(storyRoot).TrimEnd(Path.DirectorySeparatorChar));
-        var playerCount = int.Parse(ArgumentValue(args, "--players") ?? "5");
+        var title = DmAcceptanceProbe.ArgumentValue(args, "--title") ?? Path.GetFileName(Path.GetFullPath(storyRoot).TrimEnd(Path.DirectorySeparatorChar));
+        var playerCount = int.Parse(DmAcceptanceProbe.ArgumentValue(args, "--players") ?? "5");
 
         Console.WriteLine($"剧本文件夹：{storyRoot}");
         Console.WriteLine($"标题：{title}；玩家人数：{playerCount}");
@@ -51,7 +51,7 @@ public static class BuildPackageProbe
             Console.WriteLine($"  [{group.Kind}] {group.Name}（{group.PageCount} 页，{group.FileTypeLabel}）— {group.GuessReason}");
         }
 
-        var chosen = ArgumentValue(args, "--organizer");
+        var chosen = DmAcceptanceProbe.ArgumentValue(args, "--organizer");
         if (chosen is null && scan.NeedsOrganizerChoice)
         {
             Console.WriteLine("! 没有分组像是组织者手册：请用 --organizer <分组名> 指定，或把手册放在名为「组织」「主持」「手册」的文件夹里。");
@@ -109,7 +109,9 @@ public static class BuildPackageProbe
         }
 
         var flowToUse = flow ?? new ScriptFlow();
-        var result = await service.BuildAsync(extraction, title, playerCount, flowToUse, CancellationToken.None);
+        // 没识别出文字的文件要人确认：命令行用 --blank-ok 表示看过了，是插图或空白页。
+        var confirmed = extraction with { BlankFilesConfirmed = args.Contains("--blank-ok") };
+        var result = await service.BuildAsync(confirmed, title, playerCount, flowToUse, CancellationToken.None);
         var built = result.Build;
 
         var report = new
@@ -136,8 +138,8 @@ public static class BuildPackageProbe
             stepsNeedingReview = built.StepsNeedingReview,
             referenceIssues = built.ReferenceIssues,
             contentHash = built.Package.ContentHash,
-            packagePath = Path.GetRelativePath(FindRepoRoot(), result.PackagePath),
-            flowPath = Path.GetRelativePath(FindRepoRoot(), result.FlowPath),
+            packagePath = Path.GetRelativePath(DmAcceptanceProbe.FindRepoRoot(), result.PackagePath),
+            flowPath = Path.GetRelativePath(DmAcceptanceProbe.FindRepoRoot(), result.FlowPath),
             elapsedMs = total.ElapsedMilliseconds,
         };
 
@@ -181,12 +183,6 @@ public static class BuildPackageProbe
         return built.Readiness.CanStart ? 0 : 1;
     }
 
-    private static string? ArgumentValue(string[] args, string name)
-    {
-        var index = Array.IndexOf(args, name);
-        return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
-    }
-
     /// <summary>
     /// 读取流程声明文件。流程必须由准备者按剧本原文写出，软件不提供默认流程。
     /// 缺省时返回 null，包会因此停在 NeedsReview。
@@ -207,16 +203,5 @@ public static class BuildPackageProbe
         };
         return JsonSerializer.Deserialize<ScriptFlow>(File.ReadAllText(path), options)
                ?? throw new InvalidOperationException("流程声明文件无法解析。");
-    }
-
-    private static string FindRepoRoot()
-    {
-        var dir = AppContext.BaseDirectory;
-        while (dir is not null && !File.Exists(Path.Combine(dir, "LocalDm.slnx")))
-        {
-            dir = Path.GetDirectoryName(dir);
-        }
-
-        return dir ?? Directory.GetCurrentDirectory();
     }
 }

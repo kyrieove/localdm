@@ -27,9 +27,11 @@
 - 远程（隧道 + 口令 / 谷歌登录）只调研留档：`docs/plans/2026-10-28-tablet-talk-and-remote.md` 第二节。10-28 用户再次确认搁置：玩家都在一个屋，远程玩家听不到电脑语音也按不到说话键，先真机实测局域网。
 
 - 整仓审查（sol）后修了 9 项，提交 `92613d0`。之后又修了识别失败：工具报错的文件挡住建包；工具正常但没识别出文字的文件（插图、空白页）在流程页列出，主持人勾选确认后才能建包（`ScriptExtraction.BlankFiles`、`ImportWizardViewModel.BlankFilesConfirmed`）。
-- deferred（复查 P2）：
-  - `PublicMessagePublisher.Discard()` 不等在途写入，旧写入随后失败会把新局标成同步异常。修法：加代数，旧代数的失败忽略。
-  - 导入向导只有条件照抄真相时，静默删条件且照样能建包。修法：留待复核标记，并补「只有条件命中」的测试。
+- 10-29 第二次整仓审查（sol）：10 条 bug + 5 条精简全修（含上面两条 deferred）。复查又补了 4 条，这 4 条没再审：
+  - `unreviewed-fix:` `ScriptImportService.Extract.cs` 识别缓存版本升到 2（旧缓存作废，已导入的剧本再导入会重新识别一次）。
+  - `unreviewed-fix:` `ScriptImportService.BuildAsync` 空白文件未确认就拒绝建包（`ScriptExtraction.BlankFilesConfirmed`；命令行建包加 `--blank-ok`）。
+  - `unreviewed-fix:` `apps/tablet/lib/data/app_state.dart` 轮询、翻页回退按连接 / 角色 / 局代数丢弃旧结果。
+- 平板 App 换电脑时丢弃旧轮询结果：没有自动测试；翻页回退有测试（`apps/tablet/test/open_page_test.dart`）。真平板都没验。
 - 平板 App 重开局清对话、MinerU 取消杀进程、备用 OCR 走 PATH：这三处没有自动测试。
 
 ## 下一步

@@ -139,6 +139,9 @@
                                         <TextBox Text="{Binding ConditionsText, UpdateSourceTrigger=PropertyChanged}"
                                                  MinHeight="52" AcceptsReturn="True" TextWrapping="Wrap"
                                                  Padding="6,4" Margin="0,6,0,0" VerticalScrollBarVisibility="Auto" />
+                                        <TextBlock Text="有条件可能含剧情，已删去，请补写或改动一下条件再建包"
+                                                   Style="{StaticResource ChatMeta}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"
+                                                   Visibility="{Binding ConditionsRemoved, Converter={StaticResource BoolToVisibility}}" />
                                         <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                                             <TextBlock Text="{Binding SourceRefDisplay}"
                                                        Style="{StaticResource ChatMeta}" FontSize="11"

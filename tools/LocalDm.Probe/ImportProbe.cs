@@ -17,23 +17,23 @@ public static class ImportProbe
 {
     public static async Task<int> RunAsync(string[] args)
     {
-        var storyRoot = ArgumentValue(args, "--story")
+        var storyRoot = DmAcceptanceProbe.ArgumentValue(args, "--story")
             ?? throw new ArgumentException("需要 --story <剧本根目录或角色目录>");
-        var outDir = ArgumentValue(args, "--out") ?? "docs/evidence/us2";
-        var home = ArgumentValue(args, "--home")
-            ?? Path.Combine(FindRepoRoot(), ".appdata", "mineru-home");
-        var executable = ArgumentValue(args, "--mineru")
+        var outDir = DmAcceptanceProbe.ArgumentValue(args, "--out") ?? "docs/evidence/us2";
+        var home = DmAcceptanceProbe.ArgumentValue(args, "--home")
+            ?? Path.Combine(DmAcceptanceProbe.FindRepoRoot(), ".appdata", "mineru-home");
+        var executable = DmAcceptanceProbe.ArgumentValue(args, "--mineru")
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin", "mineru.exe");
-        var maxPagesPerFolder = int.Parse(ArgumentValue(args, "--pages") ?? "0");
-        var tier = Enum.Parse<ParseTier>(ArgumentValue(args, "--tier") ?? "Flash", ignoreCase: true);
+        var maxPagesPerFolder = int.Parse(DmAcceptanceProbe.ArgumentValue(args, "--pages") ?? "0");
+        var tier = Enum.Parse<ParseTier>(DmAcceptanceProbe.ArgumentValue(args, "--tier") ?? "Flash", ignoreCase: true);
         var recursive = !args.Contains("--single");
 
         Directory.CreateDirectory(outDir);
         using var runner = new MineruRunner(executable, home);
         var preflight = new MineruPrivacyPreflight(home);
         var fallback = new RapidOcrFallback(
-            ArgumentValue(args, "--ocr-python") ?? DefaultPython(),
-            ArgumentValue(args, "--ocr-script") ?? RapidOcrFallback.DefaultScriptPath());
+            DmAcceptanceProbe.ArgumentValue(args, "--ocr-python") ?? DefaultPython(),
+            DmAcceptanceProbe.ArgumentValue(args, "--ocr-script") ?? RapidOcrFallback.DefaultScriptPath());
         var pipeline = new ImportPipeline(runner, preflight, fallback);
 
         var identity = await runner.GetIdentityAsync(CancellationToken.None);
@@ -234,23 +234,6 @@ public static class ImportProbe
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         }));
         Console.WriteLine("wrote " + path);
-    }
-
-    private static string? ArgumentValue(string[] args, string name)
-    {
-        var index = Array.IndexOf(args, name);
-        return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
-    }
-
-    private static string FindRepoRoot()
-    {
-        var dir = AppContext.BaseDirectory;
-        while (dir is not null && !File.Exists(Path.Combine(dir, "LocalDm.slnx")))
-        {
-            dir = Path.GetDirectoryName(dir);
-        }
-
-        return dir ?? Directory.GetCurrentDirectory();
     }
 
     private sealed class ProbeReport

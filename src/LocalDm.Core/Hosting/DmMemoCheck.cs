@@ -159,7 +159,7 @@ public static class DmMemoCheck
     /// 按句末与停顿切句：短句比整句更容易对上卡面原文，
     /// 而卡片原文里的标点常常和主持人的标点不一样，整句比对会漏判。
     /// </summary>
-    private static IEnumerable<string> Sentences(string memo)
+    internal static IEnumerable<string> Sentences(string memo)
     {
         var builder = new StringBuilder();
         foreach (var ch in memo)

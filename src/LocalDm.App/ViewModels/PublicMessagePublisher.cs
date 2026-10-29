@@ -24,6 +24,7 @@ public sealed class PublicMessagePublisher
     private bool _failed;
     private bool _recovering;
     private string? _failure;
+    private int _generation; // Discard 一次加一：在途的旧写入回来时据此认出自己属于上一局
 
     public PublicMessagePublisher(IPublicMessageFeed feed)
     {
@@ -113,6 +114,7 @@ public sealed class PublicMessagePublisher
         lock (_gate)
         {
             wasFailed = _failed;
+            _generation++;
             _pending.Clear();
             _failed = false;
             _failure = null;
@@ -149,8 +151,10 @@ public sealed class PublicMessagePublisher
             {
                 PublicMessage? next = null;
                 var recovered = false;
+                int generation;
                 lock (_gate)
                 {
+                    generation = _generation;
                     if (!_failed && _pending.Count > 0)
                     {
                         next = _pending[0];
@@ -189,6 +193,11 @@ public sealed class PublicMessagePublisher
                         : "公开消息没有存下来。";
                     lock (_gate)
                     {
+                        if (generation != _generation)
+                        {
+                            continue; // 上一局的写入失败了：与新局无关，接着写新局的消息
+                        }
+
                         _failed = true;
                         _failure = reason;
                         _running = false;
@@ -198,12 +207,17 @@ public sealed class PublicMessagePublisher
                     return;
                 }
 
+                bool stale;
                 lock (_gate)
                 {
                     _pending.Remove(next); // 写的途中可能被 Discard 清空过
+                    stale = generation != _generation;
                 }
 
-                Committed?.Invoke(this, stored);
+                if (!stale)
+                {
+                    Committed?.Invoke(this, stored);
+                }
             }
         }
         catch (Exception ex)

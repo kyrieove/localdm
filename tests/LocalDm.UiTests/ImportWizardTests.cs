@@ -206,6 +206,22 @@ public sealed class ImportWizardTests
                 Assert.Contains(wizard.FlowSteps, row => row.Title.Length == 0);
                 Assert.Equal(["全员读完"], wizard.FlowSteps[0].Conditions);
                 Assert.False(wizard.CanBuild);
+
+                // 补好标题后，条件被删的那步仍要主持人动一下条件才放行：不能静默少条件。
+                foreach (var row in wizard.FlowSteps.Where(row => row.Title.Length == 0))
+                {
+                    row.Title = "补写的标题";
+                }
+
+                foreach (var row in wizard.FlowSteps.Where(row => row.IsHidden))
+                {
+                    row.Hint = "补写的提示";
+                }
+
+                var stripped = Assert.Single(wizard.FlowSteps, row => row.ConditionsRemoved);
+                Assert.False(wizard.CanBuild);
+                stripped.ConditionsText += "\n主持人确认";
+                Assert.True(wizard.CanBuild);
             }
             finally
             {

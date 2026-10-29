@@ -22,21 +22,21 @@ public static class ImportWizardProbe
 {
     public static async Task<int> RunAsync(string[] args)
     {
-        var repoRoot = FindRepoRoot();
-        var storyRoot = ArgumentValue(args, "--story")
+        var repoRoot = DmAcceptanceProbe.FindRepoRoot();
+        var storyRoot = DmAcceptanceProbe.ArgumentValue(args, "--story")
             ?? throw new ArgumentException("需要 --story <剧本文件夹>");
-        var dataRootSetting = ArgumentValue(args, "--settings-data")
+        var dataRootSetting = DmAcceptanceProbe.ArgumentValue(args, "--settings-data")
             ?? Path.Combine(repoRoot, ".appdata", "localdm-data");
-        var workRoot = ArgumentValue(args, "--data")
+        var workRoot = DmAcceptanceProbe.ArgumentValue(args, "--data")
             ?? Path.Combine(repoRoot, ".local", "import-acceptance", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
-        var modelOverride = ArgumentValue(args, "--model");
-        var mineruHome = ArgumentValue(args, "--home");
-        var players = int.Parse(ArgumentValue(args, "--players") ?? "5");
-        var titleOverride = ArgumentValue(args, "--title");
-        var outFile = ArgumentValue(args, "--out");
+        var modelOverride = DmAcceptanceProbe.ArgumentValue(args, "--model");
+        var mineruHome = DmAcceptanceProbe.ArgumentValue(args, "--home");
+        var players = int.Parse(DmAcceptanceProbe.ArgumentValue(args, "--players") ?? "5");
+        var titleOverride = DmAcceptanceProbe.ArgumentValue(args, "--title");
+        var outFile = DmAcceptanceProbe.ArgumentValue(args, "--out");
 
         // --data-root：直接导进某个运行数据目录（例如软件自己的 %LOCALAPPDATA%\LocalDm），而不是记录目录下的 data。
-        var dataRoot = ArgumentValue(args, "--data-root") ?? Path.Combine(workRoot, "data");
+        var dataRoot = DmAcceptanceProbe.ArgumentValue(args, "--data-root") ?? Path.Combine(workRoot, "data");
         var packagesDir = Path.Combine(dataRoot, "packages");
         Directory.CreateDirectory(packagesDir);
 
@@ -79,7 +79,7 @@ public static class ImportWizardProbe
             () => modelId);
 
         // 回归核对：用已有的流程文件跟新代码重建一次，不重新起草（模型每次文字不同，包标识没法比）。
-        if (ArgumentValue(args, "--reuse") is { } reusePath)
+        if (DmAcceptanceProbe.ArgumentValue(args, "--reuse") is { } reusePath)
         {
             return await RunReuseAsync(reusePath, wizard, packagesDir, report, outFile);
         }
@@ -372,7 +372,6 @@ public static class ImportWizardProbe
         return sameIds && samePackageId ? 0 : 9;
     }
 
-
     /// <summary>诊断：按 MineruRunner 的方式起子进程取两份状态 JSON，只打印关键字与错误码。</summary>
     private static async Task DiagnoseMineruAsync(string? executable, string? home)
     {
@@ -455,22 +454,5 @@ public static class ImportWizardProbe
     {
         var list = items.ToArray();
         return list.Length == 1 ? list[0] : list.FirstOrDefault();
-    }
-
-    private static string? ArgumentValue(string[] args, string name)
-    {
-        var index = Array.IndexOf(args, name);
-        return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
-    }
-
-    private static string FindRepoRoot()
-    {
-        var dir = AppContext.BaseDirectory;
-        while (dir is not null && !File.Exists(Path.Combine(dir, "LocalDm.slnx")))
-        {
-            dir = Path.GetDirectoryName(dir);
-        }
-
-        return dir ?? Directory.GetCurrentDirectory();
     }
 }

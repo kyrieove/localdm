@@ -8,11 +8,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// 电脑端平板服务的 HTTP 客户端。设备身份走 X-LocalDm-Device 请求头（ADR 0012 细节 1），
 /// 不靠 Cookie：杀掉 App、隔天再开还是同一台设备，认领和阅读进度都在。
 class TabletApi {
-  TabletApi(this.base, this.device);
+  TabletApi(this.base, this.device, [http.Client? client]) : _client = client ?? http.Client();
 
   final Uri base;
   final String device;
-  final _client = http.Client();
+  final http.Client _client;
 
   Map<String, String> get _headers => {'X-LocalDm-Device': device};
 

@@ -8,7 +8,7 @@ if ($command -notmatch '\bgit\b[^\n;|&]*\bcommit\b') { exit 0 }
 
 # 命令里先 cd 或 git -C 到别的目录（例如 worktree）时，以那个目录为准；Git Bash 路径 /d/… 换成 D:/…。
 $dir = $hook.cwd
-if ($command -match '(?:\bcd|\bgit\s+-C)\s+("[^"]+"|\S+)') { $dir = $Matches[1].Trim('"') -replace '^/([a-zA-Z])/', '$1:/' }
+if ($command -match '(?:\bcd|\bgit\s+-C)\s+("[^"]+"|''[^'']+''|\S+)') { $dir = $Matches[1].Trim('"', "'") -replace '^/([a-zA-Z])/', '$1:/' }
 $repo = git -C $dir rev-parse --show-toplevel 2>$null
 if (-not $repo) { exit 0 }
 $files = @(git -C $repo diff --cached --name-only)

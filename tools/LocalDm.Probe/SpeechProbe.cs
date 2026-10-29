@@ -18,9 +18,9 @@ public static class SpeechProbe
 {
     public static async Task<int> RunAsync(string[] args)
     {
-        var outDir = ArgumentValue(args, "--out") ?? "docs/evidence/us1";
-        var modelId = ArgumentValue(args, "--model") ?? "group/auto-deepseek-v4-1-flash";
-        var voiceOverride = ArgumentValue(args, "--voice");
+        var outDir = DmAcceptanceProbe.ArgumentValue(args, "--out") ?? "docs/evidence/us1";
+        var modelId = DmAcceptanceProbe.ArgumentValue(args, "--model") ?? "group/auto-deepseek-v4-1-flash";
+        var voiceOverride = DmAcceptanceProbe.ArgumentValue(args, "--voice");
         Directory.CreateDirectory(outDir);
 
         var result = new ProbeResult
@@ -95,12 +95,6 @@ public static class SpeechProbe
             System.Text.Encoding.UTF8);
         Console.WriteLine("wrote " + path);
         return 0;
-    }
-
-    private static string? ArgumentValue(string[] args, string name)
-    {
-        var index = Array.IndexOf(args, name);
-        return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new()

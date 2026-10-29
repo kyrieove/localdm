@@ -75,6 +75,9 @@ public sealed record ScriptExtraction
     /// <summary>工具正常跑完但没识别出文字的文件（分组-文件名）：多半是插图或空白页，要人确认后才放行。</summary>
     public IReadOnlyList<string> BlankFiles { get; init; } = [];
 
+    /// <summary>有人确认过 <see cref="BlankFiles"/> 确实是插图或空白页；没确认时建包会被拒。</summary>
+    public bool BlankFilesConfirmed { get; init; }
+
     /// <summary>隐私预检或授权未通过时的脱敏原因；非空表示这次识别被挡住。</summary>
     public string? BlockedReason { get; init; }
 

@@ -15,7 +15,7 @@
     </ResourceDictionary.MergedDictionaries>
 
     <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
-    <conv:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+    <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     <conv:NotEmptyToVisibilityConverter x:Key="NotEmptyToVisibility" />
     <conv:ProgressArcConverter x:Key="ProgressArc" />
 

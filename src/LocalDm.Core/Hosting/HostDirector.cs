@@ -13,7 +13,6 @@ public sealed class HostDirector
     private readonly IMagpieGateway _gateway;
     private readonly ITtsService _tts;
     private readonly ConcurrentDictionary<string, byte> _liveRequests = new(StringComparer.Ordinal);
-    private readonly ConcurrentBag<SpeechItem> _savedItems = [];
     private readonly object _stateLock = new();
     private CancellationTokenSource _requestCts = new();
     private SpeechState _state = SpeechState.Idle;
@@ -116,7 +115,6 @@ public sealed class HostDirector
         try
         {
             await _tts.SpeakAsync(item, voiceId, cancellationToken);
-            _savedItems.Add(item);
             LastItem = item;
             SetState(SpeechState.Idle);
             return new HostTurnResult(item, SpeechState.Idle, null, Late: false);
@@ -189,7 +187,6 @@ public sealed class HostDirector
                 return new HostTurnResult(null, SpeechState.Cancelled, "已取消播音。", Late: true);
             }
 
-            _savedItems.Add(item);
             LastItem = item;
             SetState(SpeechState.Idle);
             return new HostTurnResult(item, SpeechState.Idle, null, Late: false);
