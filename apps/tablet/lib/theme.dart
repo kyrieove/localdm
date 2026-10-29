@@ -93,7 +93,8 @@ ThemeData buildTheme(ColorScheme scheme) {
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: scheme.surfaceContainerLow,
       showDragHandle: true,
-      constraints: const BoxConstraints(maxWidth: 640),
+      // 盖住对话页最宽 760 的输入栏：它随 80 宽的导航栏右移 40，弹层居中时两边各需多 40，再留 20 不贴边。
+      constraints: const BoxConstraints(maxWidth: 880),
     ),
     snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating, width: 420),
     pageTransitionsTheme: const PageTransitionsTheme(builders: {

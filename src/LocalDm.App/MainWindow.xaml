@@ -216,13 +216,6 @@
                                 </StackPanel>
                             </Grid>
                         </Border>
-
-                        <!-- 重新开始不可撤销：点了从底部滑出确认面板（见窗口最上层的 RestartSheet） -->
-                        <Button x:Name="RestartButton" Content="重新开始本局"
-                                Command="{Binding Session.RestartCommand}"
-                                Style="{StaticResource TopBarButton}" HorizontalAlignment="Left" Margin="-10,10,0,0"
-                                IsEnabled="{Binding Session.CanRestart}"
-                                Visibility="{Binding Session.IsRestartVisible, Converter={StaticResource BoolToVisibility}}" />
                     </StackPanel>
                 </ScrollViewer>
 
@@ -311,10 +304,28 @@
 
                     <TextBlock Text="{Binding Session.ActionHint}" Style="{StaticResource ChatMeta}" Margin="2,0,0,0" />
 
-                    <!-- 命令被拒绝时的原因就地显示，不弹窗 -->
-                    <TextBlock x:Name="SessionStatus" Text="{Binding Session.Status}"
-                               Style="{StaticResource ChatMeta}" FontSize="12"
-                               Foreground="{StaticResource SealDeep}" Margin="2,6,0,0" />
+                    <!-- 命令被拒绝时的原因就地显示，不弹窗；成功回执用普通字色 -->
+                    <TextBlock x:Name="SessionStatus" Text="{Binding Session.Status}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource ChatMeta}">
+                                <Setter Property="FontSize" Value="12" />
+                                <Setter Property="Foreground" Value="{StaticResource SealDeep}" />
+                                <Setter Property="Margin" Value="2,6,0,0" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Session.StatusIsSuccess}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource InkSoft}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- 重新开始不可撤销：放在动作区最末、离主按钮最远；点了从底部滑出确认面板（见窗口最上层的 RestartSheet） -->
+                    <Button x:Name="RestartButton" Content="重新开始本局"
+                            Command="{Binding Session.RestartCommand}"
+                            Style="{StaticResource TopBarButton}" HorizontalAlignment="Left" Margin="-10,12,0,0"
+                            IsEnabled="{Binding Session.CanRestart}"
+                            Visibility="{Binding Session.IsRestartVisible, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
             </Grid>
         </Border>

@@ -18,6 +18,7 @@ public sealed class SessionViewModel : ObservableObject
     private ScriptPackage? _package;
     private PublicSessionProjection? _projection;
     private string _status = string.Empty;
+    private bool _statusIsSuccess;
     private string _voteInput = string.Empty;
     private bool _busy;
     private bool _narrationBusy;
@@ -148,7 +149,18 @@ public sealed class SessionViewModel : ObservableObject
     public string Status
     {
         get => _status;
-        private set => SetProperty(ref _status, value);
+        private set
+        {
+            SetProperty(ref _status, value);
+            StatusIsSuccess = false;
+        }
+    }
+
+    /// <summary>状态行是操作成功的回执（不是拒绝原因）：界面用普通字色，不用警示红。</summary>
+    public bool StatusIsSuccess
+    {
+        get => _statusIsSuccess;
+        private set => SetProperty(ref _statusIsSuccess, value);
     }
 
     public PublicSessionProjection? Projection => _projection;
@@ -435,7 +447,8 @@ public sealed class SessionViewModel : ObservableObject
 
             if (PendingMaterials.Count > 0)
             {
-                return $"还有 {PendingMaterials.Count} 份本环节材料待发放。";
+                // 剩几份已写在发放按钮下面，这里只说为什么推进按钮是灰的
+                return "本环节待发放的材料发完后，才能进入下一步。";
             }
 
             return "完成当前步骤后，直接点击动作继续，不需要额外勾选。";
@@ -539,6 +552,7 @@ public sealed class SessionViewModel : ObservableObject
                     if (type != GameCommandType.SubmitVoteSummary) { _correctingVote = false; }
                     RefreshView(_package, _projection);
                     Status = CommandStatus(type, _projection);
+                    StatusIsSuccess = true;
 
                     // 状态已由程序裁决；主持台据此写入阶段事件并请求播报措辞
                     Committed?.Invoke(this, type);

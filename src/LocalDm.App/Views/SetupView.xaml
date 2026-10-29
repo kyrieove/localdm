@@ -18,42 +18,53 @@
 
             <Border Height="1" Background="{StaticResource Rule}" Margin="0,22,0,0" />
 
-            <Border x:Name="TabletConnectionSection" DataContext="{Binding Tablet}" Padding="18" Margin="0,22,0,0"
-                    Background="{StaticResource PaperDim}" CornerRadius="16">
-                <StackPanel>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Margin="0,0,20,0">
-                            <TextBlock Text="平板服务（高级）" FontSize="17" FontWeight="SemiBold" />
-                            <TextBlock Text="平板入口与二维码在剧本库页顶部；这里只用来关闭或重新开启服务。" Style="{StaticResource ChatMeta}" Margin="0,6,0,0" TextWrapping="Wrap" />
-                        </StackPanel>
-                        <Button x:Name="TabletConnectionToggle" Grid.Column="1" Content="{Binding ToggleLabel}"
-                                Command="{Binding ToggleCommand}" Style="{StaticResource QuietButton}" Padding="16,8" />
-                    </Grid>
-                    <TextBlock x:Name="TabletConnectionStatus" Text="{Binding Status}" TextWrapping="Wrap"
-                               Style="{StaticResource ChatMeta}" Margin="0,12,0,0" />
-                    <Grid Margin="0,16,0,0" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0" VerticalAlignment="Center">
-                            <TextBlock Text="电脑和平板连同一个 Wi-Fi 后，扫码或打开下面的网址。" TextWrapping="Wrap" />
-                            <ComboBox x:Name="TabletAddressSelector" ItemsSource="{Binding Addresses}"
-                                      SelectedItem="{Binding SelectedAddress}" Margin="0,12,0,12" />
-                            <StackPanel Orientation="Horizontal">
-                                <Button Content="电脑打开" Command="{Binding OpenCommand}" Style="{StaticResource QuietButton}" Padding="12,6" Margin="0,0,8,0" />
-                                <Button Content="复制网址" Command="{Binding CopyCommand}" Style="{StaticResource QuietButton}" Padding="12,6" />
-                            </StackPanel>
-                        </StackPanel>
-                    </Grid>
+            <!-- ===== 模型 ===== -->
+            <TextBlock Text="模型" Style="{StaticResource RailLabel}" Margin="0,26,0,4" />
+
+            <Grid Margin="0,10,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                    <TextBlock Text="主持模型" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
+                    <TextBlock Text="从实际读取到的 model ID 里选，不按显示名猜。"
+                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
                 </StackPanel>
-            </Border>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ComboBox x:Name="ModelSelector" ItemsSource="{Binding AvailableModels}"
+                              SelectedItem="{Binding ModelId, Mode=TwoWay}" IsEditable="True"
+                              Width="260" Height="32" VerticalContentAlignment="Center" />
+                    <Button x:Name="ListModelsButton" Content="读取列表" Command="{Binding CheckConnectionCommand}"
+                            Style="{StaticResource QuietButton}" Padding="14,7" Margin="8,0,0,0" />
+                </StackPanel>
+            </Grid>
+
+            <StackPanel Orientation="Horizontal" Margin="0,12,0,0"
+                        Visibility="{Binding Busy, Converter={StaticResource BoolToVisibility}}">
+                <controls:ActivityDots VerticalAlignment="Center" Margin="0,0,10,0"
+                                        IsAnimating="True" DotBrush="{StaticResource Seal}" />
+                <TextBlock Text="正在连接本机模型服务…" VerticalAlignment="Center"
+                           Style="{StaticResource ChatMeta}" />
+            </StackPanel>
+
+            <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                    <TextBlock Text="模型上下文长度（tokens）" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
+                    <TextBlock Text="按所用模型的官方上下文长度填写；不确定就保留默认值。"
+                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
+                </StackPanel>
+                <TextBox x:Name="ContextWindowBox" Grid.Column="1"
+                         Text="{Binding ContextWindowTokens, UpdateSourceTrigger=PropertyChanged}"
+                         Width="260" MinHeight="34" VerticalContentAlignment="Center" />
+            </Grid>
 
             <!-- ===== 声音 ===== -->
-            <TextBlock Text="声音" Style="{StaticResource RailLabel}" Margin="0,26,0,4" />
+            <TextBlock Text="声音" Style="{StaticResource RailLabel}" Margin="0,30,0,4" />
 
             <Grid Margin="0,10,0,0">
                 <Grid.ColumnDefinitions>
@@ -129,50 +140,8 @@
                         Style="{StaticResource QuietButton}" Padding="14,7" VerticalAlignment="Center" />
             </Grid>
 
-            <!-- ===== 模型 ===== -->
-            <TextBlock Text="模型" Style="{StaticResource RailLabel}" Margin="0,30,0,4" />
-
-            <Grid Margin="0,10,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                    <TextBlock Text="主持模型" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
-                    <TextBlock Text="从实际读取到的 model ID 里选，不按显示名猜。"
-                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <ComboBox x:Name="ModelSelector" ItemsSource="{Binding AvailableModels}"
-                              SelectedItem="{Binding ModelId, Mode=TwoWay}" IsEditable="True"
-                              Width="260" Height="32" VerticalContentAlignment="Center" />
-                    <Button x:Name="ListModelsButton" Content="读取列表" Command="{Binding CheckConnectionCommand}"
-                            Style="{StaticResource QuietButton}" Padding="14,7" Margin="8,0,0,0" />
-                </StackPanel>
-            </Grid>
-
-            <StackPanel Orientation="Horizontal" Margin="0,12,0,0"
-                        Visibility="{Binding Busy, Converter={StaticResource BoolToVisibility}}">
-                <controls:ActivityDots VerticalAlignment="Center" Margin="0,0,10,0"
-                                        IsAnimating="True" DotBrush="{StaticResource Seal}" />
-                <TextBlock Text="正在连接本机模型服务…" VerticalAlignment="Center"
-                           Style="{StaticResource ChatMeta}" />
-            </StackPanel>
-
-            <Grid Margin="0,12,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                    <TextBlock Text="模型上下文长度（tokens）" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
-                    <TextBlock Text="按所用模型的官方上下文长度填写；不确定就保留默认值。"
-                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
-                </StackPanel>
-                <TextBox x:Name="ContextWindowBox" Grid.Column="1"
-                         Text="{Binding ContextWindowTokens, UpdateSourceTrigger=PropertyChanged}"
-                         Width="260" MinHeight="34" VerticalContentAlignment="Center" />
-            </Grid>
+            <!-- ===== 界面 ===== -->
+            <TextBlock Text="界面" Style="{StaticResource RailLabel}" Margin="0,30,0,4" />
 
             <!-- 界面缩放：与 Ctrl+加号 / Ctrl+减号 / Ctrl+滚轮是同一个值 -->
             <Grid Margin="0,12,0,0">
@@ -231,6 +200,40 @@
                 <CheckBox x:Name="LightThemeBox" Grid.Column="1" IsChecked="{Binding LightTheme, Mode=TwoWay}"
                           VerticalAlignment="Center" Content="用浅色" />
             </Grid>
+
+            <Border x:Name="TabletConnectionSection" DataContext="{Binding Tablet}" Padding="18" Margin="0,30,0,0"
+                    Background="{StaticResource PaperDim}" CornerRadius="16">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,20,0">
+                            <TextBlock Text="平板服务（高级）" FontSize="17" FontWeight="SemiBold" />
+                            <TextBlock Text="平板入口与二维码在剧本库页顶部；这里只用来关闭或重新开启服务。" Style="{StaticResource ChatMeta}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Button x:Name="TabletConnectionToggle" Grid.Column="1" Content="{Binding ToggleLabel}"
+                                Command="{Binding ToggleCommand}" Style="{StaticResource QuietButton}" Padding="16,8" />
+                    </Grid>
+                    <TextBlock x:Name="TabletConnectionStatus" Text="{Binding Status}" TextWrapping="Wrap"
+                               Style="{StaticResource ChatMeta}" Margin="0,12,0,0" />
+                    <Grid Margin="0,16,0,0" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0" VerticalAlignment="Center">
+                            <TextBlock Text="电脑和平板连同一个 Wi-Fi 后，扫码或打开下面的网址。" TextWrapping="Wrap" />
+                            <ComboBox x:Name="TabletAddressSelector" ItemsSource="{Binding Addresses}"
+                                      SelectedItem="{Binding SelectedAddress}" Margin="0,12,0,12" />
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="电脑打开" Command="{Binding OpenCommand}" Style="{StaticResource QuietButton}" Padding="12,6" Margin="0,0,8,0" />
+                                <Button Content="复制网址" Command="{Binding CopyCommand}" Style="{StaticResource QuietButton}" Padding="12,6" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
 
             <!-- 高级：连接与鉴权 -->
             <Expander Margin="0,20,0,0" Foreground="{StaticResource InkSoft}">

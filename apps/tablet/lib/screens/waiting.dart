@@ -25,9 +25,20 @@ class WaitingScreen extends StatelessWidget {
           left: 24,
           right: 24,
           child: Row(children: [
-            Chip(
-              avatar: Icon(app.online ? Icons.link_rounded : Icons.sync_problem_rounded, color: scheme.primary, size: 18),
-              label: Text(statusText),
+            // 不用 Chip：网页版里 Chip 把中文地址截成两个字；普通圆角框按文字自身宽度排。
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
+                decoration: BoxDecoration(
+                  border: Border.all(color: scheme.outlineVariant),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(app.online ? Icons.link_rounded : Icons.sync_problem_rounded, color: scheme.primary, size: 18),
+                  const SizedBox(width: 8),
+                  Flexible(child: Text(statusText, overflow: TextOverflow.ellipsis)),
+                ]),
+              ),
             ),
             const SizedBox(width: 12),
             TextButton.icon(
