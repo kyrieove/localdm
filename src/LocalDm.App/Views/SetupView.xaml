@@ -29,14 +29,14 @@
                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
                     <TextBlock Text="主持模型" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
                     <TextBlock Text="从实际读取到的 model ID 里选，不按显示名猜。"
-                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
+                               Style="{StaticResource ChatMeta}" Margin="0,4,0,0" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <ComboBox x:Name="ModelSelector" ItemsSource="{Binding AvailableModels}"
                               SelectedItem="{Binding ModelId, Mode=TwoWay}" IsEditable="True"
                               Width="260" Height="32" VerticalContentAlignment="Center" />
                     <Button x:Name="ListModelsButton" Content="读取列表" Command="{Binding CheckConnectionCommand}"
-                            Style="{StaticResource QuietButton}" Padding="14,7" Margin="8,0,0,0" />
+                            Style="{StaticResource QuietButton}" Padding="{StaticResource PadButton}" Margin="8,0,0,0" />
                 </StackPanel>
             </Grid>
 
@@ -56,7 +56,7 @@
                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
                     <TextBlock Text="模型上下文长度（tokens）" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
                     <TextBlock Text="按所用模型的官方上下文长度填写；不确定就保留默认值。"
-                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
+                               Style="{StaticResource ChatMeta}" Margin="0,4,0,0" />
                 </StackPanel>
                 <TextBox x:Name="ContextWindowBox" Grid.Column="1"
                          Text="{Binding ContextWindowTokens, UpdateSourceTrigger=PropertyChanged}"
@@ -74,7 +74,7 @@
                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
                     <TextBlock Text="主持音色" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
                     <TextBlock Text="回复生成后，用这位主持人的声音朗读。"
-                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
+                               Style="{StaticResource ChatMeta}" Margin="0,4,0,0" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <ComboBox x:Name="VoiceSelector" ItemsSource="{Binding AvailableVoices}"
@@ -88,7 +88,7 @@
                         </ComboBox.ItemTemplate>
                     </ComboBox>
                     <Button x:Name="PreviewVoiceButton" Content="试听" Command="{Binding PreviewVoiceCommand}"
-                            Style="{StaticResource QuietButton}" Padding="14,7" Margin="8,0,0,0" />
+                            Style="{StaticResource QuietButton}" Padding="{StaticResource PadButton}" Margin="8,0,0,0" />
                 </StackPanel>
             </Grid>
 
@@ -102,7 +102,7 @@
                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
                     <TextBlock Text="自动朗读回复" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
                     <TextBlock Text="关闭后只显示文字，仍可在每条回复旁单独重播。"
-                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
+                               Style="{StaticResource ChatMeta}" Margin="0,4,0,0" />
                 </StackPanel>
                 <CheckBox x:Name="AutoReadBox" Grid.Column="1" IsChecked="{Binding AutoRead, Mode=TwoWay}"
                           VerticalAlignment="Center" Content="回复后自动朗读" />
@@ -118,7 +118,7 @@
                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
                     <TextBlock Text="声音输出" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
                     <TextBlock Text="跟随 Windows 默认输出设备，本软件不单独选择设备。"
-                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
+                               Style="{StaticResource ChatMeta}" Margin="0,4,0,0" />
                 </StackPanel>
                 <TextBlock Grid.Column="1" Text="使用系统设置" Style="{StaticResource ChatMeta}"
                            VerticalAlignment="Center" />
@@ -134,10 +134,10 @@
                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
                     <TextBlock Text="声音可用性" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
                     <TextBlock Text="本机装了哪些中文声音。缺失时只显示文字，不静默改成英文音色。"
-                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
+                               Style="{StaticResource ChatMeta}" Margin="0,4,0,0" />
                 </StackPanel>
                 <Button Grid.Column="1" Content="重新检测声音" Command="{Binding CheckVoicesCommand}"
-                        Style="{StaticResource QuietButton}" Padding="14,7" VerticalAlignment="Center" />
+                        Style="{StaticResource QuietButton}" Padding="{StaticResource PadButton}" VerticalAlignment="Center" />
             </Grid>
 
             <!-- ===== 界面 ===== -->
@@ -151,7 +151,7 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
                     <TextBlock Text="界面缩放" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
-                    <TextBlock Text="{Binding UiScaleHint}" Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
+                    <TextBlock Text="{Binding UiScaleHint}" Style="{StaticResource ChatMeta}" Margin="0,4,0,0" />
                 </StackPanel>
                 <Slider x:Name="UiScaleSlider" Grid.Column="1" Width="260" Height="32"
                         VerticalAlignment="Center"
@@ -168,7 +168,7 @@
                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
                     <TextBlock Text="对话宽度" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
                     <TextBlock Text="满宽只留两端边距；换档立即生效。"
-                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
+                               Style="{StaticResource ChatMeta}" Margin="0,4,0,0" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <RadioButton x:Name="ChatWidthStandard" Content="标准" GroupName="ChatWidth" Margin="0,0,14,0"
@@ -195,7 +195,7 @@
                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
                     <TextBlock Text="浅色界面" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" />
                     <TextBlock Text="默认深色，适合围桌时的暗房间；白天或亮房间可换浅色。保存后重启软件生效。"
-                               Style="{StaticResource ChatMeta}" Margin="0,5,0,0" />
+                               Style="{StaticResource ChatMeta}" Margin="0,4,0,0" />
                 </StackPanel>
                 <CheckBox x:Name="LightThemeBox" Grid.Column="1" IsChecked="{Binding LightTheme, Mode=TwoWay}"
                           VerticalAlignment="Center" Content="用浅色" />
@@ -214,7 +214,7 @@
                             <TextBlock Text="平板入口与二维码在剧本库页顶部；这里只用来关闭或重新开启服务。" Style="{StaticResource ChatMeta}" Margin="0,6,0,0" TextWrapping="Wrap" />
                         </StackPanel>
                         <Button x:Name="TabletConnectionToggle" Grid.Column="1" Content="{Binding ToggleLabel}"
-                                Command="{Binding ToggleCommand}" Style="{StaticResource QuietButton}" Padding="16,8" />
+                                Command="{Binding ToggleCommand}" Style="{StaticResource QuietButton}" Padding="{StaticResource PadButton}" />
                     </Grid>
                     <TextBlock x:Name="TabletConnectionStatus" Text="{Binding Status}" TextWrapping="Wrap"
                                Style="{StaticResource ChatMeta}" Margin="0,12,0,0" />
@@ -227,8 +227,8 @@
                             <ComboBox x:Name="TabletAddressSelector" ItemsSource="{Binding Addresses}"
                                       SelectedItem="{Binding SelectedAddress}" Margin="0,12,0,12" />
                             <StackPanel Orientation="Horizontal">
-                                <Button Content="电脑打开" Command="{Binding OpenCommand}" Style="{StaticResource QuietButton}" Padding="12,6" Margin="0,0,8,0" />
-                                <Button Content="复制网址" Command="{Binding CopyCommand}" Style="{StaticResource QuietButton}" Padding="12,6" />
+                                <Button Content="电脑打开" Command="{Binding OpenCommand}" Style="{StaticResource QuietButton}" Padding="{StaticResource PadButton}" Margin="0,0,8,0" />
+                                <Button Content="复制网址" Command="{Binding CopyCommand}" Style="{StaticResource QuietButton}" Padding="{StaticResource PadButton}" />
                             </StackPanel>
                         </StackPanel>
                     </Grid>
@@ -248,7 +248,7 @@
                                Style="{StaticResource ChatMeta}" Margin="0,8,0,0" />
                     <Button Content="重新检测连接" Command="{Binding CheckConnectionCommand}"
                             Style="{StaticResource QuietButton}" HorizontalAlignment="Left"
-                            Padding="14,7" Margin="0,12,0,0" />
+                            Padding="{StaticResource PadButton}" Margin="0,12,0,0" />
                     <TextBlock Text="{Binding CallerKeyState}" Style="{StaticResource ChatMeta}"
                                Margin="0,14,0,0" />
                 </StackPanel>
@@ -303,7 +303,7 @@
                     <TextBlock Text="把运行日志、每局的操作和对话记录打成一个 zip 放到桌面，发给帮你查问题的人。里面有对话原文，含剧情；不含密钥。"
                                Style="{StaticResource ChatMeta}" TextWrapping="Wrap" />
                     <Button x:Name="ExportLogsButton" Content="导出日志到桌面" Command="{Binding ExportLogsCommand}"
-                            Style="{StaticResource QuietButton}" HorizontalAlignment="Left" Padding="14,6" Margin="0,10,0,0" />
+                            Style="{StaticResource QuietButton}" HorizontalAlignment="Left" Padding="{StaticResource PadButton}" Margin="0,10,0,0" />
                 </StackPanel>
             </Expander>
 

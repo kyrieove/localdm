@@ -25,7 +25,7 @@
                     <TextBlock Text="{Binding ShellTitle}" FontSize="20" FontWeight="Bold"
                                Foreground="{StaticResource Ink}" VerticalAlignment="Center" />
                     <!-- 主持人在朗读时出现；空闲不显示，不占注意力 -->
-                    <Border x:Name="SpeakingPill" CornerRadius="14" Padding="10,5,12,5" Margin="14,0,0,0"
+                    <Border x:Name="SpeakingPill" CornerRadius="14" Padding="10,4,12,4" Margin="14,0,0,0"
                             VerticalAlignment="Center" Background="{StaticResource SealWash}"
                             Visibility="{Binding IsSpeaking, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel Orientation="Horizontal">
@@ -72,7 +72,7 @@
                     <TextBlock Grid.Column="0" Text="{Binding PublicSyncErrorText}" TextWrapping="Wrap"
                                Style="{StaticResource ChatMeta}" FontSize="12" Foreground="{StaticResource Ink}" />
                     <Button Grid.Column="1" Content="重试同步" Command="{Binding RetryPublicSyncCommand}"
-                            Style="{StaticResource TopBarButton}" Padding="8,2" Margin="10,0,0,0"
+                            Style="{StaticResource TopBarButton}" Padding="{StaticResource PadButtonSmall}" Margin="10,0,0,0"
                             VerticalAlignment="Center" />
                 </Grid>
             </Border>
@@ -102,7 +102,7 @@
                                                    Foreground="{StaticResource OnSeal}" />
                                     </Border>
                                     <StackPanel Grid.Column="1">
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,7">
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                         <TextBlock Text="{Binding AuthorName}" Style="{StaticResource ChatMeta}" FontSize="12" />
                                         <TextBlock Text=" · " Style="{StaticResource ChatMeta}" FontSize="12" />
                                         <TextBlock Text="{Binding Time}" Style="{StaticResource ChatMeta}" FontSize="12" />
@@ -115,7 +115,7 @@
                                         <TextBlock Text="{Binding SpeechNote}" Style="{StaticResource ChatMeta}"
                                                    VerticalAlignment="Center" />
                                         <Button Content="重播" Command="{Binding ReplayCommand}"
-                                                Style="{StaticResource TopBarButton}" Padding="8,3" Margin="10,0,0,0"
+                                                Style="{StaticResource TopBarButton}" Padding="{StaticResource PadButtonSmall}" Margin="10,0,0,0"
                                                 Visibility="{Binding CanReplay, Converter={StaticResource BoolToVisibility}}" />
                                     </StackPanel>
                                     </StackPanel>
@@ -131,7 +131,7 @@
                                                    Foreground="{StaticResource Ink}" />
                                     </Border>
                                     <TextBlock Text="{Binding Time}" Style="{StaticResource ChatMeta}" FontSize="10"
-                                               HorizontalAlignment="Right" Margin="0,5,2,0" />
+                                               HorizontalAlignment="Right" Margin="0,4,2,0" />
                                 </StackPanel>
 
                                 <!-- 阶段事件：一条细线，不抢对话 -->
@@ -202,7 +202,7 @@
                                     </Style>
                                 </TextBlock.Style>
                             </TextBlock>
-                            <ItemsControl ItemsSource="{Binding Activity.Steps}" Margin="0,5,0,0"
+                            <ItemsControl ItemsSource="{Binding Activity.Steps}" Margin="0,4,0,0"
                                           Visibility="{Binding Activity.IsActive, Converter={StaticResource BoolToVisibility}}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -403,9 +403,9 @@
                         <TextBlock Text="{Binding PendingCorrectionText}" TextWrapping="Wrap" />
                         <Button Grid.Column="1" x:Name="ConfirmCorrectionButton" Content="确认"
                                 Command="{Binding ConfirmCorrectionCommand}" Style="{StaticResource SealButton}"
-                                Padding="12,6" Margin="8,0,0,0" />
+                                Padding="{StaticResource PadButton}" Margin="8,0,0,0" />
                         <Button Grid.Column="2" Content="不用" Command="{Binding DismissCorrectionCommand}"
-                                Style="{StaticResource QuietButton}" Padding="12,6" Margin="6,0,0,0" />
+                                Style="{StaticResource QuietButton}" Padding="{StaticResource PadButton}" Margin="6,0,0,0" />
                     </Grid>
                 </Border>
 
@@ -509,7 +509,7 @@
                     </StackPanel>
                 </Border>
 
-                <Grid Grid.Row="3" Margin="2,9,2,0">
+                <Grid Grid.Row="3" Margin="2,8,2,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
@@ -541,9 +541,9 @@
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <Button x:Name="CompactButton" Content="压缩上下文" Command="{Binding CompactCommand}"
-                                Style="{StaticResource TopBarButton}" Padding="8,2" Margin="0,0,8,0" />
+                                Style="{StaticResource TopBarButton}" Padding="{StaticResource PadButtonSmall}" Margin="0,0,8,0" />
                         <Button Content="请主持人开场" Command="{Binding OpeningSpeechCommand}"
-                                Style="{StaticResource TopBarButton}" Padding="8,2"
+                                Style="{StaticResource TopBarButton}" Padding="{StaticResource PadButtonSmall}"
                                 Visibility="{Binding ShowOpeningSpeech, Converter={StaticResource BoolToVisibility}}" />
                     </StackPanel>
                 </Grid>

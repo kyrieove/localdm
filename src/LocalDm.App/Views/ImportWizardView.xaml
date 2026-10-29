@@ -35,7 +35,7 @@
                              Text="{Binding FolderPath, UpdateSourceTrigger=PropertyChanged}" />
                     <Button x:Name="ChooseFolderButton" Grid.Column="1" Content="选择文件夹"
                             Click="OnChooseFolder" Style="{StaticResource QuietButton}"
-                            Padding="16,8" Margin="10,0,0,0" />
+                            Padding="{StaticResource PadButton}" Margin="10,0,0,0" />
                 </Grid>
 
                 <TextBlock Text="剧本名" Style="{StaticResource RailLabel}" Margin="0,16,0,6" />
@@ -68,7 +68,7 @@
                                         <TextBlock Text="{Binding Summary}" Style="{StaticResource ChatMeta}"
                                                    FontSize="12" Margin="0,4,0,0" />
                                         <TextBlock Text="{Binding GuessReason}" Style="{StaticResource ChatMeta}"
-                                                   FontSize="11" Margin="0,3,0,0" />
+                                                   FontSize="11" Margin="0,4,0,0" />
                                     </StackPanel>
                                     <ComboBox Grid.Column="1" VerticalAlignment="Center"
                                               ItemsSource="{Binding KindOptions}" DisplayMemberPath="Label"
@@ -95,7 +95,7 @@
                            Style="{StaticResource ChatMeta}" Margin="0,12,0,0" />
                 <Button x:Name="CancelExtractionButton" Content="取消识别"
                         Command="{Binding CancelCommand}" Style="{StaticResource QuietButton}"
-                        HorizontalAlignment="Left" Padding="16,8" Margin="0,16,0,0" />
+                        HorizontalAlignment="Left" Padding="{StaticResource PadButton}" Margin="0,16,0,0" />
             </StackPanel>
 
             <!-- ===== ④ 流程确认 ===== -->
@@ -142,23 +142,25 @@
                                         <TextBlock Text="有条件可能含剧情，已删去，请补写或改动一下条件再建包"
                                                    Style="{StaticResource ChatMeta}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"
                                                    Visibility="{Binding ConditionsRemoved, Converter={StaticResource BoolToVisibility}}" />
-                                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                        <!-- 来源页号在左，调整顺序与删除在右，同一行 -->
+                                        <DockPanel Margin="0,6,0,0" LastChildFill="True">
+                                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                                <Button Content="上移" Style="{StaticResource TopBarButton}"
+                                                        Padding="{StaticResource PadButtonSmall}" Click="OnMoveUp" />
+                                                <Button Content="下移" Style="{StaticResource TopBarButton}"
+                                                        Padding="{StaticResource PadButtonSmall}" Margin="4,0,0,0" Click="OnMoveDown" />
+                                                <Button Content="删除" Style="{StaticResource TopBarButton}"
+                                                        Padding="{StaticResource PadButtonSmall}" Margin="16,0,0,0" Click="OnDeleteStep" />
+                                            </StackPanel>
                                             <TextBlock Text="{Binding SourceRefDisplay}"
                                                        Style="{StaticResource ChatMeta}" FontSize="11"
                                                        VerticalAlignment="Center" />
-                                        </StackPanel>
+                                        </DockPanel>
                                     </StackPanel>
-                                    <StackPanel Grid.Column="1" Margin="12,0,0,0">
-                                        <ComboBox ItemsSource="{Binding KindOptions}" DisplayMemberPath="Label"
-                                                  SelectedValuePath="Value" Width="120"
-                                                  SelectedValue="{Binding Kind, Mode=TwoWay}" />
-                                        <Button Content="上移" Style="{StaticResource TopBarButton}"
-                                                Padding="8,3" Margin="0,6,0,0" Click="OnMoveUp" />
-                                        <Button Content="下移" Style="{StaticResource TopBarButton}"
-                                                Padding="8,3" Margin="0,4,0,0" Click="OnMoveDown" />
-                                        <Button Content="删除" Style="{StaticResource TopBarButton}"
-                                                Padding="8,3" Margin="0,4,0,0" Click="OnDeleteStep" />
-                                    </StackPanel>
+                                    <ComboBox Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Top"
+                                              ItemsSource="{Binding KindOptions}" DisplayMemberPath="Label"
+                                              SelectedValuePath="Value" Width="120"
+                                              SelectedValue="{Binding Kind, Mode=TwoWay}" />
                                 </Grid>
                             </Border>
                         </DataTemplate>
@@ -167,7 +169,7 @@
 
                 <Button x:Name="AddStepButton" Content="加一个环节" Command="{Binding AddStepCommand}"
                         Style="{StaticResource QuietButton}" HorizontalAlignment="Left"
-                        Padding="16,8" Margin="0,12,0,0" />
+                        Padding="{StaticResource PadButton}" Margin="0,12,0,0" />
 
                 <TextBlock Text="手册分层（只显示页号，不显示内容）" Style="{StaticResource RailLabel}"
                            Margin="0,18,0,6" />
@@ -210,13 +212,13 @@
                 </Grid.ColumnDefinitions>
                 <Button x:Name="BackButton" Grid.Column="0" Content="上一步"
                         Command="{Binding BackCommand}" Style="{StaticResource QuietButton}"
-                        Padding="18,9" Margin="0,0,10,0" />
+                        Padding="{StaticResource PadButton}" Margin="0,0,10,0" />
                 <Button x:Name="NextButton" Grid.Column="1" Content="下一步"
                         Command="{Binding NextCommand}" Style="{StaticResource SealButton}"
                         Padding="22,10" Margin="0,0,10,0" />
                 <Button x:Name="CloseWizardButton" Grid.Column="2" Content="回到剧本库"
                         Click="OnClose" Style="{StaticResource QuietButton}"
-                        Padding="18,9" Margin="0,0,16,0" />
+                        Padding="{StaticResource PadButton}" Margin="0,0,16,0" />
                 <TextBlock x:Name="StatusLabel" Grid.Column="3" Text="{Binding Status}"
                            VerticalAlignment="Center" Style="{StaticResource ChatMeta}" TextWrapping="Wrap" />
             </Grid>

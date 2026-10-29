@@ -14,6 +14,11 @@
         <themes:ThemePalette />
     </ResourceDictionary.MergedDictionaries>
 
+    <!-- 间距按 2 的倍数取值。按钮内边距只用这三档：左栏动作 / 行内按钮 / 文字型小按钮 -->
+    <Thickness x:Key="PadButtonLarge">14,10</Thickness>
+    <Thickness x:Key="PadButton">14,8</Thickness>
+    <Thickness x:Key="PadButtonSmall">8,4</Thickness>
+
     <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
     <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
     <conv:NotEmptyToVisibilityConverter x:Key="NotEmptyToVisibility" />

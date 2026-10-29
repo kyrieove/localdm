@@ -223,24 +223,24 @@
                 <StackPanel Grid.Row="1" Margin="22,10,18,18">
                     <Button x:Name="StartButton" Content="{Binding Session.StartLabel}"
                             Command="{Binding Session.StartCommand}"
-                            Style="{StaticResource SealButton}" Padding="14,11" Margin="0,0,0,8"
+                            Style="{StaticResource SealButton}" Padding="{StaticResource PadButtonLarge}" Margin="0,0,0,8"
                             IsEnabled="{Binding Session.CanStart}"
                             Visibility="{Binding Session.IsStartVisible, Converter={StaticResource BoolToVisibility}}" />
 
                     <Button x:Name="AdvanceButton" Content="{Binding Session.AdvanceLabel}"
                             Command="{Binding Session.AdvanceCommand}"
-                            Style="{StaticResource SealButton}" Padding="14,11" Margin="0,0,0,8"
+                            Style="{StaticResource SealButton}" Padding="{StaticResource PadButtonLarge}" Margin="0,0,0,8"
                             IsEnabled="{Binding Session.CanAdvance}"
                             Visibility="{Binding Session.IsAdvanceVisible, Converter={StaticResource BoolToVisibility}}" />
 
                     <Button x:Name="OpeningSpeechButton" Content="请主持人开场"
                             Command="{Binding OpeningSpeechCommand}"
-                            Padding="14,9" Margin="0,0,0,8"
+                            Padding="{StaticResource PadButtonLarge}" Margin="0,0,0,8"
                             Visibility="{Binding ShowOpeningSpeech, Converter={StaticResource BoolToVisibility}}" />
 
                     <Button x:Name="ReleaseButton" Content="{Binding Session.ReleaseLabel}"
                             Command="{Binding Session.ReleaseMaterialsCommand}"
-                            Padding="14,9" Margin="0,0,0,8"
+                            Padding="{StaticResource PadButtonLarge}" Margin="0,0,0,8"
                             IsEnabled="{Binding Session.CanReleaseMaterials}"
                             Visibility="{Binding Session.IsReleaseVisible, Converter={StaticResource BoolToVisibility}}" />
 
@@ -270,7 +270,7 @@
                         <TextBlock Text="{Binding Session.VoteHint}" Style="{StaticResource ChatMeta}" Margin="0,0,0,6" />
                         <Button x:Name="VoteButton" Content="{Binding Session.SubmitVoteLabel}"
                                 Command="{Binding Session.SubmitVoteCommand}"
-                                Style="{StaticResource SealButton}" Padding="14,11"
+                                Style="{StaticResource SealButton}" Padding="{StaticResource PadButtonLarge}"
                                 IsEnabled="{Binding Session.CanSubmitVote}" />
                     </StackPanel>
 
@@ -286,19 +286,19 @@
                                    FontSize="12" Foreground="{StaticResource SealDeep}" Margin="2,0,0,6" />
                         <Button x:Name="RevealButton" Content="{Binding Session.RevealLabel}"
                                 Command="{Binding Session.RevealCommand}"
-                                Style="{StaticResource SealButton}" Padding="14,11"
+                                Style="{StaticResource SealButton}" Padding="{StaticResource PadButtonLarge}"
                                 IsEnabled="{Binding Session.CanReveal}" />
                     </StackPanel>
 
                     <Button x:Name="CompleteButton" Content="{Binding Session.CompleteLabel}"
                             Command="{Binding Session.CompleteCommand}"
-                            Style="{StaticResource SealButton}" Padding="14,11" Margin="0,0,0,8"
+                            Style="{StaticResource SealButton}" Padding="{StaticResource PadButtonLarge}" Margin="0,0,0,8"
                             IsEnabled="{Binding Session.CanComplete}"
                             Visibility="{Binding Session.IsCompleteVisible, Converter={StaticResource BoolToVisibility}}" />
 
                     <Button x:Name="PauseResumeButton" Content="{Binding Session.PauseResumeLabel}"
                             Command="{Binding Session.PauseResumeCommand}"
-                            Style="{StaticResource QuietButton}" Padding="14,9" Margin="0,0,0,6"
+                            Style="{StaticResource QuietButton}" Padding="{StaticResource PadButtonLarge}" Margin="0,0,0,6"
                             IsEnabled="{Binding Session.CanPauseResume}"
                             Visibility="{Binding Session.IsPauseResumeVisible, Converter={StaticResource BoolToVisibility}}" />
 
@@ -382,10 +382,10 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Button Grid.Column="0" Content="取消" Command="{Binding CancelRestartCommand}"
-                                Style="{StaticResource QuietButton}" Padding="14,11" Margin="0" />
+                                Style="{StaticResource QuietButton}" Padding="{StaticResource PadButtonLarge}" Margin="0" />
                         <Button x:Name="ConfirmRestartButton" Grid.Column="2" Content="确认重来"
                                 Command="{Binding ConfirmRestartCommand}"
-                                Style="{StaticResource SealButton}" Padding="14,11" Margin="0"
+                                Style="{StaticResource SealButton}" Padding="{StaticResource PadButtonLarge}" Margin="0"
                                 IsEnabled="{Binding CanRestart}" />
                     </Grid>
                 </StackPanel>

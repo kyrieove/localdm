@@ -27,7 +27,7 @@
             <ComboBox x:Name="TabletJoinAddress" ItemsSource="{Binding Addresses}"
                       SelectedItem="{Binding SelectedAddress}" Height="32" VerticalContentAlignment="Center" />
             <Button Grid.Column="1" Content="复制网址" Command="{Binding CopyCommand}"
-                    Style="{StaticResource QuietButton}" Padding="14,6" Margin="8,0,0,0" />
+                    Style="{StaticResource QuietButton}" Padding="{StaticResource PadButton}" Margin="8,0,0,0" />
         </Grid>
         <TextBlock Text="{Binding JoinedSummary}" Style="{StaticResource ChatMeta}" Margin="0,8,0,0"
                    Visibility="{Binding JoinedSummary, Converter={StaticResource NotEmptyToVisibility}}" />
@@ -39,7 +39,7 @@
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
                     <Button Content="{Binding DisplayName, StringFormat=释放「{0}」}" Command="{Binding ReleaseCommand}"
-                            Style="{StaticResource QuietButton}" FontSize="12" Padding="10,4" Margin="0,4,6,0"
+                            Style="{StaticResource QuietButton}" FontSize="12" Padding="{StaticResource PadButtonSmall}" Margin="0,4,6,0"
                             ToolTip="平板认不回这个角色时点这里，再在平板上重新选它；翻开的页要重新翻" />
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
