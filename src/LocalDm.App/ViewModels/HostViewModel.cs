@@ -356,6 +356,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
             if (SetProperty(ref _showMaterials, value))
             {
                 OnPropertyChanged(nameof(ShowConversation));
+                OnPropertyChanged(nameof(ShellTitle));
                 OnShellTitleChanged();
             }
         }
@@ -363,7 +364,8 @@ public sealed class HostViewModel : ObservableObject, IDisposable
 
     public bool ShowConversation => !ShowMaterials;
 
-    public string ShellTitle => ShowMaterials ? "公开材料与复盘" : "本局对话";
+    // 材料页的标题只在顶栏出现一次，正文不再重复
+    public string ShellTitle => ShowMaterials ? MaterialsTitle : "本局对话";
 
     public string MaterialsTitle => _session.HasRevealedText ? "公开材料与复盘" : "已公开材料";
 
@@ -743,6 +745,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
         ShowMaterials = TruthAccess.IsUnlocked(session);
         _hadRevealedText = _session.HasRevealedText;
         OnPropertyChanged(nameof(MaterialsTitle));
+        OnPropertyChanged(nameof(ShellTitle));
         OnPropertyChanged(nameof(HasMaterialsTab));
         OnPropertyChanged(nameof(ShowOpeningSpeech));
         OnPropertyChanged(nameof(ShowSuggestions));
@@ -1809,6 +1812,7 @@ public sealed class HostViewModel : ObservableObject, IDisposable
 
             _hadRevealedText = hasRevealed;
             OnPropertyChanged(nameof(MaterialsTitle));
+            OnPropertyChanged(nameof(ShellTitle));
             OnPropertyChanged(nameof(HasMaterialsTab));
             OnPropertyChanged(nameof(RevealedText));
         }

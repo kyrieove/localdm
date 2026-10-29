@@ -157,13 +157,15 @@ class _CardTile extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Row(children: [
+          // 编号贴在卡名前，和卡名读成一组
+          Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+            Text('${card.sourceOrder}', style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
+            const SizedBox(width: 6),
             Expanded(
               child: Text(card.displayName,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 15, color: card.isAvailable ? scheme.onSurface : scheme.onSurfaceVariant, fontWeight: selected ? FontWeight.w700 : FontWeight.w400)),
             ),
-            Text('${card.sourceOrder}', style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
           ]),
         ]),
       ),

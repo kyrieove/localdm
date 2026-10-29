@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -13,6 +15,9 @@ class RolePickScreen extends StatelessWidget {
     final app = AppScope.of(context);
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final count = app.catalog.roles.length;
+    // 4 人一排；5、6 人排 3 列两行，不在第二行留一排空格；更多人最多 4 列。
+    final columns = count <= 4 ? math.max(count, 1) : math.min((count + 1) ~/ 2, 4);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(40, 36, 40, 24),
@@ -31,12 +36,19 @@ class RolePickScreen extends StatelessWidget {
           Text('选好后这台平板只显示这个角色的本子。', style: text.titleMedium?.copyWith(color: scheme.onSurfaceVariant)),
           const SizedBox(height: 28),
           Expanded(
-            child: GridView.extent(
-              maxCrossAxisExtent: 260,
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
-              childAspectRatio: 1.2, // 4–6 个角色在 iPad 横屏一屏放下，不用滚
-              children: [for (final r in app.catalog.roles) _RoleTile(role: r, taken: app.catalog.claimedRoles.contains(r.roleId))],
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: ConstrainedBox(
+                // 每张牌最宽 260，和以前一样大
+                constraints: BoxConstraints(maxWidth: columns * 260 + (columns - 1) * 16),
+                child: GridView.count(
+                  crossAxisCount: columns,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  childAspectRatio: 1.2, // 4–6 个角色在 iPad 横屏一屏放下，不用滚
+                  children: [for (final r in app.catalog.roles) _RoleTile(role: r, taken: app.catalog.claimedRoles.contains(r.roleId))],
+                ),
+              ),
             ),
           ),
         ]),
